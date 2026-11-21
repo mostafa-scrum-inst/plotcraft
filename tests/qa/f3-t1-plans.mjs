@@ -102,10 +102,12 @@ function mySearch(W, D, inp, core, lo = 0.75, hi = 1.25) {
 // ---------- seeded programmes ----------
 function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const TYPES = Object.keys(Q.ROOM_AREA), POS = ['centre', 'fl', 'fr', 'bl', 'br'];
+// F4-T2 QA-first (CD-4): rooms per floor = PC.C.MAX_ROOMS_PER_LEVEL of the build (8 today, 10 after Step 0.1); pairs stay 6.
+const MAXR = PC.C.MAX_ROOMS_PER_LEVEL;
 function programme(r, W, D) {
   const stairs = r() < 0.85, lift = stairs && r() < 0.35, pos = POS[Math.floor(r() * 5)], fill = 0.3 + r() * 0.7;
   const coreA = stairs ? 10 + (lift ? 3 : 0) : 0, target = fill * (W * D - coreA), rooms = []; let sum = 0, id = 1;
-  while (rooms.length < 8 && sum < target) { const t = TYPES[Math.floor(r() * TYPES.length)], ex = r() < 0.15; const a = ex ? Math.round((4 + r() * 40) * 2) / 2 : Q.ROOM_AREA[t]['SML'[Math.floor(r() * 3)]]; if (sum + a > target * 1.05 && rooms.length) break; rooms.push({ id: 'r' + id++, area: a }); sum += a; }
+  while (rooms.length < MAXR && sum < target) { const t = TYPES[Math.floor(r() * TYPES.length)], ex = r() < 0.15; const a = ex ? Math.round((4 + r() * 40) * 2) / 2 : Q.ROOM_AREA[t]['SML'[Math.floor(r() * 3)]]; if (sum + a > target * 1.05 && rooms.length) break; rooms.push({ id: 'r' + id++, area: a }); sum += a; }
   const pairs = []; const np = Math.floor(r() * Math.min(7, rooms.length)); for (let k = 0; k < np; k++) { const a = rooms[Math.floor(r() * rooms.length)].id, b = rooms[Math.floor(r() * rooms.length)].id; if (a !== b && !pairs.some((p) => (p[0] === a && p[1] === b) || (p[0] === b && p[1] === a))) pairs.push(PC.store.cmpId(a, b) < 0 ? [a, b] : [b, a]); }
   return { W, D, rooms, pairs, stairs, stairPos: pos, lift, fill: sum / (W * D - coreA) };
 }
@@ -138,13 +140,13 @@ const t0 = Date.now();
     R.note(`sample ${id}: ${a.ok ? a.rooms.map((r) => `${r.id} ${r.w}x${r.h}@${r.x},${r.y}`).join(' | ') : 'no layout'}; stair ${JSON.stringify(a.core.stair)}`); }
   R.check('1 sample: both levels laid out, valid by my oracle, zero unmet pairs, core where A-8 puts it, deterministic', pr); }
 
-// ================= 2. maximum levels: 8 rooms + lift at all five stair positions =================
+// ================= 2. maximum levels: MAXR rooms + lift at all five stair positions =================
 { const s = Q.plain(PC.sample.state()); s.ans.footprintPct = 50; const fp = PC.site.analyse(s).footprint, pr = [];
-  const rooms = [['bedroom', 'M'], ['bedroom', 'M'], ['bathroom', 'S'], ['bathroom', 'M'], ['office', 'S'], ['storage', 'S'], ['laundry', 'S'], ['living', 'M']].map(([t, z], i) => ({ id: 'r' + (i + 1), area: Q.ROOM_AREA[t][z] }));
+  const rooms = [['bedroom', 'M'], ['bedroom', 'M'], ['bathroom', 'S'], ['bathroom', 'M'], ['office', 'S'], ['storage', 'S'], ['laundry', 'S'], ['living', 'M'], ['storage', 'S'], ['bathroom', 'S']].slice(0, MAXR).map(([t, z], i) => ({ id: 'r' + (i + 1), area: Q.ROOM_AREA[t][z] }));
   const pairs = [['r1', 'r3'], ['r2', 'r4'], ['r5', 'r6'], ['r7', 'r8']];
   for (const pos of POS) for (const lift of [false, true]) { const inp = { W: fp.w, D: fp.d, rooms, pairs, stairs: true, stairPos: pos, lift }, st = { n: 0, worst: 0, none: 0, lowNone: 0, highNone: 0, missed: 0, missed08: 0, missedList: [], snapped: 0, unmet: 0, searchNarrow: 0 };
     const out = judge(inp, `max ${pos}${lift ? '+lift' : ''}`, pr, st); if (!out.ok) pr.push(`max ${pos}${lift ? '+lift' : ''}: no layout (fill ${(st.n && inp.rooms.reduce((a, r) => a + r.area, 0) / (fp.w * fp.d - 13) * 100).toFixed(0)} %)`); }
-  R.check(`2 maximum level (8 rooms, ${fp.w} x ${fp.d} m footprint): laid out and valid at all 5 stair positions, with and without lift`, pr); }
+  R.check(`2 maximum level (${MAXR} rooms, ${fp.w} x ${fp.d} m footprint): laid out and valid at all 5 stair positions, with and without lift`, pr); }
 
 // ================= 3. footprints up to 3:1 plus one step, both directions =================
 { const pr = [], st = { n: 0, worst: 0, none: 0, lowNone: 0, highNone: 0, missed: 0, missed08: 0, missedList: [], snapped: 0, unmet: 0, searchNarrow: 0 }, r = rng(31);
@@ -156,7 +158,7 @@ const t0 = Date.now();
 { const pr = [], st = { n: 0, worst: 0, none: 0, lowNone: 0, highNone: 0, missed: 0, missed08: 0, missedList: [], snapped: 0, unmet: 0, searchNarrow: 0 }, r = rng(2026), det = []; let lowN = 0, highN = 0;
   for (let k = 0; k < N; k++) { const W = 4 + Math.round(r() * 32) / 2, D = 4 + Math.round(r() * 32) / 2, inp = programme(r, W, D); if (inp.fill > 0.85) highN++; else lowN++; const out = judge(inp, `sweep #${k}`, pr, st);
     if (k % 10 === 0 && !eq(out, PC.layout.generate(inp))) det.push(`sweep #${k}`); }
-  R.check(`4 sweep: ${st.n} seeded programmes (1-8 rooms, 0-6 pairs, 5 stair positions, lift, fill 30-100 %): every layout valid by my oracle, unmet pairs match my adjacency, snap kept exactly when valid`, pr);
+  R.check(`4 sweep: ${st.n} seeded programmes (1-${MAXR} rooms, 0-6 pairs, 5 stair positions, lift, fill 30-100 %): every layout valid by my oracle, unmet pairs match my adjacency, snap kept exactly when valid`, pr);
   R.check(`4 sweep: deterministic (${Math.ceil(N / 10)} programmes run twice)`, det);
   // A-8 is a heuristic (one scale factor 0.8-1.2 per cell, two thickness candidates per column); the product rule is
   // only "area within 25 %". So a no-layout my wider search can solve is reported as a rate, not failed; my search
@@ -199,14 +201,14 @@ const t0 = Date.now();
 
 // ================= 6. go(3) timing on the maximum house =================
 { const s = Q.plain(PC.sample.state()); s.ans.basement = true; s.ans.floors = 3; s.ans.footprintPct = 50; s.ans.lift = true; let id = 30;
-  for (const lv of ['B', '2', 'G', '1']) while (s.ans.rooms.filter((r) => r.level === lv).length < 8) s.ans.rooms.push({ id: 'r' + id++, type: 'storage', level: lv, size: 'S', area: null, master: false });
+  for (const lv of ['B', '2', 'G', '1']) while (s.ans.rooms.filter((r) => r.level === lv).length < MAXR) s.ans.rooms.push({ id: 'r' + id++, type: 'storage', level: lv, size: 'S', area: null, master: false });
   s.ans.nextRoomId = id; s.plans = {}; s.stage = 2; PC.store.replace(s); let best = 1e9;
   for (let k = 0; k < 3; k++) { PC.store.replace({ ...Q.plain(PC.store.get()), plans: {}, stage: 2 }); PC.stages.MAX_BUILT = Math.max(PC.stages.MAX_BUILT, 3); const t = process.hrtime.bigint(); PC.store.go(3); best = Math.min(best, Number(process.hrtime.bigint() - t) / 1e6); }
   const st = PC.store.get(), pr = []; if (st.stage !== 3) pr.push('stage ' + st.stage);
   for (const lv of ['B', 'G', '1', '2']) { const p = st.plans[lv]; if (!p) { pr.push(lv + ': no plan'); continue; } if (p.sig !== PC.sig.level(st, lv)) pr.push(lv + ': stale'); if (!p.error) pr.push(...layoutProblems(...(() => { const inp = PC.plans.input(st, lv); return [inp.W, inp.D, inp, PC.layout.core(inp.W, inp.D, inp.stairs, inp.stairPos, inp.lift), p.rooms]; })()).map((x) => lv + ': ' + x)); }
   const cores = ['B', 'G', '1', '2'].map((lv) => { const inp = PC.plans.input(st, lv); return JSON.stringify(PC.layout.generate(inp).core); });
   if (new Set(cores).size !== 1) pr.push('stair / lift differ between levels');
-  R.check(`6 maximum house (basement + 3 floors, 8 rooms each, lift): go(3) lays out every level in ${best.toFixed(0)} ms (best of 3, < 500), plans valid, one identical core on every level`, best < 500 ? pr : pr.concat([`${best} ms`]));
+  R.check(`6 maximum house (basement + 3 floors, ${MAXR} rooms each, lift): go(3) lays out every level in ${best.toFixed(0)} ms (best of 3, < 500), plans valid, one identical core on every level`, best < 500 ? pr : pr.concat([`${best} ms`]));
   R.note(`maximum house: go(3) best of 3 ${best.toFixed(0)} ms; ${['B', 'G', '1', '2'].map((lv) => `${lv} ${st.plans[lv] && (st.plans[lv].error || 'ok, unmet ' + st.plans[lv].unmet.length)}`).join(', ')}`); }
 
 // ================= 7. F3-T2 retry cases (A-8 step 8; PM 4.4 row) =================

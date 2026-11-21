@@ -66,7 +66,7 @@
   S.rooms = (spec) => { // spec: [[levelName, [[name, type, size], ...]], ...]
     const list = q('room-list'); list.textContent = '';
     for (const [lvl, rooms] of spec) {
-      const g = tpl('tpl-room-group'); q('group-name', g).textContent = lvl; q('group-count', g).textContent = rooms.length + ' of 8';
+      const g = tpl('tpl-room-group'); q('group-name', g).textContent = lvl; q('group-count', g).textContent = rooms.length + ' of ' + ((window.PC && PC.C && PC.C.MAX_ROOMS_PER_LEVEL) || 8);
       for (const [name, type, size, lv] of rooms) {
         const r = tpl('tpl-room-row'); q('room-name', r).textContent = name; q('room-type', r).value = type; q('room-level', r).value = lv; q('room-size', r).value = size;
         q('room-area-hint', r).textContent = size === 'exact' ? '' : '16 m²';

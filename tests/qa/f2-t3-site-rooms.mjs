@@ -64,11 +64,13 @@ const ROOMS = () => ({ rows: [...document.querySelectorAll('[data-pc="room-list"
   groups: [...document.querySelectorAll('[data-pc="room-list"] [data-level]')].map((g) => [g.dataset.level, g.querySelector('[data-pc="group-count"]').textContent]),
   msg: (() => { const m = document.querySelector('[data-pc="room-msg"]'); return m.hidden ? '' : m.textContent; })(), pmsg: (() => { const m = document.querySelector('[data-pc="pair-msg"]'); return m.hidden ? '' : m.textContent; })(),
   pairs: [...document.querySelectorAll('[data-pc="pair-list"] [data-pc="pair-text"]')].map((x) => x.textContent), invalid: Object.keys(PC.store.session.invalidFields) });
-// The room list shows the state: one group per existing level with "n of 8", one row per room with my name, area, controls.
+// The room list shows the state: one group per existing level with "n of MAX", one row per room with my name, area, controls.
+// F4-T2 QA-first (CD-4): MAX = PC.C.MAX_ROOMS_PER_LEVEL of the build (8 today, 10 after F4-T2 Step 0.1); pairs stay 6.
 async function roomsProblems(S) {
   const s = await S.state(), a = s.ans, u = a.unit, P = await S.page.evaluate(ROOMS), names = myNames(a), f = [];
   const levels = Q.levelIds(a); if (!eq(P.groups.map((g) => g[0]), levels)) f.push(`groups ${P.groups.map((g) => g[0])} vs levels ${levels}`);
-  for (const [lv, txt] of P.groups) { const n = a.rooms.filter((r) => r.level === lv).length; if (txt !== `${n} of 8`) f.push(`${lv} count "${txt}" vs ${n} of 8`); }
+  const MAX = await S.page.evaluate(() => PC.C.MAX_ROOMS_PER_LEVEL);
+  for (const [lv, txt] of P.groups) { const n = a.rooms.filter((r) => r.level === lv).length; if (txt !== `${n} of ${MAX}`) f.push(`${lv} count "${txt}" vs ${n} of ${MAX}`); }
   if (P.rows.length !== a.rooms.length) f.push(`${P.rows.length} rows for ${a.rooms.length} rooms`);
   for (const r of a.rooms) { const w = P.rows.find((x) => x.id === r.id); if (!w) { f.push('no row for ' + r.id); continue; }
     const area = r.size === null ? r.area : Q.ROOM_AREA[r.type][r.size];
@@ -324,32 +326,37 @@ try {
     const n0 = (await S.ans()).rooms.length; await S.act('btn-room-add');
     { const a = await S.ans(), r = a.rooms[a.rooms.length - 1]; R.check(`${V} G Exact 200 sq ft office on the First floor stored as 18.5806 m²`, a.rooms.length === n0 + 1 && r.type === 'office' && r.level === '1' && r.size === null && Math.abs(r.area - 200 * Q.FT * Q.FT) < 1e-3 ? [] : [JSON.stringify(r)]); }
     await rooms(S, 'G after exact add (ft)'); await sync(S, 'G after exact add (ft)');
-    // count steppers stay within 1-8
+    // count steppers stay within 1-MAX (F4-T2 QA-first, CD-4: MAX = PC.C.MAX_ROOMS_PER_LEVEL, 8 today, 10 after Step 0.1)
+    const MAX = await S.page.evaluate(() => PC.C.MAX_ROOMS_PER_LEVEL);
     await S.act('unit-m'); await S.act(lab('room-add-size', 'S'));
-    for (let i = 0; i < 9; i++) await S.act('room-add-count-inc'); R.check(`${V} G count + stops at 8`, (await S.page.evaluate(() => document.querySelector('[data-pc="room-add-count"]').value)) === '8');
-    for (let i = 0; i < 9; i++) await S.act('room-add-count-dec'); R.check(`${V} G count - stops at 1`, (await S.page.evaluate(() => document.querySelector('[data-pc="room-add-count"]').value)) === '1');
-    // the First floor has 8 now (7 + office): a 9th is refused inline, nothing stored, no dialog
+    for (let i = 0; i < MAX + 1; i++) await S.act('room-add-count-inc'); R.check(`${V} G count + stops at ${MAX}`, (await S.page.evaluate(() => document.querySelector('[data-pc="room-add-count"]').value)) === String(MAX));
+    for (let i = 0; i < MAX + 1; i++) await S.act('room-add-count-dec'); R.check(`${V} G count - stops at 1`, (await S.page.evaluate(() => document.querySelector('[data-pc="room-add-count"]').value)) === '1');
+    // the First floor has 8 now (7 + office); with MAX > 8 it is topped up to MAX with storage rooms (store commit, the
+    // add form is tested above): one more is refused inline, nothing stored, no dialog
+    if (MAX > 8) await S.page.evaluate((MAX) => PC.store.commit((s) => { while (s.ans.rooms.filter((r) => r.level === '1').length < MAX) s.ans.rooms.push({ id: 'r' + s.ans.nextRoomId++, type: 'storage', level: '1', size: 'S', area: null, master: false }); }), MAX);
+    const fullRe = new RegExp(`First floor already has ${MAX} rooms`);
     { const b = await S.state(); await S.act('btn-room-add'); const P = await S.page.evaluate(ROOMS);
-      R.check(`${V} G a 9th room on the First floor is refused inline, nothing stored`, eq(await S.state(), b) && /First floor already has 8 rooms/.test(P.msg) && !(await S.dialogOpen()) ? [] : [P.msg]); }
-    // count 3 on the ground floor (7 rooms): refused, only 1 more fits
-    await pick(S, '[data-pc="room-add-level"]', 'G'); await S.act('room-add-count-inc'); await S.act('room-add-count-inc');
-    { const b = await S.state(); await S.act('btn-room-add'); const P = await S.page.evaluate(ROOMS); R.check(`${V} G 3 more on the Ground floor (7 of 8): refused, says 1 more fits, nothing stored`, eq(await S.state(), b) && /1 more fits/.test(P.msg) ? [] : [P.msg]); }
+      R.check(`${V} G a room beyond ${MAX} on the First floor is refused inline, nothing stored`, eq(await S.state(), b) && fullRe.test(P.msg) && !(await S.dialogOpen()) ? [] : [P.msg]); }
+    // count (MAX - 7) + 2 on the ground floor (7 rooms): refused, only MAX - 7 more fit
+    const free = MAX - 7;
+    await pick(S, '[data-pc="room-add-level"]', 'G'); for (let i = 0; i < free + 1; i++) await S.act('room-add-count-inc');
+    { const b = await S.state(); await S.act('btn-room-add'); const P = await S.page.evaluate(ROOMS); R.check(`${V} G ${free + 2} more on the Ground floor (7 of ${MAX}): refused, says ${free} more fit${free === 1 ? 's' : ''}, nothing stored`, eq(await S.state(), b) && new RegExp(`${free} more fit${free === 1 ? 's' : ''}\\b`).test(P.msg) ? [] : [P.msg]); }
     // count adds several rooms at once, auto-named: 1 more bedroom fits on the Ground floor (7 of 8) -> "Bedroom"; then a
     // second level with room: add 2 laundries to the First floor is refused (8 of 8) — so delete one First-floor room and add 1
     await S.type('room-add-count', '1'); await S.act(lab('room-add-size', 'S')); await pick(S, '[data-pc="room-add-type"]', 'bedroom'); await pick(S, '[data-pc="room-add-level"]', 'G'); await S.act('btn-room-add');
     await rooms(S, 'G one bedroom added to the Ground floor (named by my rule)');
     { const a = await S.ans(), office = a.rooms.find((r) => r.type === 'office' && r.size === null); await S.act(roomCss(office.id, 'room-delete')); await S.act(roomCss(a.rooms.find((r) => r.type === 'office' && r.size !== null).id, 'room-delete')); }
     await pick(S, '[data-pc="room-add-type"]', 'bathroom'); await pick(S, '[data-pc="room-add-level"]', '1'); await S.type('room-add-count', '2'); await S.act('btn-room-add');
-    { const a = await S.ans(); R.check(`${V} G count 2 bathrooms on the First floor (6 of 8): both added`, a.rooms.filter((r) => r.level === '1' && r.type === 'bathroom').length === 4 ? [] : [JSON.stringify(a.rooms.filter((r) => r.level === '1').map((r) => r.type))]); }
+    { const a = await S.ans(); R.check(`${V} G count 2 bathrooms on the First floor (${MAX - 2} of ${MAX}): both added`, a.rooms.filter((r) => r.level === '1' && r.type === 'bathroom').length === 4 ? [] : [JSON.stringify(a.rooms.filter((r) => r.level === '1').map((r) => r.type))]); }
     await rooms(S, 'G count 2 added: Bathroom 1..4 numbered on the First floor'); await sync(S, 'G count 2 added');
     // a row moved to a full level is refused with a message
     { const a = await S.ans(), gr = a.rooms.find((r) => r.level === 'G'); const b = await S.state(); await pick(S, roomCss(gr.id, 'room-level').slice(4), '1');
-      R.check(`${V} G moving a room to the full First floor is refused with a message, control back on its level`, eq(await S.state(), b) && /First floor already has 8 rooms/.test((await S.page.evaluate(ROOMS)).msg) ? [] : [(await S.page.evaluate(ROOMS)).msg]); await rooms(S, 'G refused level change'); }
+      R.check(`${V} G moving a room to the full First floor is refused with a message, control back on its level`, eq(await S.state(), b) && fullRe.test((await S.page.evaluate(ROOMS)).msg) ? [] : [(await S.page.evaluate(ROOMS)).msg]); await rooms(S, 'G refused level change'); }
     // bad text + Enter
     await S.act(lab('room-add-size', 'exact'));
     for (const t of ['abc', '2', '200', '']) { const b = await S.state(); await S.type('room-add-area', t); await S.act('btn-room-add'); const P = await S.page.evaluate(ROOMS);
       R.check(`${V} G exact "${t}" m²: refused with the 4-80 m² range, no dialog, nothing stored`, eq(await S.state(), b) && /4 m² to 80 m²/.test(P.msg) && !(await S.dialogOpen()) ? [] : [P.msg]); }
-    await S.type('room-add-count', '9'); await S.act(lab('room-add-size', 'M')); { const b = await S.state(); await S.act('btn-room-add'); R.check(`${V} G typed count 9 refused`, eq(await S.state(), b) && /count from 1 to 8/.test((await S.page.evaluate(ROOMS)).msg)); }
+    await S.type('room-add-count', String(MAX + 1)); await S.act(lab('room-add-size', 'M')); { const b = await S.state(); await S.act('btn-room-add'); R.check(`${V} G typed count ${MAX + 1} refused`, eq(await S.state(), b) && new RegExp(`count from 1 to ${MAX}\\.`).test((await S.page.evaluate(ROOMS)).msg)); }
     if (vp === PHONE) { await S.shot('G-rooms-sample'); }
     await S.layout(`${V} G rooms group with message`);
     await S.end(`${V} G`);
@@ -502,7 +509,7 @@ try {
     // with the same content (master bedroom at an exact 80 m² = 861 sq ft) and stricter checks (one line each, inside the
     // row, head no taller than 44 px).
     { const S = await kit(browser, vp); await S.openGroup('rooms'); await S.layout(`${V} M rooms sample`); await S.shot('M-rooms-sample');
-      await S.page.evaluate(() => PC.store.commit((s) => { const have = s.ans.rooms.filter((r) => r.level === 'G').length; for (let i = have; i < 8; i++) s.ans.rooms.push({ id: 'r' + (s.ans.nextRoomId + i - have), type: 'storage', level: 'G', size: 'S', area: null, master: false }); s.ans.nextRoomId += 8 - have; }));
+      await S.page.evaluate(() => PC.store.commit((s) => { const have = s.ans.rooms.filter((r) => r.level === 'G').length; for (let i = have; i < PC.C.MAX_ROOMS_PER_LEVEL; i++) s.ans.rooms.push({ id: 'r' + (s.ans.nextRoomId + i - have), type: 'storage', level: 'G', size: 'S', area: null, master: false }); s.ans.nextRoomId += PC.C.MAX_ROOMS_PER_LEVEL - have; }));
       await S.settle(); await rooms(S, 'M full level'); await S.layout(`${V} M rooms full level`); await S.shot('M-rooms-full'); await S.end(`${V} M sample`); }
     for (const [pname, plot] of [['sample', null], ['thin', rect(10, 50)], ['12-vertex', COMB]]) for (const u of ['m', 'ft']) {
       const S = await kit(browser, vp, plot ? { plot } : {}); if (u === 'ft') await S.act('unit-ft');

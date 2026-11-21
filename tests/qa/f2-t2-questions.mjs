@@ -322,12 +322,14 @@ try {
     // my expectations (F2-S2, 4.1 limits, A-7): the First floor's 7 sample rooms cannot move to the Ground floor (7 + 7 > 8 rooms
     // per floor), so only Delete is possible; the plans lost or regenerated are the First floor (removed) and the Ground floor
     // (the stairs go with the only upper floor), i.e. exactly PC.store.affected of the delete result.
+    // F4-T2 QA-first (CD-4): MAX = PC.C.MAX_ROOMS_PER_LEVEL of the build (8 today, 10 after Step 0.1); 7 + 7 exceeds both.
+    const MAX = await S.page.evaluate(() => PC.C.MAX_ROOMS_PER_LEVEL);
     { const a = s0.ans, g = a.rooms.filter((r) => r.level === 'G').length, f1 = a.rooms.filter((r) => r.level === '1').length, pr = [];
       if (d.title !== 'Remove First floor?' || d.ok !== 'Remove' || d.cancel !== 'Cancel') pr.push(`title/buttons ${d.title} / ${d.ok} / ${d.cancel}`);
       if (!d.rooms || !d.rooms.includes(`The First floor has ${f1} rooms.`)) pr.push('room sentence lacks the count: ' + d.rooms);
-      if (g + f1 <= 8) pr.push(`test premise: ${g} + ${f1} rooms fit on one floor`);
+      if (g + f1 <= MAX) pr.push(`test premise: ${g} + ${f1} rooms fit on one floor`);
       if (!(d.move && d.move.disabled && !d.move.checked && d.del && d.del.checked && !d.del.disabled)) pr.push('move should be disabled and delete chosen: ' + JSON.stringify([d.move, d.del]));
-      if (!/cannot be moved/.test(d.rooms || '') || !/Ground floor/.test(d.rooms || '') || !/more than 8 rooms/.test(d.rooms || '')) pr.push('the room sentence does not say why moving is impossible (Ground floor over 8 rooms): ' + d.rooms);
+      if (!/cannot be moved/.test(d.rooms || '') || !/Ground floor/.test(d.rooms || '') || !new RegExp(`more than ${MAX} rooms`).test(d.rooms || '')) pr.push(`the room sentence does not say why moving is impossible (Ground floor over ${MAX} rooms): ` + d.rooms);
       if (!(/Ground floor/.test(d.text) && /First floor/.test(d.text) && !/Basement|Second floor/.test(d.text))) pr.push('plans sentence must name exactly Ground and First floor: ' + d.text);
       if (/rooms/.test(d.text)) pr.push('room text leaked into the plans sentence: ' + d.text);
       R.check(`${V} E Q7 2 -> 1 floor (sample, valid plans): three-way dialog, ${f1} rooms, move refused (Ground floor would exceed 8), Ground and First plans named`, pr); }
@@ -346,10 +348,10 @@ try {
     { const a = (await S.state()).ans, g = a.rooms.filter((r) => r.level === 'G').length, pr = [];
       if (!/^Remove Basement\?$/.test(d.title) || d.ok !== 'Remove') pr.push(`title/button ${d.title} / ${d.ok}`);
       if (!d.rooms || !d.rooms.includes('The Basement has 1 room.') || !/Ground floor/.test(d.rooms) || /cannot/.test(d.rooms)) pr.push('room sentence: ' + d.rooms);
-      if (g + 1 > 8) pr.push('test premise: ground floor full');
+      if (g + 1 > MAX) pr.push('test premise: ground floor full');
       if (!(d.move && !d.move.disabled && d.move.checked)) pr.push('move should be possible and chosen: ' + JSON.stringify(d.move));
       if (!(/Basement/.test(d.text) && /Ground floor/.test(d.text) && !/First floor/.test(d.text))) pr.push('plans sentence must name the Basement and the Ground floor: ' + d.text);
-      R.check(`${V} E basement off (one floor, 1 basement room): move to the Ground floor offered (${g} + 1 <= 8), Basement and Ground plans named`, pr);
+      R.check(`${V} E basement off (one floor, 1 basement room): move to the Ground floor offered (${g} + 1 <= ${MAX}), Basement and Ground plans named`, pr);
       // switching to Delete still names the same plans (both remove the Basement and the stairs)
       await S.act('css:[data-pc="dialog-layer"] label:has([data-pc="level-remove-delete"])'); const d2 = await S.dialogText();
       R.check(`${V} E basement dialog, Delete chosen: still the Basement and Ground floor plans`, d2.del.checked && /Basement/.test(d2.text) && /Ground floor/.test(d2.text) ? [] : [JSON.stringify(d2)]); }

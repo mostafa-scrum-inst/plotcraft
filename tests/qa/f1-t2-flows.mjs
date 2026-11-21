@@ -120,6 +120,8 @@ try {
       R.check(`${V} D plans unapproved: 1-3 open, 4-5 locked`, (await s.steps()) === 'CaaLL' ? [] : [await s.steps()]);
       await s.act('step-4'); await s.settle(); R.check(`${V} D locked step 4 says "Approve all floors first"`, eq(await s.toasts(), ['Approve all floors first']) && (await s.step(4)).title === 'Approve all floors first' ? [] : [JSON.stringify(await s.toasts())]);
       await s.act('btn-next'); await s.act('btn-next'); await s.settle();
+      // F4-T2 Step 0.7: the build's strip stages (marker PC.ui.shell.STRIP_STAGES; [1,3,4] before it is exposed, [1,3] after)
+      const STRIPS = await s.page.evaluate(() => (PC.ui && PC.ui.shell && PC.ui.shell.STRIP_STAGES) || PC.C.STRIP_STAGES || [1, 3, 4]), on4 = STRIPS.includes(4);
       let bar = await s.bar(); R.check(`${V} D stage 3: label "Next: Interior", Next disabled until floors approved, strip shown`, (await s.stages()) === '3' && bar.label === NEXT[3] && !bar.next && (await s.shown('sample-strip')) ? [] : [JSON.stringify(bar) + ' stages ' + await s.stages()]);
       R.check(`${V} D stage 3 ${L3() ? 'has its controller (F3-T1): no' : 'has no controller yet: the'} "not built yet" notice${L3() ? '' : ' is shown (TL condition 1)'}`, eq(await s.banners(), L3() ? [] : ['This stage is not built yet: static preview']) ? [] : [JSON.stringify(await s.banners())]);
       await s.page.evaluate((p) => PC.store.commit((st) => { st.plans.G = { ...p, sig: PC.sig.level(st, 'G') }; }, { nav: true }), plan(true));
@@ -127,9 +129,9 @@ try {
       await s.page.evaluate((p) => PC.store.commit((st) => { st.plans['1'] = { ...p, sig: PC.sig.level(st, '1') }; }, { nav: true }), plan(true));
       R.check(`${V} D all floors approved: Next enabled, steps 4-5 open`, (await s.bar()).next && (await s.steps()) === 'DDCaa' ? [] : [await s.steps()]);
       await s.act('btn-next'); await s.settle(); bar = await s.bar();
-      R.check(`${V} D stage 4: label "Build 3D model", strip shown`, (await s.stages()) === '4' && bar.label === NEXT[4] && bar.next && (await s.shown('sample-strip')) ? [] : [JSON.stringify(bar)]);
+      R.check(`${V} D stage 4: label "Build 3D model", strip ${on4 ? 'shown' : 'hidden, no Skip to 3D (round-8 decision 9)'}`, (await s.stages()) === '4' && bar.label === NEXT[4] && bar.next && (await s.shown('sample-strip')) === on4 && (await s.shown('btn-skip3d')) === on4 ? [] : [JSON.stringify(bar)]);
       R.check(`${V} D stage 4 ${L5() ? 'has its controller (F3-T2): no notice' : '(no controller): notice shown, exactly once'}`, eq(await s.banners(), L5() ? [] : ['This stage is not built yet: static preview']) ? [] : [JSON.stringify(await s.banners())]);
-      await s.layout(`${V} D stage 4 with strip`);
+      await s.layout(`${V} D stage 4${on4 ? ' with strip' : ''}`);
       await s.act('btn-next'); await s.settle(); bar = await s.bar();
       R.check(`${V} D stage 5: Next hidden, Back enabled, strip hidden, steps 1-4 done`, (await s.stages()) === '5' && bar.nextHidden && bar.back && !(await s.shown('sample-strip')) && (await s.steps()) === 'DDDDC' ? [] : [JSON.stringify(bar) + await s.steps()]);
       if (L3D()) { await s.until(async () => (await s.v3()).unavailable, 3000); const v = await s.v3();
@@ -138,7 +140,7 @@ try {
       await s.layout(`${V} D stage 5`);
       await s.act('btn-back'); await s.settle(); R.check(`${V} D Back from stage 5 opens stage 4`, (await s.stages()) === '4' && (await s.state()).stage === 4);
       await s.act('btn-back'); await s.act('btn-back'); await s.settle();
-      R.check(`${V} D back on stage 2: strip hidden (strip is for stages 1, 3, 4 only)`, (await s.stages()) === '2' && !(await s.shown('sample-strip')));
+      R.check(`${V} D back on stage 2: strip hidden (strip is for stages ${STRIPS.join(', ')} only)`, (await s.stages()) === '2' && !(await s.shown('sample-strip')));
       R.check(`${V} D back on stage 2 (has a controller): the notice is gone again`, (await s.banners()).length === 0 ? [] : [JSON.stringify(await s.banners())]);
       R.check(`${V} D navigation kept sampleClean`, (await s.state()).sampleClean === true);
       // a plan with an error blocks stage 4 again and the app leaves the now-locked stage only by user action

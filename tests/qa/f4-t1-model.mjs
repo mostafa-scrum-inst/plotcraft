@@ -139,18 +139,18 @@ R.note(`matrix: ${built} states built (${deep} deep, ${wide} wide footprints), $
 {
   const f = [];
   const s = make((t) => { t.plot.pts = [[0, 0], [60, 0], [60, 50], [0, 50]]; t.ans.footprintPct = 40; t.ans.floors = 3; t.ans.basement = true; t.ans.lift = true;
-    const per = ['bedroom', 'bedroom', 'bathroom', 'office', 'storage', 'laundry', 'maid', 'bathroom'];
+    const per = ['bedroom', 'bedroom', 'bathroom', 'office', 'storage', 'laundry', 'maid', 'bathroom', 'storage', 'office'].slice(0, PC.C.MAX_ROOMS_PER_LEVEL); // F4-T2 CD-4: the build's maximum (8 / 10)
     t.ans.rooms = []; t.ans.pairs = []; let n = 1; for (const l of ['B', 'G', '1', '2']) for (const ty of per) t.ans.rooms.push({ id: 'r' + n++, type: ty, level: l, size: 'S', area: null, master: false }); t.ans.nextRoomId = n; });
   if (!ok(s)) f.push('setup: maximum house has no layout');
   else {
     const h = PC.house.build(s), X = H.expected(s, PC.site.analyse(s).footprint, D), { made, sum } = shell(h);
     f.push(...modelProblems(s, h, X), ...H.shellProblems(sum, X, D));
-    if (h.levels.some((l) => l.rooms.length !== 8)) f.push('not 8 rooms per level');
+    if (h.levels.some((l) => l.rooms.length !== PC.C.MAX_ROOMS_PER_LEVEL)) f.push(`not ${PC.C.MAX_ROOMS_PER_LEVEL} rooms per level`);
     if (sum.length > 40) f.push(`${sum.length} meshes > 40`);
     if (made.length !== sum.length) f.push(`tracked ${made.length} != meshes in the world ${sum.length}`);
-    R.note(`maximum house (B + 3 floors, lift, 8 rooms each): ${sum.length} meshes`);
+    R.note(`maximum house (B + 3 floors, lift, ${PC.C.MAX_ROOMS_PER_LEVEL} rooms each): ${sum.length} meshes`);
   }
-  R.check('6 maximum house (basement + 3 floors + lift, 8 rooms per level): shell = my oracle, <= 40 meshes, every mesh tracked for disposal', f);
+  R.check(`6 maximum house (basement + 3 floors + lift, ${PC.C.MAX_ROOMS_PER_LEVEL} rooms per level): shell = my oracle, <= 40 meshes, every mesh tracked for disposal`, f);
 }
 R.note(`node run ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 process.exit(R.done() ? 0 : 1);

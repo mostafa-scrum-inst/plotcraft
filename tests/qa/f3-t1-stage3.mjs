@@ -72,7 +72,7 @@ async function stage3Problems(S) {
     const tierName = (tp, x) => { if (x === 'full') return 'full'; const T = P.table || {}; for (const k of tp === 'bedroom' ? ['bedroom', 'master'] : [tp]) { if (T[k] && x === T[k].short) return 'short'; if (T[k] && x === T[k].tiny) return 'tiny'; } return 'unknown ' + x; };
     for (const [tp, e] of Object.entries(by)) { const kinds = new Set([...e.tiers].map((x) => tierName(tp, x))); if ([...kinds].some((k) => k.startsWith('unknown'))) f.push(`${tp}: label form not in PC.data.roomLabels: ${[...kinds]}`); if (kinds.size > 1) f.push(`${tp} labels drawn at mixed tiers ${[...kinds]}`); if (e.area.size && e.area.size !== e.rooms.size) f.push(`${tp}: area line on ${e.area.size} of ${e.rooms.size} labelled rooms`); } }
   // warnings: unmet pairs of this level, then the F2 warnings
-  if (p && !p.error) { const w = p.unmet.map((q) => `${names[q[0]]} and ${names[q[1]]} are not next to each other.`); if (!eq(P.warn.slice(0, w.length), w)) f.push(`unmet warnings ${JSON.stringify(P.warn)} vs ${JSON.stringify(w)}`); }
+  if (p && !p.error) { const w = p.unmet.map((q) => `${names[q[0]]} and ${names[q[1]]} are not next to each other.`); const pw = P.warn.filter((x) => !/has no way in from the hall or stairs/.test(x)); /* F4-T2 CD-5 access lines (none on the sample, 6.2) are checked in their own suite */ if (!eq(pw.slice(0, w.length), w)) f.push(`unmet warnings ${JSON.stringify(P.warn)} vs ${JSON.stringify(w)}`); }
   return f;
 }
 const check3 = async (S, label) => { await S.settle(); R.check(`${S.vp.tag} ${label}: stage 3 shows the state (tabs, counter, plan, labels, warnings)`, await stage3Problems(S)); };
@@ -80,7 +80,7 @@ const toStage3 = async (S) => { if ((await S.stages()) !== '3') { await S.act('b
 const tapRoom = async (S, id) => { const P = await S.page.evaluate(PLAN), r = P.rooms.find((x) => x.id === id), c = await S.page.evaluate(() => { const b = document.querySelector('[data-pc="plan-canvas"]').getBoundingClientRect(); return [b.left, b.top]; }); await S.tapAt([c[0] + (r.scr.x0 + r.scr.x1) / 2, c[1] + (r.scr.y0 + r.scr.y1) / 2]); };
 const selTab = async (S, id) => S.act(`css:[data-pc="plan-tabs"] [data-level="${id}"]`);
 const MAXHOUSE = (s) => { s.ans.basement = true; s.ans.floors = 3; s.ans.footprintPct = 50; s.ans.lift = true; let id = s.ans.nextRoomId; const T = ['bedroom', 'bathroom', 'office', 'storage', 'laundry', 'maid'];
-  for (const lv of ['B', '2', 'G', '1']) { let k = 0; while (s.ans.rooms.filter((r) => r.level === lv).length < 8) s.ans.rooms.push({ id: 'r' + id++, type: T[k++ % T.length], level: lv, size: 'S', area: null, master: false }); } s.ans.nextRoomId = id; s.plans = {}; };
+  for (const lv of ['B', '2', 'G', '1']) { let k = 0; while (s.ans.rooms.filter((r) => r.level === lv).length < (PC.C.MAX_ROOMS_PER_LEVEL || 8)) s.ans.rooms.push({ id: 'r' + id++, type: T[k++ % T.length], level: lv, size: 'S', area: null, master: false }); } s.ans.nextRoomId = id; s.plans = {}; };
 
 const browser = await launch();
 const t0 = Date.now();

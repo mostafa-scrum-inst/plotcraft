@@ -1,7 +1,25 @@
 # PlotCraft — Product goals and user stories (prototype)
 
-Owner: PM. Source: `docs/00-brief.md`. Status: approved by the CTO (round 2); round 3 edits made at the F1 feature review; round 4 edits apply the client's binding decisions `docs/01-product/client-decisions.md` (CD-1 to CD-3); round 5 edits made at the F2 feature review; rounds 6 and 7 fix user-facing texts at the F3-T2 and F3-T3 plan reviews; round 8 edits made at the F3 feature review; round 9 fixes the stage-5 level selector labels at the F4-T1 plan review.
+Owner: PM. Source: `docs/00-brief.md`. Status: approved by the CTO (round 2); round 3 edits made at the F1 feature review; round 4 edits apply the client's binding decisions `docs/01-product/client-decisions.md` (CD-1 to CD-3); round 5 edits made at the F2 feature review; rounds 6 and 7 fix user-facing texts at the F3-T2 and F3-T3 plan reviews; round 8 edits made at the F3 feature review; round 9 fixes the stage-5 level selector labels at the F4-T1 plan review; round 10 applies CD-4 / CD-5 and answers the F4-T2 plan questions.
 This document says **what** and **how we know it works**. How it is built is the Tech Lead's call.
+
+## Changes in round 10 (2026-11-21, F4-T2 plan + plan review: CD-4 / CD-5 applied, PM questions Q2, Q3, Q5, Q7, Q8 and the Roof-on view; no story IDs changed)
+
+Answers to `docs/03-tasks/F4-T2/plan.md` §14 (PM) and `plan-review.md` required item 2. Measured on the FS scratch probe (CD-5 literal definition, generator sweep of 2 400 programmes, 2 367 laid out): 26.7 % of levels flag a room (9.2 % of rooms); 5.7 % of levels with 1–3 rooms, 22 % with 4–5, 45 % with 6–8; 15 % below 50 % fill, 66 % above 85 %. Of the 1 068 flagged rooms, 780 are larger than 9.5 m2 (bedrooms, living rooms boxed in), only 288 are service-sized. So the warning is mostly signal, not noise: it marks the floors an architect would fix anyway (the generator has no circulation rule, A-8).
+
+| Item | Decision / final text |
+|---|---|
+| CD-4 numbers (client decision) | 4.1 Q11, 4.3 "Levels", F3-S1 sweep, F5-S2 and G6 now say **10 rooms per plan level** (maximum house 4 x 10 = 40 rooms). |
+| Q2 sample (CD-5) | **Neither (a) nor (b): refine the access definition (c), within CD-5.** 6.2 requires the sample to show **no warnings**, and its boxed-in Bathroom (S 4, between the Maid's room and the Laundry) is the maid's bathroom, a normal Gulf-villa layout, not a defect. Changing the sample breaks goldens for nothing. With the refinement below the sample is clean (probe: Ground and First no flag) and its layout, goldens and approvals are unchanged. |
+| CD-5 access definition (PM refinement of the PM definition in CD-5; the client's decision "warn, name each room" is unchanged) | A room **has access** when it shares at least 0.8 m of a non-exterior side with hall (footprint not covered by rooms or the core) or with the stair / lift. A room without it is **reached through** a neighbour that has access or is itself reached, when they share a wall (`PC.layout.adjacent`) and either (1) they are a must-be-adjacent pair (CD-5's en-suite rule), or (2) it is a **Bathroom** and the neighbour is a **Bedroom or Maid's room** (en-suite), or (3) it is a **Storage or Laundry** and the neighbour is any room other than a Bathroom, Storage or Laundry. Chains count (fixed point: a Bathroom through a Bedroom that is reached through its paired Living counts). Every other room without access is named. The host table is data (`PC.C`, one place), unit-tested per rule. Effect on the sweep: at most about 4 points fewer flagged levels (the typeless sweep cannot measure it exactly; small-room proxy 26.7 % -> 22.5 %); a boxed-in Bedroom, Living, Majlis, Office, Kitchen or Dining is always named. |
+| Q3 warning text | One line per room, listed with the level's warnings, never blocking Approve, updated after each release: **"The Bathroom has no way in from the hall or stairs. Move or resize a neighbouring room to open one."** The room is named as the pair warning names it (with its number when the floor has two of a type, e.g. "Bathroom 2"). "Drag a room aside" dropped: on a full floor there may be no hall to drag into, so the hint names resize too. |
+| Q3 hall pockets | A hall pocket that touches no stair, lift or entrance **counts as hall for now** (FS proposal accepted). Known limit, listed in the F4-T2 outcome; revisit only if the client or the phone check reports it. |
+| Q5 Undo | **Dropped on a tab switch to another floor** (accepted: one step, on the floor you see). Button `aria-label` and tooltip "Undo last edit". Confirmation in `plan-msg`: **"Last edit undone."**; when the undo also restores the approval: **"Last edit undone. Ground floor approved again."** (floor name as in the other stage-3 messages). |
+| Q7 gate without a wall | **No gate without the wall** (Q17 lists the gate under the wall; Designer agrees). On stage 2 the Gate position control is **disabled while Boundary wall is off** (like Pool size with Pool off); the chosen value is kept and comes back with the wall. The entrance path strip kept free of vegetation (A-13) runs from the entrance to the street edge when there is no gate (TL places it). |
+| Q8 seating that does not fit | **Never silent**: a new F2-S3 warning (non-blocking, stage 2 and again on Floor plans, like parking / pool), computed by the same placement as the 3D: **"Garden seating does not fit in the yard: it is left out of the 3D scene. Try a lower footprint %, fewer cars or a smaller pool."** The sample's seating must fit (6.2 no warnings); if it does not, FS stops and asks. |
+| Roof on (TL plan review, required item 2) | **Accepted**: with the Roof on (level "All") the house is shown **closed**: the exterior walls continue from the dollhouse cut up under the roof, so the roof never floats; the entrance stays visible. With the Roof off the dollhouse cut is as today. F4-S1 and 3.3 reworded. |
+
+**Client information (non-blocking, with the next client message):** CD-5 warnings will be common on full floors (about 1 in 4 laid-out floors, nearly half of floors with 6 or more rooms). The decision stands; the client may later ask for a generator access rule as its own task (see the card in `status.md` / PM reply).
 
 ## Changes in round 9 (2026-11-21, F4-T1 plan review: stage-5 level selector labels and two confirmations; no story IDs changed)
 
@@ -135,7 +153,7 @@ Product answers:
 | G3 | The architect stays in control of the layout. | No 3D build is possible until every plan level is individually approved; any room can be moved/resized before approval. Only exception: "Skip to 3D" on the unmodified sample project (F1-S5). |
 | G4 | Works on any device from day one. | Every story passes at 360x640 touch, 768x1024 touch and 1280x800 mouse; no horizontal page scroll; all touch targets >= 44 px. |
 | G5 | Robust inside the sandbox. | Zero uncaught console errors on the happy path and on every listed edge case; app fully usable with `localStorage` unavailable; no `alert/confirm/prompt`, downloads, or network calls other than the one three.js script. |
-| G6 | Runs on a mid-range phone. | Hosted page: sample scene stays interactive (orbit responds without visible stalls). Locally testable proxy for the **maximum house** (3 floors + basement, 8 rooms per level, furniture "full", pool, 4 covered cars, all extras): 150 or fewer meshes in the scene (an instanced mesh counts as one), exactly one shadow-casting light, shadow map 1024 or smaller, pixel ratio 2 or lower, no animation frames requested while the 3D view is hidden. The TL may adjust these numbers in this row. |
+| G6 | Runs on a mid-range phone. | Hosted page: sample scene stays interactive (orbit responds without visible stalls). Locally testable proxy for the **maximum house** (3 floors + basement, 10 rooms per level (CD-4), furniture "full", pool, 4 covered cars, all extras): 150 or fewer meshes in the scene (an instanced mesh counts as one), exactly one shadow-casting light, shadow map 1024 or smaller, pixel ratio 2 or lower, no animation frames requested while the 3D view is hidden. The TL may adjust these numbers in this row. |
 
 ### Non-goals (prototype)
 - Real solar positions, climate or geographic data (time of day and seasons are visual approximations).
@@ -215,7 +233,7 @@ Product answers:
 - **Pitched:** two-slope gable roof, ridge along the longer footprint side.
 - **Terrace:** flat slab with a tall parapet (about 1 m) and a pergola block.
 - **Usable roof = yes** (Q7): Pitched is unavailable; if Pitched was selected it changes to Flat with an inline note. A usable roof shows a stair-head block on the roof and at least the tall parapet.
-- **The roof never hides interiors by default:** a separate "Roof" toggle in the 3D view is **off** by default; the roof is drawn only when it is on **and** the level selector is "All". Using the room finder or starting the tour switches it off.
+- **The roof never hides interiors by default:** a separate "Roof" toggle in the 3D view is **off** by default; the roof is drawn only when it is on **and** the level selector is "All", and then the exterior walls are drawn up to it (closed house, round 10). Using the room finder or starting the tour switches it off.
 
 ## 4. Defaults and numbers (single source; the TL may propose changes here, in one place)
 
@@ -233,7 +251,7 @@ Product answers:
 | 8 Ceiling height | 3.0 m | 2.4–4.5 m |
 | 9 Roof type | Flat | Flat, Pitched, Terrace (section 3.3) |
 | 10 Exterior style | Sand | Sand, White, Terracotta, Grey |
-| 11 Room list | Ground: Living, Kitchen, Bathroom. First: Bedroom x2, Bathroom | 1–8 rooms per plan level, 10 types |
+| 11 Room list | Ground: Living, Kitchen, Bathroom. First: Bedroom x2, Bathroom | 1–10 rooms per plan level (CD-4), 10 types |
 | 12 Room size | M | S / M / L, or exact 4–80 m2 |
 | 13 Adjacent pairs | none | up to 6 pairs per level |
 | 14 Stairs / lift | Centre; lift no | Centre, Front-left, Front-right, Back-left, Back-right (front = street side; left/right as seen from the street facing the house); lift yes/no |
@@ -275,7 +293,7 @@ The default room list needs 60 m2 on the ground floor (Living 30 + Kitchen 14 + 
 | Footprint proportions (3.1) | bounding-box proportions limited to **2:1**; only when that footprint is clamped: its long side stretched up to **3:1**, and 3:1 tried in both orientations (CD-1). After rounding: long side at most 2 × (short side + 0.5 m) for 2:1-limited footprints, at most 3 × short side + 0.5 m for stretched / 3:1 footprints (A-6 step 8, CTO correction at the F2 review). After these tries a footprint is not clamped when its long side = target / short side rounded down to 0.5 m |
 | Edge-class overrides (3.1, F2-S4) | any non-street edge, back <-> side; at most one override per edge (so at most 11 on a 12-vertex plot); street edge never; cleared on any outline change, on reopening the shape, or on a Q6 change |
 | Room limits | minimum side 1.5 m; generated rooms within 25 % of requested area and no longer than 3 times their width |
-| Levels | 1–3 floors, optional basement, optional usable roof; at most 8 rooms per plan level (maximum house: 4 plan levels, 32 rooms) |
+| Levels | 1–3 floors, optional basement, optional usable roof; at most 10 rooms per plan level (CD-4; maximum house: 4 plan levels, 40 rooms) |
 
 ### 4.4 Interaction numbers fixed during implementation
 Set by the Tech Lead (architecture A-6, A-8, A-15) and listed here so QA and reviewers have one place to look. They are tuning values, not product rules; a change is made in the code constants and in this table together.
@@ -373,6 +391,8 @@ Draw the land as a polygon with live measurements; includes the stage navigation
     - Exactly one of the two is shown for a clamped footprint; neither for an unclamped one. A footprint stretched to its target, short only by the 0.5 m rounding (3.1 "Clamped after the stretch"), is not clamped: 10 x 50 m at 20 % (6 x 16.5 m = 99 m2) shows no warning; at 24 % (6 x 18.5 m = 111 m2) it shows the proportion wording.
   - footprint + vegetation + parking + pool areas exceed the plot area: vegetation is reduced to what fits and the effective % is shown;
   - parking does not fit between the building and the street edge, or the pool (with its 1 m clearance) does not fit in the back or side open area: the item is left out of the 3D scene and the user is told which, with a fix hint (round 5, final wording): parking — "Try fewer cars, a lower footprint % or a larger front setback (it moves the building back from the street)."; pool — "Try a smaller pool, a lower footprint % or a larger back setback (it moves the building toward the street)." Reason: the building is centred between its setbacks, so a *larger* front (back) setback moves it away from the street (back boundary) and deepens the front (back) yard where parking (the pool) goes first, while a smaller one, or smaller side setbacks (a wider building, narrower side yards), can make things worse. Checked on the sample core: 4 cars at 45 % fit with front 3 m and 6 m but are omitted with front 1 m; pool L at 40 % is omitted with back 2, 3, 4 m and fits with back 5 m or at 25 %. "Try" because one step may not be enough.
+  - garden seating (Q17) does not fit in the yard (round 10): "Garden seating does not fit in the yard: it is left out of the 3D scene. Try a lower footprint %, fewer cars or a smaller pool."
+- Q17: the Gate position control is disabled while Boundary wall is off; its value is kept (round 10).
 - Every blocking condition clears as soon as the answer is fixed, without reloading.
 
 **F2-S4 Correct an edge's class (back / side).** (Round 4, client decision CD-2.) As an architect, I want to say which boundaries are back and which are sides when the automatic 40-degree rule gets it wrong, so that the right setback applies to each edge.
@@ -395,10 +415,12 @@ Draw the land as a polygon with live measurements; includes the stage navigation
 - For every level: every room requested for it appears exactly once, labelled with name and area; rooms are rectangles fully inside the footprint; no two rooms overlap each other or the stair/lift block.
 - When stairs exist, the stair block (and lift if chosen) is at the same position on every level, in the part of the footprint named by Q14.
 - Each generated room's area is within 25 % of the requested area, no side is under 1.5 m, and no room is longer than 3 times its width. Footprint not used by rooms or stairs is shown as hall/circulation, not left blank.
-- Each must-be-adjacent pair shares a wall segment where possible; any pair that could not be satisfied is listed as a warning on that level.
+- Each must-be-adjacent pair shares a wall segment where possible; any pair that could not be satisfied is listed as a warning on that level ("Kitchen and Dining are not next to each other. Drag one against the other to join them.", round 8).
+- **Hall access (CD-5, round 10):** each room with no way in (rule in the round-10 table: 0.8 m onto hall or stair / lift, or reached through a pair partner, an en-suite host or a storage / laundry host) is named in a non-blocking warning on that level: "The Bathroom has no way in from the hall or stairs. Move or resize a neighbouring room to open one." It is re-checked after every edit. The sample shows none.
+- Low fill (round 8): under 50 % fill a non-blocking hint "Rooms fill only 48 % of the Ground floor. Add rooms, choose larger sizes, or lower the footprint % (Q3)."
 - Generation never fails silently: if a level cannot be laid out it shows a message with a link back to the room list.
 - Generation is deterministic: the same inputs give the same layout.
-- The criteria above hold on footprints of every proportion the site model can produce, **up to 3:1** (CD-1): the generator's seeded test sweep includes stretched footprints, at least the 6 x 18 m and 15 x 5 m examples of 3.1 with the default room list and with a full 8-room level that fits by area.
+- The criteria above hold on footprints of every proportion the site model can produce, **up to 3:1** (CD-1): the generator's seeded test sweep includes stretched footprints, at least the 6 x 18 m and 15 x 5 m examples of 3.1 with the default room list and with a full 8-room level that fits by area, and (CD-4) a seeded set of 9- and 10-room levels.
 - "Regenerate this floor" re-creates the layout (in-page confirmation only if the level is edited or approved, naming which, round 6 texts; an untouched Draft regenerates at once) and clears that level's approval only.
 
 **F3-S2 Edit the plan.** As an architect, I want to drag and resize rooms so that the layout matches my intent.
@@ -406,7 +428,8 @@ Draw the land as a polygon with live measurements; includes the stage navigation
 - A room cannot be moved or resized outside the footprint (it stops at the footprint edge) and cannot go below 1.5 m per side.
 - Overlap is **allowed while dragging**; on release, rooms that overlap another room or the stair/lift block are highlighted as invalid with a message, and the level cannot be approved until fixed.
 - The stair and lift blocks are fixed: they cannot be dragged or resized (their position is changed through Q14).
-- A broken must-be-adjacent pair after editing shows a warning (does not block approval).
+- A broken must-be-adjacent pair or a room left with no hall access after editing shows a warning (does not block approval).
+- One-step "Undo last edit" (44 px, round 8): restores the shown floor's plan as before the last move or resize, approval state included; gone after a new edit, Regenerate, an R5 reset, an approve / un-approve, a switch to another floor tab or leaving stage 3. Messages: "Last edit undone." / "Last edit undone. Ground floor approved again." (round 10).
 - Editing one level never changes another level.
 - Touch: one finger drags the selected room/handle; handles have >= 44 px hit areas; two fingers pan/zoom the plan; the page does not scroll while dragging. Works at 360 px.
 
@@ -427,11 +450,11 @@ Draw the land as a polygon with live measurements; includes the stage navigation
 **F4-S1 See the house on the plot.** As an architect, I want a block-style dollhouse of the approved plans on my plot so that I and my client can read the design at a glance.
 - The 3D view shows the plot at the drawn shape, the building at the footprint position (3.1), and one storey per plan level at the Q8 height; rooms match the approved plans in position and size.
 - Dollhouse: no ceilings, and walls are cut away/lowered so room interiors are visible from above. A level selector (All / each plan level, labelled "All / Basement / Ground / First / Second" with the full floor names for screen readers, round 9) hides everything above the chosen level. **The view opens on "All" with the roof off, so the top floor's interiors are visible immediately.**
-- A "Roof" toggle (default off) shows the Q9 roof per 3.3 when the level selector is "All"; flat, pitched and terrace are visibly different, and a usable roof shows its stair head.
+- A "Roof" toggle (default off) shows the Q9 roof per 3.3 when the level selector is "All"; flat, pitched and terrace are visibly different, and a usable roof shows its stair head. With the roof on the house is shown closed: exterior walls run up to the roof, which never floats (round 10).
 - Selecting Basement opens the ground inside the footprint so basement rooms are visible from above (3.2).
 - Each room has a fixed set of block furniture for its type (e.g. bed in bedroom, counter in kitchen, sofa in living, table in dining, floor seating in majlis, desk in office, fixtures in bathroom, shelves in storage, machines in laundry). Q18 changes colours/finishes only; Q19 "sparse" shows visibly fewer pieces than "full". Furniture stays inside its room.
 - Stairs (and lift if chosen) are visible; exterior colours follow Q10; rooms are distinguishable by type (floor tint and/or a label).
-- Outdoor: vegetation covers roughly the effective vegetation % of the plot and never sits inside the building, parking or pool; parking spaces match Q15 (covered shows a canopy) and sit between the building and the street edge; the pool appears if Q16 is yes at its 4.3 size, behind or beside the building; boundary wall, gate (on the street edge at the Q17 position) and garden seating appear per Q17; the main entrance faces the street edge; a north marker reflects Q5. Items left out by an F2-S3 warning are absent.
+- Outdoor: vegetation covers roughly the effective vegetation % of the plot and never sits inside the building, parking or pool; parking spaces match Q15 (covered shows a canopy) and sit between the building and the street edge; the pool appears if Q16 is yes at its 4.3 size, behind or beside the building; boundary wall, gate (on the street edge at the Q17 position; only with the wall, round 10) and garden seating appear per Q17; the main entrance faces the street edge; a north marker reflects Q5. Items left out by an F2-S3 warning are absent.
 - While the scene is being built a "Building…" state is shown; if 3D cannot start (WebGL or three.js unavailable) an in-page message explains it and the 2D stages remain usable.
 
 **F4-S2 Look from any angle.** As an architect, I want free camera control so that I can inspect the model from anywhere.
@@ -462,7 +485,7 @@ Draw the land as a polygon with live measurements; includes the stage navigation
 - During the tour the current room's name is shown and levels above the current room are hidden so the room is visible; the camera never passes below ground level.
 - Controls: Pause/Resume, Stop, and speed (slow / normal / fast). Stop, or any manual camera gesture, ends the tour and leaves the camera where it is under user control.
 - Time of day and season can be changed during the tour without interrupting it.
-- Works with a single room and with the maximum house (4 plan levels x 8 rooms); a normal-speed tour of the sample project lasts 30–90 s.
+- Works with a single room and with the maximum house (4 plan levels x 10 rooms, CD-4); a normal-speed tour of the sample project lasts 30–90 s.
 - Leaving the 3D stage stops the tour; coming back does not auto-restart it.
 
 ## 6. Delivery

@@ -25,7 +25,7 @@ const SCENARIOS = [
   ['s2-site-errors', 2, ({ S, q }) => { S.group('site'); for (const k of ['front', 'back', 'side']) { const e = q(`q-setback-${k}-err`); e.hidden = false; e.textContent = 'Enter a number from 0 to 20 m.'; q(`q-setback-${k}`).setAttribute('aria-invalid', 'true'); } q('q-footprint-err').hidden = false; q('q-footprint-err').textContent = 'Footprint % plus vegetation % is over 100.'; }],
   ['s2-site-preview-collapsed', 2, ({ S }) => { S.group('site'); S.collapse('site-preview', 'site-preview-toggle', true); }],
   ['s2-building', 2, ({ S, q }) => { S.group('building'); q('q-roof-note').hidden = false; q('q-usable-roof').checked = true; q('q-roof').querySelector('[value=pitched]').disabled = true; }],
-  ['s2-rooms', 2, ({ S, q }, ROOMS8) => { S.group('rooms'); S.rooms(ROOMS8); S.pairs(['Kitchen + Dining', 'Master bedroom + Bathroom (First floor)']); q('room-msg').hidden = false; q('room-msg').textContent = 'Ground floor already has 8 rooms.'; }, { rooms: true }],
+  ['s2-rooms', 2, ({ S, q }, ROOMS8) => { S.group('rooms'); const M = PC.C.MAX_ROOMS_PER_LEVEL || 8, EXTRA = [['Office', 'office', 'S', 'G'], ['Storage 2', 'storage', 'S', 'G'], ['Bathroom 2', 'bathroom', 'S', 'G'], ['Laundry 2', 'laundry', 'S', 'G']]; /* F4-T2 CD-4: a full Ground floor of the build's maximum */ ROOMS8[0][1] = ROOMS8[0][1].concat(EXTRA).slice(0, M); S.rooms(ROOMS8); S.pairs(['Kitchen + Dining', 'Master bedroom + Bathroom (First floor)']); q('room-msg').hidden = false; q('room-msg').textContent = `Ground floor already has ${M} rooms.`; }, { rooms: true }],
   ['s2-rooms-nostairs', 2, ({ S, q }) => { S.group('rooms'); q('q-stairs-box').hidden = true; q('q-stairs-none').hidden = false; }],
   ['s2-outdoor', 2, ({ S, q }) => { S.group('outdoor'); q('q-pool').checked = true; }],
   ['s2-summary-open', 2, ({ S }) => { S.group('site'); S.summary(); S.conflicts([['block', 'Ground floor: needs 160 m², 143 m² available. Remove a room or raise the footprint % (Q3).'], ['block', 'Basement has no rooms. Add a room or switch the basement off (Q7).'], ['warn', 'Parking does not fit between the building and the street. It will be left out.'], ['warn', 'Vegetation reduced to 12 % to fit the plot.']]); S.collapse('summary', 'summary-toggle', false); }, { scope: '.pc-summary' }],
@@ -225,8 +225,9 @@ try {
       if (!noShots && vp.tag === '360x640') await page.screenshot({ path: join(SHOTS, `stepper-${n}-${vp.tag}.png`), clip: { x: 0, y: 0, width: vp.w, height: 100 } });
       await ctx.close();
     }
-    // sample strip on stages 1-4 (FS will show it on 1,3,4): stage must still fit
-    for (const n of [1, 3, 4]) {
+    // sample strip on the build's strip stages ([1,3,4] until F4-T2 Step 0.7, [1,3] after; marker PC.ui.shell.STRIP_STAGES / PC.C.STRIP_STAGES): stage must still fit
+    const STRIPS = await (async () => { const { ctx, page } = await openPage(browser, vp); const r = await page.evaluate(() => (PC.ui && PC.ui.shell && PC.ui.shell.STRIP_STAGES) || PC.C.STRIP_STAGES || [1, 3, 4]); await ctx.close(); return r.slice(); })();
+    for (const n of STRIPS) {
       const { ctx, page } = await openPage(browser, vp); await page.evaluate(INPAGE); await page.evaluate((n) => { __qa.S.stage(n); __qa.q('sample-strip').hidden = false; if (n === 1) __qa.q('start-panel').hidden = true; if (n === 3) __qa.S.planTabs([['Ground', 'approved', true], ['First', 'approved', false]]); __qa.S.paint(); }, n);
       const T = `${vp.tag} strip on stage ${n}`;
       R.check(`${T} no page scroll`, await page.evaluate(() => __qa.C.pageScroll()));
