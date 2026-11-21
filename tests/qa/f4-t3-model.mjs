@@ -15,6 +15,8 @@
 //     tree order (seed without Q4: the trees at a lower % are all kept at a higher %).
 //   W shortfall warning (marker PC.scatter + the warning in PC.validate; otherwise the view suite checks the stage-5
 //     panel): shown iff vegPlaced < 0.8 x veg.area and Q4 > 0, the PM's text exactly (m and ft), never on the sample.
+//   X (round 1, TL focus list): concave plots (L, U, rotated L); Q4 sweep (trees never move; shrubs observed); shortfall
+//     together with veg-reduced and never above the cap line; stage-2 sweep timing; warm memo output = a fresh load.
 // Run: node tests/qa/f4-t3-model.mjs [--only=O,K,...]   (--no-shots accepted and ignored)
 import { collector } from './lib.mjs';
 import * as Q from './f2-t1-ref.mjs';
@@ -191,6 +193,58 @@ if (want('W')) {
     if (inCore) R.check(`W shortfall warning in PC.validate iff vegPlaced < 0.8 x min(veg.area, cap area 1020 m²) and Q4 > 0 (${rows.length} cases: ${tally.on} short, ${tally.off} not, ${tally.zero} at 0 %), the PM's text exactly in m and ft, a warning (non-blocking); never on the sample`, cut(f));
     else R.check('W sample: no warning at all and placement >= 80 % of veg.area (PM 6.2)', f);
   }
+}
+// ================= X. impl-review focus extras (round 1) =================
+if (want('X') && HAS.scatter) {
+  // concave plots (L and U shapes, one rotated): the edge rules and exclusions
+  const f = [], cc = [['L shape', [[0, 0], [30, 0], [30, 16], [14, 16], [14, 36], [0, 36]]], ['U shape', [[0, 0], [34, 0], [34, 34], [24, 34], [24, 14], [10, 14], [10, 34], [0, 34]]],
+    ['L shape rotated 50 deg', (() => { const a = 50 * Math.PI / 180, c = Math.cos(a), sn = Math.sin(a); return [[0, 0], [30, 0], [30, 16], [14, 16], [14, 36], [0, 36]].map(([x, y]) => [Math.round((x * c - y * sn + 40) * 1000) / 1000, Math.round((x * sn + y * c) * 1000) / 1000]); })()]];
+  let nT = 0, nS = 0, nh = 0;
+  for (const [pn, pts] of cc) for (const veg of [15, 40]) for (const fp of [25, 35]) {
+    const s = make((s) => { s.plot.pts = pts; s.ans.streetEdge = 0; s.ans.vegPct = veg; s.ans.footprintPct = fp; s.ans.parking.cars = 1; }), h = PC.house.build(s);
+    if (!h) { f.push(`${pn} veg ${veg} fp ${fp}: no house (${JSON.stringify(PC.validate(s).blocking.map((b) => b.code))})`); continue; }
+    const r = V.scatterProblems(h, H.frameOf(s).pL, s.ans.extras, vegOf(s).area, `${pn} veg ${veg} fp ${fp}`); f.push(...r.f); nT += r.nT; nS += r.nS; nh++;
+    // a concave notch: no centre outside the polygon even inside the bbox
+  }
+  R.check(`X concave plots (L, U, L rotated 50 degrees; ${nh} houses, ${nT} trees, ${nS} shrubs): every rule of V holds (edge distances to every edge, exclusions, spacing, stop rule)`, cut(f));
+  // Q4 sweep: trees never move (kept or added); shrubs observed
+  const obs = []; let prevT = null, prevS = null, moved = 0;
+  const k3 = (x) => x.map((y) => y.toFixed(9)).join(',');
+  for (const veg of [5, 10, 15, 20, 25, 30, 35, 40, 50, 60]) { const h = PC.house.build(make((s) => { s.ans.vegPct = veg; })), T = h.site.trees.map(k3), S2 = h.site.shrubs.map(k3);
+    if (prevT) { const st = new Set(T); moved += prevT.filter((x) => !st.has(x)).length; const ss = new Set(S2), kept = prevS.filter((x) => ss.has(x)).length; obs.push(`${veg} %: trees ${prevT.length}->${T.length}, shrubs ${prevS.length}->${S2.length} (${kept} kept, ${prevS.length - kept} gone, ${S2.length - kept} new)`); }
+    prevT = T; prevS = S2; }
+  R.check('X Q4 sweep 5..60 % on the sample: no tree ever moves or disappears when the % rises (trees only added)', moved ? [`${moved} trees gone or moved`] : []);
+  R.note(`X shrubs over the Q4 sweep (observation): ${obs.join('; ')}`);
+  // shortfall together with veg-reduced, and no warning above the cap
+  const g = [];
+  { let both = 0, red = 0;
+    for (const [pn, pts] of [['16 x 18', [[0, 0], [16, 0], [16, 18], [0, 18]]], ['20 x 24', [[0, 0], [20, 0], [20, 24], [0, 24]]], ['sample', null]]) for (const fp of [20, 30, 40, 50]) for (const cars of [0, 2, 4]) {
+      const s = make((s) => { if (pts) { s.plot.pts = pts; s.ans.streetEdge = 0; } s.ans.footprintPct = fp; s.ans.vegPct = 100 - fp; s.ans.parking.cars = cars; s.ans.pool = { on: true, size: 'M' }; }), site = PC.site.analyse(s);
+      if (!site || !site.footprint || !site.veg.reduced) continue; red++;
+      let placed = null; try { placed = V.vegPlacedOf(PC, s); } catch (e) { continue; }
+      const w = PC.validate(s).warnings, sh = w.find((x) => V.isShort(x.text)), vr = w.find((x) => x.code === 'veg-reduced'), tag = `${pn} fp ${fp} + veg ${100 - fp}, ${cars} cars, pool M`;
+      if (!vr) g.push(`${tag}: no veg-reduced row`);
+      if (V.shouldWarn(100 - fp, placed, site.veg.area) !== !!sh) g.push(`${tag}: shortfall ${!!sh}, my rule ${V.shouldWarn(100 - fp, placed, site.veg.area)} (placed ${placed} of ${site.veg.area.toFixed(1)})`);
+      if (sh && sh.text !== V.shortText(placed, site.plotArea, site.veg.pct, 'm')) g.push(`${tag}: text "${sh.text}"`);
+      if (sh && vr) both++; }
+    if (!both) g.push(`no state among ${red} reduced ones shows both warnings`); else R.note(`X ${both} of ${red} vegetation-reduced states also show the shortfall warning`); }
+  for (const veg of [20, 50, 80]) { const s = make((s) => { s.plot.pts = [[0, 0], [100, 0], [100, 100], [0, 100]]; s.ans.streetEdge = 0; s.ans.footprintPct = 15; s.ans.vegPct = veg; }), site = PC.site.analyse(s), placed = V.vegPlacedOf(PC, s);
+    if (placed < 0.8 * site.veg.area && !(placed >= 0.8 * V.CAP_AREA - 1e-9)) g.push(`100 x 100 at ${veg} %: placed ${placed} below both lines`);
+    if (PC.validate(s).warnings.some((x) => V.isShort(x.text))) g.push(`100 x 100 at ${veg} %: shortfall shown although placed ${placed} >= 0.8 x 1020`); }
+  R.check('X shortfall with veg-reduced (footprint + vegetation = 100 % on 3 plots x 4 % x 0 / 2 / 4 cars, pool M: shown iff my rule, exact text, both rows together); never above the cap line on 100 x 100 m at 20 / 50 / 80 % (placed >= 816 m²)', g);
+  // finding 7: stage-2 sweep timing, memo output identical to a fresh load
+  const sw = [];
+  for (const [tag, mut] of [['sample', null], ['100 x 100 m veg 20 %', (s) => { s.plot.pts = [[0, 0], [100, 0], [100, 100], [0, 100]]; s.ans.streetEdge = 0; s.ans.vegPct = 20; }]]) {
+    let best = Infinity, worst = 0; const base = make(mut, false);
+    for (let rep = 0; rep < 3; rep++) { let w = 0; const t1 = Date.now(); for (let fp = 10; fp <= 80; fp++) { const s = Q.plain(base); s.ans.footprintPct = fp; const a = performance.now(); PC.site.analyse(s); PC.validate(s); w = Math.max(w, performance.now() - a); } best = Math.min(best, Date.now() - t1); worst = rep ? Math.min(worst, w) : w; }
+    sw.push(`${tag}: ${best} ms for 71 ticks (best of 3), worst tick ${worst.toFixed(1)} ms`);
+  }
+  R.note(`X stage-2 footprint sweep 10..80 % (analyse + validate, node): ${sw.join('; ')}`);
+  const fresh = H.loadPC3().PC, id = [];
+  for (const [pn, pts] of PLOTS) for (const fp of [10, 40]) for (const veg of [10, 40]) { const mut = (s) => { if (pts) { s.plot.pts = pts; s.ans.streetEdge = 0; } s.ans.footprintPct = fp; s.ans.vegPct = veg; };
+    const a = PC.site.analyse(make(mut, false)), sF = Q.plain(PC.sample.state()); mut(sF); const b = fresh.site.analyse(sF);
+    if (JSON.stringify([a.trees, a.shrubs, a.vegPlaced]) !== JSON.stringify([b.trees, b.shrubs, b.vegPlaced])) id.push(`${pn} fp ${fp} veg ${veg}: memo-warm output != a fresh load`); }
+  R.check('X finding 7: scatter output with a warm candidate memo (after the sweeps) = a fresh load, 16 states', id);
 }
 R.note(`node run ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 process.exit(R.done() ? 0 : 1);

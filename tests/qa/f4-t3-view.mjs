@@ -20,7 +20,10 @@
 //   C 360x640 touch: presets and the slider by tap, readout and scene follow; Light pane layout (F1-T1 rules), panel
 //     <= 34 % of the canvas, one row of presets, 44 px targets. Shortfall warning: never on the sample; the PM's text on
 //     a short state, on stage 2 (row) and Floor plans, or in the stage-5 panel (the TL's fallback).
-// Run: node tests/qa/f4-t3-view.mjs [--no-shots] [--only=A,B,C]
+//   D (round 1, TL focus list 6 / 7): winter has no canopy pixels; tree shadows darken the frame at 17.5 h; the maximum
+//     house with the caps under 24 looks: no create / dispose, setLook mean < 5 ms, the house never clipped by the box.
+//   E (exploratory) the Light pane at 640x360 and 768x1024.
+// Run: node tests/qa/f4-t3-view.mjs [--no-shots] [--only=A,B,C,D,E]
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT, collector, launch } from './lib.mjs';
@@ -272,6 +275,59 @@ await guard('C 360x640', async () => {
       await S.shot('C-shortfall'); }
     R.check(`${T}: shortfall warning: none on the sample (stage 2, stage 5); on a short state (${sm ? sm.m.replace(/s\.ans\.|s\.plot\./g, '').slice(0, 70) : '-'}; placed ${sm ? sm.placed : '-'} m²) the PM's text, found on ${where}`, cut(g));
   }
+  await S.end(T);
+});
+
+// ================= E. exploratory: Light pane at 640x360 and 768x1024 (F1-T1 layout rules, 44 px, one line each) =================
+if (HAS.look) for (const vp of [{ tag: '640x360', w: 640, h: 360, touch: true }, { tag: '768x1024', w: 768, h: 1024, touch: true }]) await guard(`E ${vp.tag}`, async () => {
+  const S = await session(browser, vp, { three: 'real' }), T = `E ${vp.tag} real`; await to5(S); await lightTab(S);
+  await S.act('v3-preset-evening'); await settleLook(S); const f = ctlProblems(await ctl(S), 17.5, 'summer', 'Evening');
+  const lay = await S.page.evaluate(() => { const q = (h) => document.querySelector(`[data-pc="${h}"]`); return ['v3-time', 'v3-season', 'v3-preset-morning', 'v3-preset-noon', 'v3-preset-evening', 'v3-preset-night'].map((h) => { const r = q(h).getBoundingClientRect(); return [h, r.width, r.height, r.right <= innerWidth + 0.5 && r.left >= -0.5]; }).filter(([, w, hh, inV]) => w < 43.5 || hh < 43.5 || !inV); });
+  if (lay.length) f.push(`controls under 44 px or outside: ${JSON.stringify(lay)}`);
+  await S.layout(`${T} Light tab`); await S.shot('E-light');
+  R.check(`${T}: Light pane: Evening by tap (17:30, pressed), every control >= 44 px inside the viewport`, f);
+  await S.end(T);
+});
+
+// ================= D. impl-review focus extras (real r128 pixels, maximum house looks, cap) =================
+// screenshots decoded and kept in the page (window.__px), compared there: no megapixel arrays cross the wire
+let PXN = 0;
+const shotPx = async (S) => { const buf = await S.page.locator('[data-pc="v3-canvas"]').screenshot(), name = 'p' + PXN++; await S.page.evaluate(([b64, n]) => new Promise((res) => { const im = new Image(); im.onload = () => { const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const x = c.getContext('2d'); x.drawImage(im, 0, 0); (window.__px = window.__px || {})[n] = x.getImageData(0, 0, im.width, im.height).data; res(); }; im.src = 'data:image/png;base64,' + b64; }), [buf.toString('base64'), name]); return name; };
+const pxDiffIn = (S, an, bn, thr = 30) => S.page.evaluate(([an, bn, thr]) => { const a = window.__px[an], b = window.__px[bn]; let n = 0, d = 0; for (let k = 0; k < a.length; k += 4) { const e = Math.abs(a[k] - b[k]) + Math.abs(a[k + 1] - b[k + 1]) + Math.abs(a[k + 2] - b[k + 2]); if (e > thr) n++; d += (0.2126 * (a[k] - b[k]) + 0.7152 * (a[k + 1] - b[k + 1]) + 0.0722 * (a[k + 2] - b[k + 2])); } return { n, dLum: d / (a.length / 4) }; }, [an, bn, thr]);
+const setObj = (S, name, key, val) => S.page.evaluate(([n, k, v]) => { const i = PC.debug.scene(); i.world.getObjectByName(n)[k] = v; PC.view3d.invalidate(); }, [name, key, val]);
+if (HAS.look && HAS.scatter) await guard('D extras', async () => {
+  const S = await session(browser, VP.desk, { three: 'real' }), T = 'D 1280x800 real', veg = PC.data.vegetation || V.VEG_TABLE;
+  await to5(S); const f = [];
+  // winter: no canopy pixels (the frame equals itself with the canopies forced hidden, and differs with them forced shown)
+  await S.page.evaluate(() => PC.view3d.setLook({ hour: 12, season: 'winter' })); await ready(S); const w0 = await shotPx(S);
+  await setObj(S, 'canopies', 'visible', true); await ready(S); const w1 = await shotPx(S); await setObj(S, 'canopies', 'visible', false); await ready(S); const w2 = await shotPx(S);
+  const a = await pxDiffIn(S, w0, w1), b = await pxDiffIn(S, w0, w2); if (!(a.n > 200) || b.n) f.push(`winter frame vs canopies shown: ${a.n} px differ; vs forced hidden: ${b.n} px (0 expected)`);
+  await S.shot('D-winter-noon');
+  // vegetation shadows at 17.5 h: trees casting vs not
+  await S.page.evaluate(() => PC.view3d.setLook({ hour: 17.5, season: 'summer' })); await ready(S); const s0 = await shotPx(S);
+  for (const n of ['trunks', 'canopies']) await setObj(S, n, 'castShadow', false); await ready(S); const s1 = await shotPx(S);
+  for (const n of ['trunks', 'canopies']) await setObj(S, n, 'castShadow', true); await ready(S);
+  // summer 17.5 h: the sun at the 0.15 Y clamp grazes the ground, so shadows are faint (~10 levels per channel; observation O-1): count changes > 6
+  const c = await pxDiffIn(S, s0, s1, 6); if (!(c.n > 1000 && c.dLum < 0)) f.push(`17.5 h: tree shadows change ${c.n} px (> 6 levels), mean luma ${c.dLum.toFixed(3)} (shadows should darken)`);
+  await S.shot('D-evening-shadows');
+  R.check(`${T}: winter shows no canopy pixels (frame = canopies forced hidden, ${a.n} px differ with them shown); at 17.5 h the trunks and canopies cast shadows that darken the frame (${c.n} px change by > 6 levels, mean luma ${c.dLum.toFixed(2)})`, f);
+  // maximum house with the caps: all looks, no create / dispose, mean setLook, the house never clipped by the capped box
+  const ok = await to5(S, "s.plot.pts = [[0, 0], [100, 0], [100, 100], [0, 100]]; s.ans.streetEdge = 0; s.ans.footprintPct = 15; s.ans.vegPct = 80; s.ans.floors = 3; s.ans.basement = true; s.ans.lift = true; s.ans.usableRoof = true; s.ans.roofType = 'terrace'; s.ans.pool = { on: true, size: 'L' }; s.ans.parking = { cars: 4, covered: true }; s.ans.extras = { wall: true, gate: 'right', seating: true }; s.ans.pairs = []; s.ans.rooms = []; let n = 1; for (const l of ['B', 'G', '1', '2']) for (const ty of ['bedroom', 'bathroom', 'kitchen', 'living', 'dining', 'majlis', 'office', 'maid', 'storage', 'laundry']) s.ans.rooms.push({ id: 'r' + n++, type: ty, level: l, size: 'S', area: null, master: false }); s.ans.nextRoomId = n;");
+  const g = [], times = [], cap = []; const b0 = await snap(S), mem0 = await S.page.evaluate(() => JSON.stringify(PC.debug.scene().renderer.info.memory));
+  if (!ok) g.push('not ready');
+  for (const season of V.SEASONS) for (const hour of [6, 8, 12, 17.5, 18, 22]) {
+    times.push(await S.page.evaluate(([h, s]) => { const t = performance.now(); PC.view3d.setLook({ hour: h, season: s }); return performance.now() - t; }, [hour, season]));
+    const gg = await snap(S); g.push(...sameScene(b0, gg, `${season} ${hour} h`), ...lookProblems(gg, hour, season, `${season} ${hour} h`)); if (gg.meshIds.length > 40) g.push(`${gg.meshIds.length} meshes`);
+    if (season === 'summer') { const r = await S.page.evaluate((veg) => { const i = PC.debug.scene(); i.renderNow(); let sun = null; i.scene.traverse((o) => { if (o.isDirectionalLight && o.castShadow) sun = o; }); const h = i.house, c = h.center, fp = h.footprint, cam = sun.shadow.camera, m = cam.matrixWorldInverse.elements; let out = 0;
+        for (const u of [fp.u, fp.u + fp.w]) for (const v of [fp.v, fp.v + fp.d]) for (const y of [0, h.roof.baseY + 1.2]) { const p = [u - c[0], y, -(v - c[1])], x = m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12], yy = m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13], z = m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14]; if (x < cam.left || x > cam.right || yy < cam.bottom || yy > cam.top || -z < cam.near || -z > cam.far) out++; }
+        return { out, capped: Math.max(-cam.left, cam.right, -cam.bottom, cam.top) >= PC.C.VIEW3D.shadowR * h.radius - 1e-6 }; }, veg); cap.push(`${hour} h ${r.capped ? 'capped' : 'fitted'}${r.out ? `, ${r.out} house corners outside` : ''}`); if (r.out) g.push(`summer ${hour} h: ${r.out} house corners outside the shadow box`); }
+  }
+  const mem1 = await S.page.evaluate(() => JSON.stringify(PC.debug.scene().renderer.info.memory)); if (mem1 !== mem0) g.push(`renderer memory ${mem0} -> ${mem1}`);
+  const mean = times.reduce((x, y) => x + y, 0) / times.length;
+  if (mean >= 5) g.push(`setLook mean ${mean.toFixed(2)} ms`);
+  R.check(`${T}: maximum house, 100 x 100 m at 80 % (caps): 24 looks, each = my oracle with the same meshes / materials, renderer memory unchanged (no create / dispose), ${b0.meshIds.length} meshes <= 40, setLook mean ${mean.toFixed(2)} ms < 5; the house (to the roof + 1.2 m) inside the shadow box at 6 / 8 / 12 / 17.5 / 18 / 22 h`, cut(g));
+  R.note(`D maximum garden shadow box: ${cap.join(', ')}`);
+  await S.page.evaluate(() => PC.view3d.setLook({ hour: 18, season: 'summer' })); await ready(S); await S.shot('D-max-18h');
   await S.end(T);
 });
 
