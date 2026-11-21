@@ -6,7 +6,8 @@
 //                                                  focused run for one task: build, lint, unit, and only the
 //                                                  browser files whose name contains one of the given words
 //   node tests/run-all.mjs --qa --only f1-t3       one QA suite
-//   --jobs N                                       browser files run N at a time (default 2: the machine has 2 cores)
+//   --jobs N                                       browser files run N at a time (default 3: two green full runs at 3
+//                                                  on this 4-core machine, TL F4-T1 outcome review; target <= 420 s)
 //
 // Steps: --unit, --three, --e2e (tests/e2e/*.spec.mjs), --qa (QA's own suites, tests/qa/run-*.mjs, without
 // screenshots). No step flag = all steps. Build and lint always run. Browser files are separate processes with
@@ -22,7 +23,7 @@ const args = process.argv.slice(2), only = ['--unit', '--three', '--e2e', '--qa'
 const want = (f) => only.length === 0 || only.includes(f);
 const opt = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : null; };
 const words = (opt('--only') || '').split(',').map((w) => w.trim()).filter(Boolean);
-const jobs = Math.max(1, parseInt(opt('--jobs') || '2', 10) || 2);
+const jobs = Math.max(1, parseInt(opt('--jobs') || '3', 10) || 3);
 const secs = (ms) => (ms / 1000).toFixed(1) + ' s';
 const list = (dir, ext) => existsSync(join(here, dir)) ? readdirSync(join(here, dir)).filter((f) => f.endsWith(ext)).sort().map((f) => join(here, dir, f)) : [];
 const picked = (files) => words.length ? files.filter((f) => words.some((w) => f.slice(here.length + 1).includes(w))) : files;

@@ -52,7 +52,7 @@ async function addAndEdit(vp) {
   const need0 = await k.levelRows();
   await act('btn-room-add'); await settled(page);
   T.eq(await k.names('1'), ['Bedroom 1', 'Bedroom 2', 'Bathroom', 'Bedroom 3', 'Bedroom 4', 'Bedroom 5'], `${tag} count 3 adds Bedroom 3..5`);
-  T.eq([await k.group('G').locator('[data-pc="group-count"]').textContent(), await k.group('1').locator('[data-pc="group-count"]').textContent()], ['3 of 8', '6 of 8'], `${tag} group counts`);
+  T.eq([await k.group('G').locator('[data-pc="group-count"]').textContent(), await k.group('1').locator('[data-pc="group-count"]').textContent()], ['3 of 10', '6 of 10'], `${tag} group counts`);
   T.ok((await k.levelRows())[1] !== need0[1] && (await k.levelRows())[1].startsWith('First floor 96 m²'), `${tag} summary needed follows (${(await k.levelRows())[1]})`);
   // exact area typed in ft, stored in m2
   await k.tapEl(page.locator('label:has(> input[name="unit-toggle"][value="ft"])')); await settled(page);
@@ -65,11 +65,11 @@ async function addAndEdit(vp) {
   const st = (await k.roomsOn('1')).at(-1);
   T.eq([st.type, st.size, st.area], ['storage', null, 9.2903], `${tag} 100 sq ft stored as 9.2903 m2`);
   T.eq(await k.text('room-msg'), '', `${tag} no message after a successful add`);
-  // 9th room refused inline
-  await k.radio('room-add-size', 'M'); await act('room-add-count-inc');
+  // 11th room refused inline (4 more on a floor of 7; CD-4: 10 per floor)
+  await k.radio('room-add-size', 'M'); for (let i = 0; i < 3; i++) await act('room-add-count-inc');
   const before = await k.state();
   await act('btn-room-add'); await settled(page);
-  T.eq([await k.text('room-msg'), await k.state()], ['The First floor has 7 rooms: 1 more fits (8 per floor).', before], `${tag} a 9th room is refused inline, nothing stored`);
+  T.eq([await k.text('room-msg'), await k.state()], ['The First floor has 7 rooms: 3 more fit (10 per floor).', before], `${tag} an 11th room is refused inline, nothing stored`);
   await k.tapEl(page.locator('label:has(> input[name="unit-toggle"][value="m"])')); await settled(page);
   // edit a row: size L, type, exact area with a bad value then a good one (Enter)
   const r5 = k.rowOf('r5');
@@ -142,7 +142,7 @@ async function stairsAndLevels(vp) {
   k = await kit(vp); ({ page, hook, act, tag } = k);
   await k.seedPlans();
   await act('q-tab-building'); await k.radio('q-floors', '1'); await settled(page);
-  T.eq([await hook('level-remove-move').isDisabled(), await hook('level-remove-delete').isChecked(), await k.text('level-remove-text')], [true, true, 'The First floor has 7 rooms. They cannot be moved: the Ground floor would have more than 8 rooms. Delete them?'], `${tag} move disabled with its reason, delete preselected`);
+  T.eq([await hook('level-remove-move').isDisabled(), await hook('level-remove-delete').isChecked(), await k.text('level-remove-text')], [true, true, 'The First floor has 7 rooms. They cannot be moved: the Ground floor would have more than 10 rooms. Delete them?'], `${tag} move disabled with its reason, delete preselected`);
   await act('dialog-ok'); await settled(page);
   s = await k.state();
   T.ok(!(await k.dialogOpen()) && s.ans.floors === 1 && s.ans.rooms.every((r) => r.level === 'G') && !s.plans['1'], `${tag} Remove with delete: one dialog, first floor rooms and plan gone`);

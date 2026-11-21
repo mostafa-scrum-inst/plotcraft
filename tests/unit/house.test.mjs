@@ -113,3 +113,12 @@ test('never generates or syncs; does not mutate (frozen state)', () => {
   assert.ok(h);
   assert.deepEqual(JSON.parse(JSON.stringify(h)), plain(h));
 });
+
+test('TL item 2 (F4-T2 Q6): the refusal needs stage 3 reachable, not only valid (Q4 vegetation makes stage 2 invalid)', () => {
+  const s = sampleApproved(PC);
+  s.ans.vegPct = 80;                                                       // footprint 25 % + vegetation 80 % > 100 %
+  assert.ok(plain(PC.validate.blocking(s)).length > 0, 'a blocking conflict on stage 2');
+  const st = PC.stages.status(s);
+  assert.deepEqual([st[3].valid, st[3].reachable], [true, false], 'plans fresh and approved, stage 3 not reachable');
+  assert.equal(PC.house.build(s), null);
+});

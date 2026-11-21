@@ -80,8 +80,10 @@
       var d = drag, res = null;
       if (!cancelled) step(w);                                  // the release point counts (live = release)
       drag = null;
+      var before = PC.plans.snapshot(PC.store.get().plans[d.level]);
       if (!cancelled && d.level === host.level()) PC.store.commit(function (s) { res = PC.plans.applyEdit(s, d.level, d.cur); });
-      if (res && res.changed) host.committed({ level: d.level, id: d.id, wasApproved: res.wasApproved });
+      // before / after: the one-step undo snapshot (F4-T2 Step 0)
+      if (res && res.changed) host.committed({ level: d.level, id: d.id, wasApproved: res.wasApproved, before: before, after: PC.plans.snapshot(PC.store.get().plans[d.level]) });
       host.changed();
     }
 

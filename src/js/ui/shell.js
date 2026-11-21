@@ -5,7 +5,7 @@
   var controllers = {}, shown = 0, ready = false;
   var furthest = 1;                  // furthest stage opened in this session (a step is "done" only once visited)
   var STATIC_ID = 'stage-static', STATIC_TEXT = 'This stage is not built yet: static preview';
-  var STRIP_STAGES = [1, 3, 4];      // sample strip (and the only "Skip to 3D") shows here while the sample is untouched
+  var STRIP_STAGES = [1, 3];         // sample strip (and the only "Skip to 3D") shows here while the sample is untouched (PM round 8: not on 4)
 
   function call(n, method, arg) { var c = controllers[n]; if (c && c[method]) c[method](arg); }
 
@@ -74,6 +74,7 @@
 
   ui.stages = ui.stages || {};
   ui.shell = {
+    STRIP_STAGES: STRIP_STAGES,       // read-only for tests (QA version marker, F4-T2 Step 0)
     // Stage controllers (A-15): { enter(), leave(), render(state) }, all optional. Later tasks register theirs.
     register: function (n, controller) {
       controllers[n] = controller;

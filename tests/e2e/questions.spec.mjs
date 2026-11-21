@@ -356,7 +356,7 @@ async function gateAndRiders(vp) {
   await k.radio('q-floors', '1');
   // three-way dialog (F2-T3): the ground floor already has 7 rooms, so moving 7 more is not possible; delete is preselected
   T.eq([await k.text('dialog-title'), await k.text('level-remove-text'), await k.text('dialog-text'), await k.text('dialog-ok'), await hook('level-remove-move').isDisabled(), await hook('level-remove-delete').isChecked()],
-    ['Remove First floor?', 'The First floor has 7 rooms. They cannot be moved: the Ground floor would have more than 8 rooms. Delete them?', 'The floor plans of the Ground floor and the First floor will be regenerated or lost, with their manual edits and approvals.', 'Remove', true, true], `${tag} removing a floor with rooms asks with its own dialog`);
+    ['Remove First floor?', 'The First floor has 7 rooms. They cannot be moved: the Ground floor would have more than 10 rooms. Delete them?', 'The floor plans of the Ground floor and the First floor will be regenerated or lost, with their manual edits and approvals.', 'Remove', true, true], `${tag} removing a floor with rooms asks with its own dialog`);
   await act('dialog-cancel'); await settled(page);
   T.eq([await k.state(), await k.checked('q-floors')], [before, '2'], `${tag} Cancel keeps the floor`);
   await k.radio('q-floors', '1'); await act('dialog-ok'); await settled(page);

@@ -140,7 +140,7 @@
       return best;
     },
     // Move every room of level `from` to level `to`, keeping their pairs. Refused when `to` would get more than
-    // 8 rooms or 6 pairs.
+    // MAX_ROOMS_PER_LEVEL rooms or MAX_PAIRS_PER_LEVEL pairs.
     moveRooms: function (d, from, to) {
       var C = PC.C, moving = L.roomsOn(d, from), pairs = L.pairsOn(d, from).length;
       if (L.roomsOn(d, to).length + moving.length > C.MAX_ROOMS_PER_LEVEL) return { ok: false, reason: 'full' };

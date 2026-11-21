@@ -128,7 +128,8 @@ rejects('exact area 3', (s) => { s.ans.rooms[0].size = null; s.ans.rooms[0].area
 rejects('exact area 81', (s) => { s.ans.rooms[0].size = null; s.ans.rooms[0].area = 81; });
 rejects('master on a kitchen', (s) => { s.ans.rooms[3].master = true; });
 rejects('unknown room key', (s) => { s.ans.rooms[0].name = 'Lounge'; });
-rejects('9 rooms on one level', (s) => { s.ans.rooms.push({ id: 'r15', type: 'storage', level: 'G', size: 'S', area: null, master: false }, { id: 'r16', type: 'storage', level: 'G', size: 'S', area: null, master: false }); s.ans.nextRoomId = 17; });
+rejects('11 rooms on one level', (s) => { s.ans.rooms.push({ id: 'r18', type: 'storage', level: 'G', size: 'S', area: null, master: false }, { id: 'r15', type: 'storage', level: 'G', size: 'S', area: null, master: false }, { id: 'r16', type: 'storage', level: 'G', size: 'S', area: null, master: false }, { id: 'r17', type: 'storage', level: 'G', size: 'S', area: null, master: false }); s.ans.nextRoomId = 19; });
+accepts('10 rooms on one level', (s) => { s.ans.rooms.push({ id: 'r17', type: 'storage', level: 'G', size: 'S', area: null, master: false }, { id: 'r15', type: 'storage', level: 'G', size: 'S', area: null, master: false }, { id: 'r16', type: 'storage', level: 'G', size: 'S', area: null, master: false }); s.ans.nextRoomId = 18; });
 rejects('pair across levels', (s) => { s.ans.pairs.push(['r1', 'r8']); });
 rejects('pair with an unknown room', (s) => { s.ans.pairs.push(['r1', 'r99']); });
 rejects('pair of a room with itself', (s) => { s.ans.pairs.push(['r1', 'r1']); });

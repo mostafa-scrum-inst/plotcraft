@@ -24,7 +24,7 @@ test('4.3 numbers', () => {
   assert.deepEqual(plain(C.PLAN_SNAP), { m: 0.5, ft: 0.3048 });
   assert.deepEqual(plain(C.PLOT), { minPts: 3, maxPts: 12, extent: 100, minArea: 50 });
   assert.equal(C.BUILDABLE_MIN, 20);
-  assert.deepEqual([C.ROOM_MIN_SIDE, C.ROOM_AREA_TOL, C.ROOM_MAX_ASPECT, C.MAX_ROOMS_PER_LEVEL, C.MAX_PAIRS_PER_LEVEL], [1.5, 0.25, 3, 8, 6]);
+  assert.deepEqual([C.ROOM_MIN_SIDE, C.ROOM_AREA_TOL, C.ROOM_MAX_ASPECT, C.MAX_ROOMS_PER_LEVEL, C.MAX_PAIRS_PER_LEVEL], [1.5, 0.25, 3, 10, 6]);   // CD-4: 10 rooms per floor since F4-T2
   assert.equal(C.FT, 0.3048);
 });
 

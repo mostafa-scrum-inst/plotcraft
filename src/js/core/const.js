@@ -36,7 +36,15 @@
     PLOT: { minPts: 3, maxPts: 12, extent: 100, minArea: 50 },
     BUILDABLE_MIN: 20,
     ROOM_MIN_SIDE: 1.5, ROOM_AREA_TOL: 0.25, ROOM_MAX_ASPECT: 3,
-    MAX_ROOMS_PER_LEVEL: 8, MAX_PAIRS_PER_LEVEL: 6,
+    MAX_ROOMS_PER_LEVEL: 10, MAX_PAIRS_PER_LEVEL: 6,   // CD-4: 10 rooms per plan level (was 8)
+    // CD-5 hall access (PM round 10): a room has access with >= min m of a non-exterior side on hall or on the stair /
+    // lift; one without is reached through a wall-sharing neighbour that is reached when they are a must-be-adjacent
+    // pair or the neighbour's type is listed for it here (en-suite and service rooms). Chains count.
+    HALL_ACCESS: { min: 0.8, hosts: {
+      bathroom: ['bedroom', 'maid'],
+      storage: ['bedroom', 'kitchen', 'living', 'dining', 'majlis', 'office', 'maid'],
+      laundry: ['bedroom', 'kitchen', 'living', 'dining', 'majlis', 'office', 'maid'] } },
+    LOW_FILL: 0.5,                                // PM round 8: a level whose drawn rooms + core fill less than this gets a hint
     // A-8 generator: room scale range, shared wall (length, tolerance), overlap tolerance, assignments tried for pairs
     LAYOUT: { fMin: 0.8, fMax: 1.2, adjMin: 0.5, adjTol: 0.02, overlapTol: 0.011, topAssignments: 60,
       retry: { fMin: 0.75, fMax: 1.25 } },          // 4.4: retry only when the first pass finds no layout (F3-T2)

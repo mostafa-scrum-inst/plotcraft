@@ -153,3 +153,62 @@ test('moveRect: a move past the footprint takes the neighbours\' span from the c
     assert.equal(r.x + r.w, 4.13, `grid ${grid}: the right edge lands on the neighbour seen from the clamped span`);
   }
 });
+
+// ---- F4-T2 Step 0 ----
+test('applyEdit guard (CTO F3 round 2): a stale plan or a side <= 0 is refused, nothing stored', () => {
+  const s = synced(), before = plain(s.plans.G), r = room(s, 'G', 'r1');
+  for (const rect of [{ ...r, w: 0 }, { ...r, h: -1 }]) assert.deepEqual(plain(P.applyEdit(s, 'G', rect)), { changed: false, wasApproved: false });
+  assert.deepEqual(plain(s.plans.G), before, 'no side <= 0 stored');
+  const st = plain(s); st.ans.footprintPct = 30;                            // the stored G plan is now stale
+  assert.notEqual(st.plans.G.sig, PC.sig.level(st, 'G'));
+  assert.equal(P.applyEdit(st, 'G', { ...r, x: r.x + 0.5 }).changed, false, 'stale plan refused');
+  assert.equal(P.applyEdit(s, 'G', { ...r, x: r.x + 0.5 }).changed, true, 'a fresh plan still edits');
+});
+
+test('CTO debt 6: a room overlapping only the lift is reported by overlaps and blocks approve', () => {
+  const s = plain(PC.sample.state()); s.ans.lift = true; P.sync(s);
+  const lift = plain(P.ctx(s, 'G')).core.lift, r = room(s, 'G', 'r6');
+  assert.ok(lift, 'the sample with a lift');
+  s.plans.G.rooms = s.plans.G.rooms.map((q) => q.id === 'r6' ? { id: 'r6', x: lift.x, y: lift.y, w: lift.w, h: lift.h } : q);
+  assert.deepEqual(plain(P.problems(s, 'G')).filter((q) => q.ids.includes('r6')), [{ code: 'overlap-core', ids: ['r6', 'lift'] }]);
+  assert.equal(P.canApprove(s, 'G'), 'overlap'); assert.equal(P.approve(s, 'G'), false);
+  assert.ok(r, 'room r6 exists');
+});
+
+test('one-step undo: restores the plan and its approval; ends with a new edit, Regenerate, approve / unapprove or an R5 reset', () => {
+  // a 0.1 m shrink of the Maid's room: never an overlap, so Approve stays possible
+  const edit = (s) => { const b = P.snapshot(s.plans.G), r = room(s, 'G', 'r5'); P.applyEdit(s, 'G', { ...r, w: r.w - 0.1 }); return { level: 'G', before: b, after: P.snapshot(s.plans.G) }; };
+  let s = synced(); P.approve(s, 'G'); const orig = plain(s.plans.G);
+  let u = edit(s);
+  assert.equal(s.plans.G.approved, false); assert.equal(P.undoable(s, u), true);
+  assert.equal(P.undoEdit(s, u), true); assert.deepEqual(plain(s.plans.G), orig, 'plan and approval back');
+  assert.equal(P.undoable(s, u), false, 'one step: not twice');
+  u = edit(s); edit(s);
+  assert.equal(P.undoable(s, u), false, 'a second edit ends the first snapshot');
+  u = edit(s); P.regenerate(s, 'G'); assert.equal(P.undoable(s, u), false, 'Regenerate');
+  u = edit(s); P.approve(s, 'G'); assert.equal(P.undoable(s, u), false, 'approve');
+  u = edit(s); s.ans.footprintPct = 30; P.sync(s); assert.equal(P.undoable(s, u), false, 'R5 reset (sync regenerated)');
+  assert.equal(P.undoEdit(s, u), false); assert.equal(P.undoable(s, null), false);
+});
+
+test('fill (PM round 8): drawn rooms + stair + lift over the footprint; the low-fill hint threshold is strict (< 50 %)', () => {
+  const s = synced();
+  assert.ok(Math.abs(P.fill(s, 'G') - 0.811) < 0.001 && P.fill(s, '1') > 0.84, 'sample 81 % / 84 %');
+  const c = plain(P.ctx(s, 'G')), half = c.W * c.D / 2 - c.core.stair.w * c.core.stair.h;   // 71.25 - 10 = 61.25 = 7 x 8.75
+  s.plans.G.rooms = [{ id: 'r1', x: 0, y: 0, w: 7, h: half / 7 }];
+  assert.equal(P.fill(s, 'G'), 0.5); assert.equal(P.lowFill(s, 'G'), null, 'exactly 50 %: no hint');
+  assert.equal(P.lowFill(s, '1'), null, 'sample First floor: no hint');
+  s.plans.G.rooms[0].h -= 0.01; assert.ok(P.fill(s, 'G') < 0.5); assert.equal(P.lowFill(s, 'G'), 49, 'just under: 49 %');
+  const st = plain(s); st.ans.footprintPct = 30; assert.equal(P.fill(st, 'G'), null, 'stale plan: none');
+});
+
+test('ft minimum (PM round 8 decision 5): a shrinking edge lands exactly on 1.5 m in ft; m unchanged', () => {
+  const ft = synth(0.3048, []), m = synth(0.5, []);
+  assert.equal(east({ ...ft, minSnap: true }, 1.6), 1.5, 'ft: the 1.5 m limit is a candidate');
+  assert.equal(east({ ...ft, minSnap: true }, 1.85), 1.83, 'ft: 0.35 m away the grid still rules (6 ft)');
+  assert.equal(east(ft, 1.6), 1.52, 'without the candidate (old behaviour): 5 ft');
+  assert.equal(east(m, 1.6), 1.5, 'm: the grid lands there anyway');
+  assert.equal(plain(P.ctx(synced('ft'), 'G')).minSnap, true); assert.equal(plain(P.ctx(synced('m'), 'G')).minSnap, false);
+  const g = plain(P.resizeRect(A, 'e', 1.6 - 4, 0, { ...ft, minSnap: true })).guides;
+  assert.deepEqual(g, [], 'no snap guide for the limit');
+});

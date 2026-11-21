@@ -140,6 +140,7 @@
   "plan-counter",
   "plan-canvas",
   "plan-fit",
+  "plan-undo",
   "plan-error",
   "plan-error-text",
   "btn-goto-rooms",

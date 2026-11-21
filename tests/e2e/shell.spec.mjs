@@ -106,7 +106,7 @@ async function gating(vp) {
   await act('btn-next');
   T.eq(await t.visibleStages(), '4', `${tag} stage 4 opens`);
   T.eq(await t.text('btn-next-label'), 'Build 3D model', `${tag} stage 4 Next label`);
-  T.ok(!(await t.hidden('sample-strip')), `${tag} strip on stage 4`);
+  T.ok(await t.hidden('sample-strip'), `${tag} no strip on stage 4 (STRIP_STAGES = [1, 3], PM decision 9)`);
   await t.layout('stage 4');
   await act('btn-next');
   T.eq(await t.visibleStages(), '5', `${tag} stage 5 opens`);

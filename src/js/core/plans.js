@@ -47,7 +47,7 @@
       var fp = PC.site.analyse(state).footprint, L = PC.levels;
       if (!fp) return null;
       var c = PC.layout.core(fp.w, fp.d, L.stairsExist(state), state.ans.stairPos, L.liftExists(state));
-      return { W: fp.w, D: fp.d, core: { stair: c.stair, lift: c.lift }, grid: PC.C.PLAN_SNAP[state.ans.unit] };
+      return { W: fp.w, D: fp.d, core: { stair: c.stair, lift: c.lift }, grid: PC.C.PLAN_SNAP[state.ans.unit], minSnap: state.ans.unit === 'ft' };
     },
     // Snap candidates for room `id`: for each axis the parallel edges as { v, lo, hi, kind }, where x-edges are the
     // vertical lines x = v spanning y in [lo, hi]. Other rooms ('room'), the stair and lift ('core') and the
@@ -108,22 +108,28 @@
       var MIN = PC.C.ROOM_MIN_SIDE, r = { id: start.id, x: start.x, y: start.y, w: start.w, h: start.h }, x1 = r.x + r.w, y1 = r.y + r.h, sn;
       // the finger position is clamped to the allowed range first (as moveRect does), so an edge dragged past the
       // footprint lands on it, not on the nearest grid line inside it (QA F3-T2 bug 1)
-      var snap = function (v, s0, s1, cands, lo, hi) { return P.snapEdge(Math.min(hi, Math.max(lo, v)), s0, s1, cands, ctx.grid, lo, hi); };
+      // ft (ctx.minSnap): the shrinking limit, 1.5 m from the opposite edge, is one more candidate, so the minimum is
+      // reachable exactly as in m (PM round 8, decision 5). m is unchanged: its 0.5 m grid already lands there.
+      var snap = function (v, s0, s1, cands, lo, hi, limit) {
+        var all = ctx.minSnap ? cands.concat([{ v: limit, lo: s0, hi: s1, kind: 'min' }]) : cands;
+        return P.snapEdge(Math.min(hi, Math.max(lo, v)), s0, s1, all, ctx.grid, lo, hi);
+      };
       if (kind === 'e' || kind === 'w') {
-        sn = kind === 'e' ? snap(x1 + dx, r.y, y1, ctx.cands.x, r.x + MIN, ctx.W) : snap(r.x + dx, r.y, y1, ctx.cands.x, 0, x1 - MIN);
+        sn = kind === 'e' ? snap(x1 + dx, r.y, y1, ctx.cands.x, r.x + MIN, ctx.W, r.x + MIN) : snap(r.x + dx, r.y, y1, ctx.cands.x, 0, x1 - MIN, x1 - MIN);
         if (kind === 'e') r.w = sn.v - r.x; else { r.x = sn.v; r.w = x1 - sn.v; }
       } else {
-        sn = kind === 'n' ? snap(y1 + dy, r.x, x1, ctx.cands.y, r.y + MIN, ctx.D) : snap(r.y + dy, r.x, x1, ctx.cands.y, 0, y1 - MIN);
+        sn = kind === 'n' ? snap(y1 + dy, r.x, x1, ctx.cands.y, r.y + MIN, ctx.D, r.y + MIN) : snap(r.y + dy, r.x, x1, ctx.cands.y, 0, y1 - MIN, y1 - MIN);
         if (kind === 'n') r.h = sn.v - r.y; else { r.y = sn.v; r.h = y1 - sn.v; }
       }
       var axis = kind === 'e' || kind === 'w' ? 'x' : 'y', s0 = axis === 'x' ? r.y : r.x, s1 = s0 + (axis === 'x' ? r.h : r.w);
-      return { rect: round(r), guides: sn.to === 'edge' && sn.at.kind !== 'footprint' ? [{ axis: axis, v: sn.v, lo: Math.min(sn.at.lo, s0), hi: Math.max(sn.at.hi, s1) }] : [] };
+      return { rect: round(r), guides: sn.to === 'edge' && sn.at.kind !== 'footprint' && sn.at.kind !== 'min' ? [{ axis: axis, v: sn.v, lo: Math.min(sn.at.lo, s0), hi: Math.max(sn.at.hi, s1) }] : [] };
     },
     // In-place mutator (inside a commit): store the edited rectangle of one room on level `id`. The level becomes
     // edited, loses its approval and gets its unmet pairs recomputed; no other level is touched.
     applyEdit: function (draft, id, rect) {
       var p = draft.plans[id], was = !!(p && p.approved), i = p ? p.rooms.findIndex(function (r) { return r.id === rect.id; }) : -1;
-      if (i < 0) return { changed: false, wasApproved: was };
+      // CTO F3 round 2: never store an edit into a stale plan or a rectangle without area
+      if (i < 0 || p.sig !== PC.sig.level(draft, id) || !(rect.w > 0 && rect.h > 0)) return { changed: false, wasApproved: was };
       var o = p.rooms[i], n = round(rect);
       if (o.x === n.x && o.y === n.y && o.w === n.w && o.h === n.h) return { changed: false, wasApproved: was };
       p.rooms[i] = n; p.edited = true; p.approved = false;
@@ -131,6 +137,40 @@
       p.unmet = PC.levels.pairsOn(draft, id).map(function (q) { return [q[0], q[1]]; })
         .filter(function (q) { return by[q[0]] && by[q[1]] && !PC.layout.adjacent(by[q[0]], by[q[1]]); });
       return { changed: true, wasApproved: was };
+    },
+    // CD-5: ids of the rooms of level `id` with no way in from the hall or stairs (PC.layout.access), [] for a missing,
+    // failed or stale plan. Derived from the drawn plan, never stored.
+    noAccess: function (state, id) {
+      var p = state.plans[id], c = P.ctx(state, id), types = {};
+      if (!p || p.error || !c || p.sig !== PC.sig.level(state, id)) return [];
+      state.ans.rooms.forEach(function (r) { types[r.id] = r.type; });
+      return PC.layout.access(c.W, c.D, p.rooms, c.core, PC.levels.pairsOn(state, id), types);
+    },
+    // PM round 8: share of the footprint covered by the drawn rooms + stair + lift (0..1), null without a fresh plan.
+    fill: function (state, id) {
+      var p = state.plans[id], c = P.ctx(state, id);
+      if (!p || p.error || !c || p.sig !== PC.sig.level(state, id)) return null;
+      var a = p.rooms.reduce(function (s, r) { return s + r.w * r.h; }, 0);
+      [c.core.stair, c.core.lift].forEach(function (b) { if (b) a += b.w * b.h; });
+      return a / (c.W * c.D);
+    },
+    // The low-fill hint (PM round 8): the whole percent shown when the fill is strictly under C.LOW_FILL, else null.
+    lowFill: function (state, id) {
+      var f = P.fill(state, id);
+      return f !== null && f < PC.C.LOW_FILL ? Math.floor(f * 100 + 1e-9) : null;
+    },
+    // One-step undo (PM round 8 decision 4, F4-T2 Step 0). snap = { level, before, after }: deep copies of the level's
+    // plan around one edit commit. Undoable only while the plan still equals `after`, so a new edit, Regenerate, an
+    // R5 reset, a sync or an approval change ends it by construction (never survives a regeneration).
+    snapshot: function (plan) { return plan ? JSON.parse(JSON.stringify(plan)) : null; },
+    undoable: function (state, snap) {
+      return !!(snap && snap.before && state.plans[snap.level] && JSON.stringify(state.plans[snap.level]) === JSON.stringify(snap.after));
+    },
+    // In-place mutator: puts `before` back (rooms, unmet, edited, approved). -> true when it did.
+    undoEdit: function (draft, snap) {
+      if (!P.undoable(draft, snap)) return false;
+      draft.plans[snap.level] = JSON.parse(JSON.stringify(snap.before));
+      return true;
     },
     // Overlaps on a level (rooms with rooms, rooms with the stair / lift), [] when none. Derived, never stored.
     problems: function (state, id) {

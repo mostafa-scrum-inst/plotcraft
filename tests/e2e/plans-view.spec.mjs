@@ -106,7 +106,7 @@ async function problems(vp) {
   await page.evaluate(() => PC.store.commit((s) => { s.plans.G.unmet = [['r3', 'r4']]; s.ans.parking.cars = 4; }, { nav: true }));
   await k.tapEl(k.tab('Ground floor')); await settled(page);
   const ws = await page.evaluate(() => [...document.querySelectorAll('[data-pc="plan-warn-list"] [data-pc="warn-text"]')].map((e) => e.textContent));
-  T.ok(ws.includes('Dining and Kitchen are not next to each other.'), `${tag} unmet pair listed (${ws})`);
+  T.ok(ws.includes('Dining and Kitchen are not next to each other. Drag one against the other to join them.'), `${tag} unmet pair listed (${ws})`);
   T.ok(ws.some((w) => w.startsWith('Parking does not fit')) || !(await page.evaluate(() => PC.validate(PC.debug.state()).warnings.length)), `${tag} F2 warnings repeated`);
   T.eq(await k.text('plan-warn-count'), String(ws.length), `${tag} the chip counts them`);
   await k.end('problems');

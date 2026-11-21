@@ -31,7 +31,9 @@
   // Best column-partition layout of `rooms` (already ordered) in a cell, or null. An under-filled cell is also
   // tried trimmed to fMax x the rooms' area along each axis (CTO round 1), so a big room is not stretched across
   // a cell it cannot fill.
-  function layoutCell(cell, rooms, R) {
+  // g (optional, F4-T2 speed-up): { pm: prefix masks of the rooms' indices in the order's room list, memo } so a
+  // column (a contiguous group, in that order) is evaluated once per (S, f, group) across all subsets of one order.
+  function layoutCell(cell, rooms, R, g) {
     if (!rooms.length) return { score: 0, rects: [] };
     var sum = rooms.reduce(function (s, r) { return s + r.area; }, 0), MIN = PC.C.ROOM_MIN_SIDE, shapes = [cell], best = null;
     if (cell.w * cell.h > R.fMax * sum) {
@@ -39,63 +41,119 @@
       if (tw >= MIN) shapes.push({ x: cell.x, y: cell.y, w: tw, h: cell.h });
       if (th >= MIN) shapes.push({ x: cell.x, y: cell.y, w: cell.w, h: th });
     }
-    shapes.forEach(function (sh) { var l = layoutShape(sh, rooms, R); if (l && (!best || l.score < best.score - 1e-9)) best = l; });
+    var colMemo = {};                                           // column results shared by the shapes (same rooms; key S, f, i, j)
+    shapes.forEach(function (sh) { var l = layoutShape(sh, rooms, R, colMemo, g); if (l && (!best || l.score < best.score - 1e-9)) best = l; });
     return best;
   }
-  function layoutShape(cell, rooms, R) {
+  function layoutShape(cell, rooms, R, colMemo, g) {
     var MIN = PC.C.ROOM_MIN_SIDE, ASP = PC.C.ROOM_MAX_ASPECT, sum = rooms.reduce(function (s, r) { return s + r.area; }, 0);
     var fFill = Math.min(R.fMax, cell.w * cell.h / sum + 1e-12), n = rooms.length, best = null;
     if (fFill < R.fMin - 1e-9) return null;
-    (fFill > 1 ? [fFill, 1] : [fFill]).forEach(function (f) {
-      for (var axis = 0; axis < 2; axis++) {                     // 0: columns advance along x; 1: along y
-        var L = axis ? cell.h : cell.w, S = axis ? cell.w : cell.h, groups = {};
+    // One phase = one (f, axis); axis 0: columns advance along x, 1: along y. phase() walks the partitions (pruning
+    // with seen0) and keeps the survivors; replay() compares them, in mask order, against the best so far.
+    function phase(f, axis, seen0) {
+        var L = axis ? cell.h : cell.w, S = axis ? cell.w : cell.h, memo = colMemo || {}, pk = S + '|' + f;
+        var groups = memo[pk] || (memo[pk] = {}), gm = g ? (g.memo[pk] || (g.memo[pk] = {})) : null;
         // One column = a contiguous group of rooms [i..j]; its two thickness candidates depend only on the group,
-        // so they are evaluated once per group (n(n+1)/2 groups) instead of once per partition.
-        var column = function (i, j) {
-          var key = i * 16 + j;
-          if (key in groups) return groups[key];
-          var grp = rooms.slice(i, j + 1), A = grp.reduce(function (s, r) { return s + r.area * f; }, 0);
-          var evalT = function (t) {                               // one column thickness: valid shapes, aspect score
-            var sc = 0;
-            for (var q = 0; q < grp.length; q++) {
-              var len = grp[q].area * f / t, a = Math.max(t, len) / Math.min(t, len);
-              if (t < MIN - 1e-6 || len < MIN - 1e-6 || a > ASP + 1e-6) return null;
-              sc += a - 1;
-            }
-            return { t: t, sc: sc };
-          };
-          var full = evalT(A / S), tsq = Math.sqrt(grp[0].area * f), sq = A / tsq <= S + 1e-9 && tsq > A / S ? evalT(tsq) : null;
-          return (groups[key] = full || sq ? { grp: grp, full: full, sq: sq } : null);
-        };
-        for (var mask = 0; mask < (1 << (n - 1)); mask++) {
-          var cols = [], ok = true, i = 0, minTotal = 0;
-          while (i < n && ok) {
-            var j = i; while (j < n - 1 && !(mask & (1 << j))) j++;
-            var col = column(i, j);
-            if (!col) { ok = false; break; }
-            cols.push(col); minTotal += (col.full || col.sq).t; i = j + 1;
-            if (minTotal > L + 1e-6) { ok = false; break; }
+        // S and f, so they are evaluated once per (S, f, group) for all shapes of the cell (F4-T2 speed-up 4). The
+        // arithmetic (summation order included) is the plain version's; the group itself is sliced only when drawn.
+        var evalT = function (t, i, j) {                           // one column thickness: valid shapes, aspect score
+          var sc = 0;
+          for (var q = i; q <= j; q++) {
+            var len = rooms[q].area * f / t, a = Math.max(t, len) / Math.min(t, len);
+            if (t < MIN - 1e-6 || len < MIN - 1e-6 || a > ASP + 1e-6) return null;
+            sc += a - 1;
           }
-          if (!ok || minTotal > L + 1e-6) continue;
-          // full span first; upgrade a column to square-ish (rest of the column is hall) while the cell allows it
-          var total = minTotal, pick = cols.map(function (c) { return c.full || c.sq; });
-          cols.forEach(function (c, k) {
-            if (c.full && c.sq && c.sq.sc < c.full.sc - 1e-9 && total - c.full.t + c.sq.t <= L + 1e-6) { total += c.sq.t - c.full.t; pick[k] = c.sq; }
+          return { t: t, sc: sc };
+        };
+        var column = function (i, j) {
+          var key = i * 16 + j;                                    // unique while n <= 16 rooms
+          var hit = groups[key];
+          if (hit !== undefined) return hit;
+          var gk = gm ? g.pm[j + 1] ^ g.pm[i] : 0, v = gm ? gm[gk] : undefined;
+          if (v === undefined) {
+            var A = 0;
+            for (var q = i; q <= j; q++) A += rooms[q].area * f;
+            var full = evalT(A / S, i, j), tsq = Math.sqrt(rooms[i].area * f), sq = A / tsq <= S + 1e-9 && tsq > A / S ? evalT(tsq, i, j) : null;
+            v = full || sq ? { full: full, sq: sq } : null;
+            if (gm) gm[gk] = v;
+          }
+          return (groups[key] = v);                                // { full, sq } or null; shared, never changed
+        };
+        // Every column partition, as a mask (bit j set = a column ends after room j). F4-T2 speed-ups (TL Q1, exact):
+        // partitions are built column by column, so a failing first columns (a null column, or the thinnest
+        // total already over L) discard every partition that starts with them (prefix pruning), and a partial
+        // whose score lower bound exceeds the best score seen by more than 1e-6 is discarded (branch and bound;
+        // a column scores at least min(full, square-ish), an upgrade only moves it there). The survivors are then
+        // compared in increasing mask order with the unchanged 1e-9 rule, as the plain mask loop did.
+        var surv = [], buf = [], base = 4 * Math.abs(f - 1) * n, seen = seen0;
+        var walk = function (i, mask, cols, minTotal, lb) {
+          if (i === n) {
+            var total = minTotal, k, score = base, m = cols.length;
+            for (k = 0; k < m; k++) {
+              var c = cols[k];
+              buf[k] = c.full || c.sq;
+              if (c.full && c.sq && c.sq.sc < c.full.sc - 1e-9 && total - c.full.t + c.sq.t <= L + 1e-6) { total += c.sq.t - c.full.t; buf[k] = c.sq; }
+            }
+            for (k = 0; k < m; k++) score += buf[k].sc;
+            if (score > seen + 1e-6) return;                       // the same margin rule, on the exact score
+            if (score < seen) seen = score;
+            surv.push({ mask: mask, score: score });               // columns and picks are rebuilt from the mask if drawn
+            return;
+          }
+          for (var j = i; j < n; j++) {
+            var col = column(i, j);
+            if (!col) continue;
+            var mt = minTotal + (col.full || col.sq).t;
+            if (mt > L + 1e-6) continue;
+            var low = lb + (col.full && col.sq ? Math.min(col.full.sc, col.sq.sc) : (col.full || col.sq).sc);
+            if (low > seen + 1e-6) continue;
+            cols.push(col);
+            walk(j + 1, j < n - 1 ? mask | (1 << j) : mask, cols, mt, low);
+            cols.pop();
+          }
+        };
+        walk(0, 0, [], 0, base);
+        return { f: f, axis: axis, L: L, column: column, surv: surv, seen: seen };
+    }
+    // The survivors are the leaves within 1e-6 of min(best so far, the phase's least score): the same set whatever
+    // seen0 the walk started from, as long as it was not below the best score at this point of the order.
+    function replay(ph) {
+        var f = ph.f, axis = ph.axis, L = ph.L, column = ph.column, thr = best ? Math.min(best.score, ph.seen) : ph.seen;
+        var surv = ph.surv.filter(function (sv) { return !(sv.score > thr + 1e-6); });
+        surv.sort(function (a, b) { return a.mask - b.mask; });
+        surv.forEach(function (sv) {
+          if (best && !(sv.score < best.score - 1e-9)) return;
+          // the leaf's columns (from the mask's column ends) and its thickness picks, computed exactly as in walk
+          var cols = [], ends = [], i0 = 0, total = 0, k, pick = [];
+          for (k = 0; k < n; k++) if (k === n - 1 || (sv.mask & (1 << k))) { cols.push(column(i0, k)); ends.push([i0, k]); i0 = k + 1; }
+          cols.forEach(function (c) { total += (c.full || c.sq).t; });
+          cols.forEach(function (c, q) {
+            pick[q] = c.full || c.sq;
+            if (c.full && c.sq && c.sq.sc < c.full.sc - 1e-9 && total - c.full.t + c.sq.t <= L + 1e-6) { total += c.sq.t - c.full.t; pick[q] = c.sq; }
           });
-          var pos = 0, score = 4 * Math.abs(f - 1) * n, rects = [];
+          var pos = 0, rects = [];
           cols.forEach(function (c, k) {
-            var t = pick[k].t, off = 0; score += pick[k].sc;
-            c.grp.forEach(function (r) {
+            var t = pick[k].t, off = 0;
+            rooms.slice(ends[k][0], ends[k][1] + 1).forEach(function (r) {
               var len = r.area * f / t;
               rects.push(axis ? { id: r.id, x: off, y: pos, w: len, h: t } : { id: r.id, x: pos, y: off, w: t, h: len });
               off += len;
             });
             pos += t;
           });
-          if (!best || score < best.score - 1e-9) best = { score: score, rects: rects };
-        }
-      }
-    });
+          best = { score: sv.score, rects: rects };
+        });
+    }
+    if (!(fFill > 1)) { replay(phase(fFill, 0, Infinity)); replay(phase(fFill, 1, best ? best.score : Infinity)); return best; }
+    // Under-filled shape: the order is (fFill, 0), (fFill, 1), (1, 0), (1, 1). Every fFill leaf scores at least
+    // base = 4 (fFill - 1) n. The f = 1 phases are walked first (seen0 never below the original's: Infinity, then the
+    // first phase's least score + 1e-6, which bounds the best after it); when base is over the least score of the
+    // first f = 1 phase with a leaf by more than 1e-6 + 1e-9, the first f = 1 survivor would replace any fFill
+    // result, so the fFill phases cannot change the outcome and are skipped (exact, F4-T2 Step 0).
+    var one0 = phase(1, 0, Infinity), one1 = phase(1, 1, one0.seen + 1e-6), m = one0.surv.length ? one0.seen : one1.seen;
+    if (!(4 * (fFill - 1) * n > m + 1e-6 + 1e-9)) { replay(phase(fFill, 0, Infinity)); replay(phase(fFill, 1, best ? best.score : Infinity)); }
+    replay(one0); replay(one1);
     return best;
   }
   // The four mirror variants of a cell layout, placed in the cell.
@@ -118,30 +176,40 @@
   // shared: cell layouts by cell and ordered room ids, reused by the second room order (same subset, same order).
   // R: the cell scale range { fMin, fMax } (first pass PC.C.LAYOUT, retry PC.C.LAYOUT.retry).
   function generateOrdered(W, D, rs, pairs, c, shared, R) {
-    var cells = c.cells, n = rs.length, k = cells.length, memo = {}, cands = [], asg = [], used = [], i;
+    var cells = c.cells, n = rs.length, k = cells.length, memo = {}, cands = [], asg = [], used = [], i, colG = {};
     var top = pairs.length ? K().topAssignments : 1, paired = {};
     pairs.forEach(function (p) { paired[p[0]] = paired[p[1]] = true; });
     var twin = rs.map(function (r, q) { return q > 0 && !paired[r.id] && !paired[rs[q - 1].id] && Math.abs(r.area - rs[q - 1].area) < 1e-9; });
-    for (i = 0; i < k; i++) used.push(0);
+    var cur = [];
+    for (i = 0; i < k; i++) { used.push(0); cur.push(0); }
     function cellLay(ci, mask) {
-      var key = ci * 256 + mask;
+      var key = ci * (1 << n) + mask;                    // unique per (cell, room subset) for any n (CD-4: was ci * 256, which collided at n >= 9)
       if (!(key in memo)) {
-        var sub = rs.filter(function (r, q) { return mask & (1 << q); }), sk = ci + '|' + sub.map(function (r) { return r.id; }).join(',');
-        memo[key] = sk in shared ? shared[sk] : (shared[sk] = layoutCell(cells[ci], sub, R));
+        var sub = [], pm = [0];
+        rs.forEach(function (r, q) { if (mask & (1 << q)) { sub.push(r); pm.push(pm[pm.length - 1] | (1 << q)); } });
+        // a cell layout depends on the cell's size only (rects are cell-local, variants() places them), so cells of
+        // the same size share it (F4-T2, exact: e.g. F / B and CL / CR around a centred stair)
+        var sk = cells[ci].w + 'x' + cells[ci].h + '|' + sub.map(function (r) { return r.id; }).join(',');
+        memo[key] = sk in shared ? shared[sk] : (shared[sk] = layoutCell(cells[ci], sub, R, { pm: pm, memo: colG }));
       }
       return memo[key];
     }
     (function dfs(q) {
       if (q === n) {
-        var masks = cells.map(function () { return 0; }), score = 0, ci;
-        asg.forEach(function (cc, r) { masks[cc] |= 1 << r; });
-        for (ci = 0; ci < k; ci++) { var l = cellLay(ci, masks[ci]); if (!l) return; score += l.score; }
+        var masks = cur, score = 0, ci;                    // cur: the cells' room masks, kept up to date by the search
+        // F4-T2 speed-up (exact): cell scores are >= 0 and the hall bonus below is at most 2, so once the list is full
+        // and the partial sum - bonus already reaches its worst score, this assignment cannot enter the list
+        var bonus = c.stair ? 2 : 0;
+        for (ci = 0; ci < k; ci++) {
+          var l = cellLay(ci, masks[ci]); if (!l) return; score += l.score;
+          if (cands.length >= top && score - bonus >= cands[cands.length - 1].score) return;
+        }
         if (c.stair && cells.some(function (cl, x) { return cl.id[0] === 'C' && !masks[x]; })) score -= 2;   // keep a hall beside the stair
         // keep only the best `top` in (score, discovery order): the same list a full sort would give
         if (cands.length < top || score < cands[cands.length - 1].score) {
           var at = cands.length;
           while (at > 0 && cands[at - 1].score > score) at--;
-          cands.splice(at, 0, { score: score, masks: masks });
+          cands.splice(at, 0, { score: score, masks: masks.slice() });
           if (cands.length > top) cands.pop();
         }
         return;
@@ -150,19 +218,34 @@
       // for them (the first of each set of equivalent assignments, which is the one the search kept anyway).
       for (var cc = q > 0 && twin[q] ? asg[q - 1] : 0; cc < k; cc++) {
         if ((used[cc] + rs[q].area) * R.fMin > cells[cc].w * cells[cc].h + 1e-9) continue;
-        asg[q] = cc; used[cc] += rs[q].area; dfs(q + 1); used[cc] -= rs[q].area;
+        asg[q] = cc; used[cc] += rs[q].area; cur[cc] |= 1 << q; dfs(q + 1); cur[cc] &= ~(1 << q); used[cc] -= rs[q].area;
       }
     })(0);
     if (!cands.length) return { ok: false };
     var best = null;
     cands.some(function (cd) {
       var vs = cd.masks.map(function (m, ci) { return variants(cells[ci], cellLay(ci, m)); }), combos = pairs.length ? Math.pow(4, k) : 1;
+      // F4-T2 speed-up (exact): a pair's adjacency depends only on the mirror variants of its two rooms' cells, so it
+      // is tabulated once per candidate (16 variant pairs) instead of rebuilding every room for each of the combos.
+      var at = {};
+      vs.forEach(function (v, ci) { v[0].forEach(function (r, q) { at[r.id] = [ci, q]; }); });
+      var tab = pairs.map(function (p) {
+        var A = at[p[0]], B = at[p[1]], t = [];
+        for (var va = 0; va < 4; va++) for (var vb = 0; vb < 4; vb++) t.push(A[0] === B[0] && va !== vb ? null : adjacent(vs[A[0]][va][A[1]], vs[B[0]][vb][B[1]]));
+        return { a: A[0], b: B[0], t: t };
+      });
       for (var cb = 0; cb < combos; cb++) {
-        var rects = [], by = {};
-        for (var ci = 0; ci < k; ci++) rects = rects.concat(vs[ci][(cb >> (2 * ci)) & 3]);
-        rects.forEach(function (r) { by[r.id] = r; });
-        var unmet = pairs.filter(function (p) { return !adjacent(by[p[0]], by[p[1]]); }), score = cd.score + 100 * unmet.length;
-        if (!best || score < best.score - 1e-9) best = { score: score, rects: rects, unmet: unmet };
+        var unmet = [];
+        for (var pi = 0; pi < pairs.length; pi++) {
+          var tp = tab[pi];
+          if (!tp.t[((cb >> (2 * tp.a)) & 3) * 4 + ((cb >> (2 * tp.b)) & 3)]) unmet.push(pairs[pi]);
+        }
+        var score = cd.score + 100 * unmet.length;
+        if (!best || score < best.score - 1e-9) {
+          var rects = [];
+          for (var ci = 0; ci < k; ci++) rects = rects.concat(vs[ci][(cb >> (2 * ci)) & 3]);
+          best = { score: score, rects: rects, unmet: unmet };
+        }
         if (!unmet.length) break;
       }
       return best && !best.unmet.length && best.score <= cd.score + 1e-9;
@@ -198,9 +281,60 @@
     return out;
   }
 
+  // CD-5 (PM round 10): ids of the rooms with no way in from the hall or the stair / lift, in room order. Frame P.
+  // A side counts when it is not on the footprint outline; what of it no other room or the core touches (within
+  // adjTol) faces hall. Access: >= HALL_ACCESS.min of hall, or of stair / lift contact. A room without it is reached
+  // through an adjacent reached room that is its pair partner or listed in HALL_ACCESS.hosts for its type; the
+  // rule runs to a fixed point, so chains count. Hall pockets that touch no stair count as hall (known limit).
+  function access(W, D, rooms, c, pairs, types) {
+    var e = K().adjTol, A = PC.C.HALL_ACCESS, blocks = [];
+    rooms.forEach(function (r) { blocks.push({ id: r.id, x: r.x, y: r.y, w: r.w, h: r.h, core: false }); });
+    [c && c.stair, c && c.lift].forEach(function (b) { if (b) blocks.push({ id: '', x: b.x, y: b.y, w: b.w, h: b.h, core: true }); });
+    // sides as [axis, at, from, to]: axis 'x' = a vertical side at x = at spanning y
+    function sides(b) { return [['x', b.x, b.y, b.y + b.h], ['x', b.x + b.w, b.y, b.y + b.h], ['y', b.y, b.x, b.x + b.w], ['y', b.y + b.h, b.x, b.x + b.w]]; }
+    var reached = {};
+    rooms.forEach(function (r) {
+      var hall = 0, touch = 0;
+      sides(r).forEach(function (s) {
+        var edge = s[0] === 'x' ? W : D;
+        if (Math.abs(s[1]) < e || Math.abs(s[1] - edge) < e) return;            // exterior wall
+        var free = [[s[2], s[3]]];
+        blocks.forEach(function (b) {
+          if (!b.core && b.id === r.id) return;
+          sides(b).forEach(function (t) {
+            if (t[0] !== s[0] || Math.abs(t[1] - s[1]) >= e) return;
+            var lo = Math.max(s[2], t[2]), hi = Math.min(s[3], t[3]);
+            if (hi - lo <= 1e-9) return;
+            if (b.core) touch += hi - lo;
+            free = free.reduce(function (out, f) {
+              if (t[3] <= f[0] || t[2] >= f[1]) out.push(f);
+              else { if (t[2] > f[0]) out.push([f[0], t[2]]); if (t[3] < f[1]) out.push([t[3], f[1]]); }
+              return out;
+            }, []);
+          });
+        });
+        free.forEach(function (f) { hall += f[1] - f[0]; });
+      });
+      reached[r.id] = hall >= A.min - 1e-9 || touch >= A.min - 1e-9;
+    });
+    var paired = function (a, b) { return (pairs || []).some(function (p) { return (p[0] === a && p[1] === b) || (p[0] === b && p[1] === a); }); };
+    for (var changed = true; changed;) {
+      changed = false;
+      rooms.forEach(function (r) {
+        if (reached[r.id]) return;
+        var hosts = A.hosts[types[r.id]] || [];
+        if (rooms.some(function (n) { return n.id !== r.id && reached[n.id] && adjacent(r, n) && (paired(r.id, n.id) || hosts.indexOf(types[n.id]) >= 0); })) {
+          reached[r.id] = true; changed = true;
+        }
+      });
+    }
+    return rooms.filter(function (r) { return !reached[r.id]; }).map(function (r) { return r.id; });
+  }
+
   PC.layout = {
     core: core,
     adjacent: adjacent,
+    access: access,
     check: check,
     overlaps: overlaps,
     // input: { W, D, rooms: [{ id, area }], pairs: [[a, b]], stairs, stairPos, lift } ->

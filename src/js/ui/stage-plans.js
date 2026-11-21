@@ -6,7 +6,7 @@
 (function (PC) {
   'use strict';
   var ui = PC.ui = PC.ui || {}, L = PC.levels, U = PC.units;
-  var view = null, editor = null, level = null, selected = null, labels = [], tabKey = '', note = null;
+  var view = null, editor = null, level = null, selected = null, labels = [], tabKey = '', note = null, undo = null;
   var NO_LAYOUT = 'This floor could not be laid out. Try fewer or smaller rooms on this level, another stair position, or a larger footprint.';
   // Texts: PM round 6 (goals-and-stories.md). The hint fits one line at 360 px (measured: 332 of 336 px), so the
   // PM's long form is used, not the fallback "Drag to move; tap, then drag a handle to resize.".
@@ -19,7 +19,12 @@
     backEdit: '{level} is back to Draft. Approve it again when you are done.', backTap: '{level} is back to Draft.',
     regenTitle: 'Regenerate this floor?', regenTail: ' It will be laid out again from the room list.',
     regenEdited: 'Your manual edits to the {level} will be lost.', regenApproved: "The {level}'s approval will be cleared.",
-    regenBoth: 'Your manual edits to the {level} and its approval will be lost.'
+    regenBoth: 'Your manual edits to the {level} and its approval will be lost.',
+    // warnings: PM round 8 (pair, low fill) and round 10 (hall access, CD-5); Undo messages: round 10
+    unmet: '{a} and {b} are not next to each other. Drag one against the other to join them.',
+    noAccess: 'The {a} has no way in from the hall or stairs. Move or resize a neighbouring room to open one.',
+    lowFill: 'Rooms fill only {p} % of the {level}. Add rooms, choose larger sizes, or lower the footprint % (Q3).',
+    undone: 'Last edit undone.', undoneApproved: 'Last edit undone. {level} approved again.'
   };
   function fill(t, o) { return t.replace(/\{(\w+)\}/g, function (m, k) { return o[k]; }); }
   function cap(t) { return t.charAt(0).toUpperCase() + t.slice(1); }
@@ -47,7 +52,7 @@
   }
   function setLevel(id) {
     if (id === level) return;
-    level = id; selected = null; note = null; editor.cancel(); render(get()); fit();
+    level = id; selected = null; note = null; undo = null; editor.cancel(); render(get()); fit();   // undo: on the floor you see (PM round 10)
   }
 
   /* ---- drawing ---- */
@@ -152,7 +157,12 @@
   }
   function warnings(s) {
     var p = plan(), names = L.roomNames(s), out = [];
-    if (p && !p.error) p.unmet.forEach(function (q) { out.push({ kind: 'warn', text: names[q[0]] + ' and ' + names[q[1]] + ' are not next to each other.' }); });
+    if (p && !p.error) p.unmet.forEach(function (q) { out.push({ kind: 'warn', text: fill(T.unmet, { a: names[q[0]], b: names[q[1]] }) }); });
+    if (level) {
+      PC.plans.noAccess(s, level).forEach(function (id) { out.push({ kind: 'warn', text: fill(T.noAccess, { a: names[id] }) }); });
+      var pct = PC.plans.lowFill(s, level);
+      if (pct !== null) out.push({ kind: 'warn', text: fill(T.lowFill, { p: pct, level: L.name(level) }) });
+    }
     PC.validate(s).warnings.forEach(function (w) { out.push({ kind: 'warn', text: w.text }); });
     return out;
   }
@@ -186,6 +196,20 @@
     btn.classList.toggle('is-approved', on);
     ui.$('btn-approve-label').textContent = on ? 'Approved' : 'Approve floor';
     ui.$('btn-regenerate').disabled = !p;
+    if (undo && (undo.level !== level || !PC.plans.undoable(s, undo))) undo = null;
+    ui.$('plan-undo').hidden = !undo;
+  }
+  // One-step "Undo last edit" (PM rounds 8 and 10): the shown floor's plan as it was before the last move / resize,
+  // approval included. The snapshot is guarded by content (PC.plans.undoable), so it cannot outlive a new edit,
+  // Regenerate, an R5 reset or an approval change; a floor-tab switch and leaving stage 3 drop it too.
+  function undoLast() {
+    var u = undo, s = get();
+    if (!u || u.level !== level || !PC.plans.undoable(s, u)) { undo = null; renderPanel(s); return; }
+    undo = null; selected = null;
+    var back = u.before.approved && !u.after.approved;
+    note = { level: u.level, text: back ? fill(T.undoneApproved, { level: cap(L.name(u.level)) }) : T.undone };
+    PC.store.commit(function (d) { PC.plans.undoEdit(d, u); });
+    ui.$('btn-regenerate').focus();                     // the pressed button hides; keep the keyboard place (Designer)
   }
   // The stage message line (one at a time): overlap reason (blocks approval), then the latest note on this floor,
   // then "approved", else the hint. Nothing while the no-layout banner speaks.
@@ -221,7 +245,7 @@
     var text = p.edited && p.approved ? T.regenBoth : p.edited ? T.regenEdited : T.regenApproved;
     var go = PC.plans.hasWork(p) ? ui.dialog.confirm({ title: T.regenTitle, text: fill(text, { level: nameL }) + T.regenTail, ok: 'Regenerate', cancel: 'Cancel' }) : Promise.resolve(true);
     return go.then(function (ok) {
-      if (ok) { selected = null; note = null; PC.store.commit(function (d) { PC.plans.regenerate(d, id); }); }
+      if (ok) { selected = null; note = null; undo = null; PC.store.commit(function (d) { PC.plans.regenerate(d, id); }); }
       return ok;
     });
   }
@@ -263,12 +287,16 @@
         footprint: function () { var st = site(); return st ? st.footprint : null; },
         changed: function () { renderPanel(get()); view.invalidate(); },
         // an edit on an approved floor returns it to Draft: told once, on that transition (F3-S3)
-        committed: function (r) { note = r.wasApproved ? { level: r.level, text: fill(T.backEdit, { level: cap(L.name(r.level)) }) } : (note && note.level === r.level ? null : note); }
+        committed: function (r) {
+          note = r.wasApproved ? { level: r.level, text: fill(T.backEdit, { level: cap(L.name(r.level)) }) } : (note && note.level === r.level ? null : note);
+          undo = r.before ? { level: r.level, before: r.before, after: r.after } : null;
+        }
       });
       ui.View2D.named.plan = view;
       ui.on(ui.$('plan-fit'), 'click', function () { fit(); view.invalidate(); });
       ui.on(ui.$('btn-regenerate'), 'click', regenerate);
       ui.on(ui.$('btn-approve'), 'click', approve);
+      ui.on(ui.$('plan-undo'), 'click', undoLast);
       ui.on(ui.$('btn-goto-rooms'), 'click', function () {
         var id = level;
         if (PC.store.go(2)) ui.stages.questions.goTo(11, id);
@@ -277,7 +305,7 @@
         var panel = ui.$('plan-warn-panel'), open = panel.classList.contains('is-collapsed');
         panel.classList.toggle('is-collapsed', !open); ui.$('plan-warn-toggle').setAttribute('aria-expanded', String(open));
       });
-      PC.store.subscribe(function (s, prev, meta) { if (meta.replace) { level = null; selected = null; tabKey = ''; note = null; editor.cancel(); } });
+      PC.store.subscribe(function (s, prev, meta) { if (meta.replace) { level = null; selected = null; tabKey = ''; note = null; undo = null; editor.cancel(); } });
       Object.assign(PC.debug, {
         planLabels: function () { view.drawNow(); return labels.map(function (l) { return { text: l.text, x: l.x, y: l.y, w: l.w, h: l.h }; }); },
         planView: function () { return { level: level, selected: selected, scale: view.scale }; },
@@ -285,7 +313,7 @@
         planHandles: function (id) { var r = view.canvas.getBoundingClientRect(); return editor.spots(id).map(function (h) { return { kind: h.kind, x: r.left + h.x, y: r.top + h.y }; }); },
         planDrag: function () { return editor.dragging(); }
       });
-      ui.shell.register(3, { enter: function () { selected = null; note = null; editor.cancel(); render(get()); fit(); view.invalidate(); }, render: render });
+      ui.shell.register(3, { enter: function () { selected = null; note = null; undo = null; editor.cancel(); render(get()); fit(); view.invalidate(); }, render: render });
     }
   };
 })(globalThis.PC = globalThis.PC || {});

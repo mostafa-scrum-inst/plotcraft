@@ -976,6 +976,18 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   .pc-plans .pc-msg { font-size: var(--fs-cap); }
 }
 
+/* F4-T2 Step 0: one-step Undo between Regenerate and Approve (Designer, docs/03-tasks/F4-T2/designer-plan.md §1) */
+.pc-plans .pc-toolrow > .pc-plans__undo { padding: 0; width: var(--tap); flex: none; }
+@media (min-width: 900px) and (min-height: 481px) {          /* side panel: Regenerate + Undo on one line, Approve below */
+  .pc-plans .pc-toolrow { flex-direction: row; flex-wrap: wrap; align-items: stretch; }
+  .pc-plans .pc-toolrow > [data-pc="btn-regenerate"] { flex: 1 1 0; }
+  .pc-plans .pc-toolrow > .pc-toolrow__end { flex: 1 1 100%; }
+}
+@media (max-height: 480px) and (orientation: landscape) and (max-width: 899px) {
+  .pc-plans .pc-toolrow { flex-wrap: nowrap; }
+  .pc-plans .pc-toolrow > .pc-toolrow__end { flex: 1 1 0; min-width: 0; padding: 0 var(--s2); }
+}
+
 /* css/43-stage-interior.css */
 /* Stage 4: Interior */
 .pc-interior { overflow-y: auto; overscroll-behavior: contain; }
@@ -1531,6 +1543,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
         </div>
         <div class="pc-toolrow">
           <button class="pc-btn" type="button" data-pc="btn-regenerate"><svg class="pc-i" aria-hidden="true"><use href="#i-refresh"/></svg><span class="pc-plans__regen-txt">Regenerate<span class="pc-plans__regen-full">&nbsp;this floor</span></span></button>
+          <button class="pc-btn pc-btn--icon pc-plans__undo" type="button" aria-label="Undo last edit" title="Undo last edit"
+                  data-pc="plan-undo" hidden><svg class="pc-i" aria-hidden="true"><use href="#i-undo"/></svg></button>
           <button class="pc-btn pc-btn--primary pc-toolrow__end" type="button" data-pc="btn-approve"><svg class="pc-i" aria-hidden="true"><use href="#i-check"/></svg><span data-pc="btn-approve-label">Approve floor</span></button>
         </div>
       </div>
@@ -1771,7 +1785,15 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     PLOT: { minPts: 3, maxPts: 12, extent: 100, minArea: 50 },
     BUILDABLE_MIN: 20,
     ROOM_MIN_SIDE: 1.5, ROOM_AREA_TOL: 0.25, ROOM_MAX_ASPECT: 3,
-    MAX_ROOMS_PER_LEVEL: 8, MAX_PAIRS_PER_LEVEL: 6,
+    MAX_ROOMS_PER_LEVEL: 10, MAX_PAIRS_PER_LEVEL: 6,   // CD-4: 10 rooms per plan level (was 8)
+    // CD-5 hall access (PM round 10): a room has access with >= min m of a non-exterior side on hall or on the stair /
+    // lift; one without is reached through a wall-sharing neighbour that is reached when they are a must-be-adjacent
+    // pair or the neighbour's type is listed for it here (en-suite and service rooms). Chains count.
+    HALL_ACCESS: { min: 0.8, hosts: {
+      bathroom: ['bedroom', 'maid'],
+      storage: ['bedroom', 'kitchen', 'living', 'dining', 'majlis', 'office', 'maid'],
+      laundry: ['bedroom', 'kitchen', 'living', 'dining', 'majlis', 'office', 'maid'] } },
+    LOW_FILL: 0.5,                                // PM round 8: a level whose drawn rooms + core fill less than this gets a hint
     // A-8 generator: room scale range, shared wall (length, tolerance), overlap tolerance, assignments tried for pairs
     LAYOUT: { fMin: 0.8, fMax: 1.2, adjMin: 0.5, adjTol: 0.02, overlapTol: 0.011, topAssignments: 60,
       retry: { fMin: 0.75, fMax: 1.25 } },          // 4.4: retry only when the first pass finds no layout (F3-T2)
@@ -2267,7 +2289,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       return best;
     },
     // Move every room of level `from` to level `to`, keeping their pairs. Refused when `to` would get more than
-    // 8 rooms or 6 pairs.
+    // MAX_ROOMS_PER_LEVEL rooms or MAX_PAIRS_PER_LEVEL pairs.
     moveRooms: function (d, from, to) {
       var C = PC.C, moving = L.roomsOn(d, from), pairs = L.pairsOn(d, from).length;
       if (L.roomsOn(d, to).length + moving.length > C.MAX_ROOMS_PER_LEVEL) return { ok: false, reason: 'full' };
@@ -2770,7 +2792,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   // Best column-partition layout of `rooms` (already ordered) in a cell, or null. An under-filled cell is also
   // tried trimmed to fMax x the rooms' area along each axis (CTO round 1), so a big room is not stretched across
   // a cell it cannot fill.
-  function layoutCell(cell, rooms, R) {
+  // g (optional, F4-T2 speed-up): { pm: prefix masks of the rooms' indices in the order's room list, memo } so a
+  // column (a contiguous group, in that order) is evaluated once per (S, f, group) across all subsets of one order.
+  function layoutCell(cell, rooms, R, g) {
     if (!rooms.length) return { score: 0, rects: [] };
     var sum = rooms.reduce(function (s, r) { return s + r.area; }, 0), MIN = PC.C.ROOM_MIN_SIDE, shapes = [cell], best = null;
     if (cell.w * cell.h > R.fMax * sum) {
@@ -2778,63 +2802,119 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       if (tw >= MIN) shapes.push({ x: cell.x, y: cell.y, w: tw, h: cell.h });
       if (th >= MIN) shapes.push({ x: cell.x, y: cell.y, w: cell.w, h: th });
     }
-    shapes.forEach(function (sh) { var l = layoutShape(sh, rooms, R); if (l && (!best || l.score < best.score - 1e-9)) best = l; });
+    var colMemo = {};                                           // column results shared by the shapes (same rooms; key S, f, i, j)
+    shapes.forEach(function (sh) { var l = layoutShape(sh, rooms, R, colMemo, g); if (l && (!best || l.score < best.score - 1e-9)) best = l; });
     return best;
   }
-  function layoutShape(cell, rooms, R) {
+  function layoutShape(cell, rooms, R, colMemo, g) {
     var MIN = PC.C.ROOM_MIN_SIDE, ASP = PC.C.ROOM_MAX_ASPECT, sum = rooms.reduce(function (s, r) { return s + r.area; }, 0);
     var fFill = Math.min(R.fMax, cell.w * cell.h / sum + 1e-12), n = rooms.length, best = null;
     if (fFill < R.fMin - 1e-9) return null;
-    (fFill > 1 ? [fFill, 1] : [fFill]).forEach(function (f) {
-      for (var axis = 0; axis < 2; axis++) {                     // 0: columns advance along x; 1: along y
-        var L = axis ? cell.h : cell.w, S = axis ? cell.w : cell.h, groups = {};
+    // One phase = one (f, axis); axis 0: columns advance along x, 1: along y. phase() walks the partitions (pruning
+    // with seen0) and keeps the survivors; replay() compares them, in mask order, against the best so far.
+    function phase(f, axis, seen0) {
+        var L = axis ? cell.h : cell.w, S = axis ? cell.w : cell.h, memo = colMemo || {}, pk = S + '|' + f;
+        var groups = memo[pk] || (memo[pk] = {}), gm = g ? (g.memo[pk] || (g.memo[pk] = {})) : null;
         // One column = a contiguous group of rooms [i..j]; its two thickness candidates depend only on the group,
-        // so they are evaluated once per group (n(n+1)/2 groups) instead of once per partition.
-        var column = function (i, j) {
-          var key = i * 16 + j;
-          if (key in groups) return groups[key];
-          var grp = rooms.slice(i, j + 1), A = grp.reduce(function (s, r) { return s + r.area * f; }, 0);
-          var evalT = function (t) {                               // one column thickness: valid shapes, aspect score
-            var sc = 0;
-            for (var q = 0; q < grp.length; q++) {
-              var len = grp[q].area * f / t, a = Math.max(t, len) / Math.min(t, len);
-              if (t < MIN - 1e-6 || len < MIN - 1e-6 || a > ASP + 1e-6) return null;
-              sc += a - 1;
-            }
-            return { t: t, sc: sc };
-          };
-          var full = evalT(A / S), tsq = Math.sqrt(grp[0].area * f), sq = A / tsq <= S + 1e-9 && tsq > A / S ? evalT(tsq) : null;
-          return (groups[key] = full || sq ? { grp: grp, full: full, sq: sq } : null);
-        };
-        for (var mask = 0; mask < (1 << (n - 1)); mask++) {
-          var cols = [], ok = true, i = 0, minTotal = 0;
-          while (i < n && ok) {
-            var j = i; while (j < n - 1 && !(mask & (1 << j))) j++;
-            var col = column(i, j);
-            if (!col) { ok = false; break; }
-            cols.push(col); minTotal += (col.full || col.sq).t; i = j + 1;
-            if (minTotal > L + 1e-6) { ok = false; break; }
+        // S and f, so they are evaluated once per (S, f, group) for all shapes of the cell (F4-T2 speed-up 4). The
+        // arithmetic (summation order included) is the plain version's; the group itself is sliced only when drawn.
+        var evalT = function (t, i, j) {                           // one column thickness: valid shapes, aspect score
+          var sc = 0;
+          for (var q = i; q <= j; q++) {
+            var len = rooms[q].area * f / t, a = Math.max(t, len) / Math.min(t, len);
+            if (t < MIN - 1e-6 || len < MIN - 1e-6 || a > ASP + 1e-6) return null;
+            sc += a - 1;
           }
-          if (!ok || minTotal > L + 1e-6) continue;
-          // full span first; upgrade a column to square-ish (rest of the column is hall) while the cell allows it
-          var total = minTotal, pick = cols.map(function (c) { return c.full || c.sq; });
-          cols.forEach(function (c, k) {
-            if (c.full && c.sq && c.sq.sc < c.full.sc - 1e-9 && total - c.full.t + c.sq.t <= L + 1e-6) { total += c.sq.t - c.full.t; pick[k] = c.sq; }
+          return { t: t, sc: sc };
+        };
+        var column = function (i, j) {
+          var key = i * 16 + j;                                    // unique while n <= 16 rooms
+          var hit = groups[key];
+          if (hit !== undefined) return hit;
+          var gk = gm ? g.pm[j + 1] ^ g.pm[i] : 0, v = gm ? gm[gk] : undefined;
+          if (v === undefined) {
+            var A = 0;
+            for (var q = i; q <= j; q++) A += rooms[q].area * f;
+            var full = evalT(A / S, i, j), tsq = Math.sqrt(rooms[i].area * f), sq = A / tsq <= S + 1e-9 && tsq > A / S ? evalT(tsq, i, j) : null;
+            v = full || sq ? { full: full, sq: sq } : null;
+            if (gm) gm[gk] = v;
+          }
+          return (groups[key] = v);                                // { full, sq } or null; shared, never changed
+        };
+        // Every column partition, as a mask (bit j set = a column ends after room j). F4-T2 speed-ups (TL Q1, exact):
+        // partitions are built column by column, so a failing first columns (a null column, or the thinnest
+        // total already over L) discard every partition that starts with them (prefix pruning), and a partial
+        // whose score lower bound exceeds the best score seen by more than 1e-6 is discarded (branch and bound;
+        // a column scores at least min(full, square-ish), an upgrade only moves it there). The survivors are then
+        // compared in increasing mask order with the unchanged 1e-9 rule, as the plain mask loop did.
+        var surv = [], buf = [], base = 4 * Math.abs(f - 1) * n, seen = seen0;
+        var walk = function (i, mask, cols, minTotal, lb) {
+          if (i === n) {
+            var total = minTotal, k, score = base, m = cols.length;
+            for (k = 0; k < m; k++) {
+              var c = cols[k];
+              buf[k] = c.full || c.sq;
+              if (c.full && c.sq && c.sq.sc < c.full.sc - 1e-9 && total - c.full.t + c.sq.t <= L + 1e-6) { total += c.sq.t - c.full.t; buf[k] = c.sq; }
+            }
+            for (k = 0; k < m; k++) score += buf[k].sc;
+            if (score > seen + 1e-6) return;                       // the same margin rule, on the exact score
+            if (score < seen) seen = score;
+            surv.push({ mask: mask, score: score });               // columns and picks are rebuilt from the mask if drawn
+            return;
+          }
+          for (var j = i; j < n; j++) {
+            var col = column(i, j);
+            if (!col) continue;
+            var mt = minTotal + (col.full || col.sq).t;
+            if (mt > L + 1e-6) continue;
+            var low = lb + (col.full && col.sq ? Math.min(col.full.sc, col.sq.sc) : (col.full || col.sq).sc);
+            if (low > seen + 1e-6) continue;
+            cols.push(col);
+            walk(j + 1, j < n - 1 ? mask | (1 << j) : mask, cols, mt, low);
+            cols.pop();
+          }
+        };
+        walk(0, 0, [], 0, base);
+        return { f: f, axis: axis, L: L, column: column, surv: surv, seen: seen };
+    }
+    // The survivors are the leaves within 1e-6 of min(best so far, the phase's least score): the same set whatever
+    // seen0 the walk started from, as long as it was not below the best score at this point of the order.
+    function replay(ph) {
+        var f = ph.f, axis = ph.axis, L = ph.L, column = ph.column, thr = best ? Math.min(best.score, ph.seen) : ph.seen;
+        var surv = ph.surv.filter(function (sv) { return !(sv.score > thr + 1e-6); });
+        surv.sort(function (a, b) { return a.mask - b.mask; });
+        surv.forEach(function (sv) {
+          if (best && !(sv.score < best.score - 1e-9)) return;
+          // the leaf's columns (from the mask's column ends) and its thickness picks, computed exactly as in walk
+          var cols = [], ends = [], i0 = 0, total = 0, k, pick = [];
+          for (k = 0; k < n; k++) if (k === n - 1 || (sv.mask & (1 << k))) { cols.push(column(i0, k)); ends.push([i0, k]); i0 = k + 1; }
+          cols.forEach(function (c) { total += (c.full || c.sq).t; });
+          cols.forEach(function (c, q) {
+            pick[q] = c.full || c.sq;
+            if (c.full && c.sq && c.sq.sc < c.full.sc - 1e-9 && total - c.full.t + c.sq.t <= L + 1e-6) { total += c.sq.t - c.full.t; pick[q] = c.sq; }
           });
-          var pos = 0, score = 4 * Math.abs(f - 1) * n, rects = [];
+          var pos = 0, rects = [];
           cols.forEach(function (c, k) {
-            var t = pick[k].t, off = 0; score += pick[k].sc;
-            c.grp.forEach(function (r) {
+            var t = pick[k].t, off = 0;
+            rooms.slice(ends[k][0], ends[k][1] + 1).forEach(function (r) {
               var len = r.area * f / t;
               rects.push(axis ? { id: r.id, x: off, y: pos, w: len, h: t } : { id: r.id, x: pos, y: off, w: t, h: len });
               off += len;
             });
             pos += t;
           });
-          if (!best || score < best.score - 1e-9) best = { score: score, rects: rects };
-        }
-      }
-    });
+          best = { score: sv.score, rects: rects };
+        });
+    }
+    if (!(fFill > 1)) { replay(phase(fFill, 0, Infinity)); replay(phase(fFill, 1, best ? best.score : Infinity)); return best; }
+    // Under-filled shape: the order is (fFill, 0), (fFill, 1), (1, 0), (1, 1). Every fFill leaf scores at least
+    // base = 4 (fFill - 1) n. The f = 1 phases are walked first (seen0 never below the original's: Infinity, then the
+    // first phase's least score + 1e-6, which bounds the best after it); when base is over the least score of the
+    // first f = 1 phase with a leaf by more than 1e-6 + 1e-9, the first f = 1 survivor would replace any fFill
+    // result, so the fFill phases cannot change the outcome and are skipped (exact, F4-T2 Step 0).
+    var one0 = phase(1, 0, Infinity), one1 = phase(1, 1, one0.seen + 1e-6), m = one0.surv.length ? one0.seen : one1.seen;
+    if (!(4 * (fFill - 1) * n > m + 1e-6 + 1e-9)) { replay(phase(fFill, 0, Infinity)); replay(phase(fFill, 1, best ? best.score : Infinity)); }
+    replay(one0); replay(one1);
     return best;
   }
   // The four mirror variants of a cell layout, placed in the cell.
@@ -2857,30 +2937,40 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   // shared: cell layouts by cell and ordered room ids, reused by the second room order (same subset, same order).
   // R: the cell scale range { fMin, fMax } (first pass PC.C.LAYOUT, retry PC.C.LAYOUT.retry).
   function generateOrdered(W, D, rs, pairs, c, shared, R) {
-    var cells = c.cells, n = rs.length, k = cells.length, memo = {}, cands = [], asg = [], used = [], i;
+    var cells = c.cells, n = rs.length, k = cells.length, memo = {}, cands = [], asg = [], used = [], i, colG = {};
     var top = pairs.length ? K().topAssignments : 1, paired = {};
     pairs.forEach(function (p) { paired[p[0]] = paired[p[1]] = true; });
     var twin = rs.map(function (r, q) { return q > 0 && !paired[r.id] && !paired[rs[q - 1].id] && Math.abs(r.area - rs[q - 1].area) < 1e-9; });
-    for (i = 0; i < k; i++) used.push(0);
+    var cur = [];
+    for (i = 0; i < k; i++) { used.push(0); cur.push(0); }
     function cellLay(ci, mask) {
-      var key = ci * 256 + mask;
+      var key = ci * (1 << n) + mask;                    // unique per (cell, room subset) for any n (CD-4: was ci * 256, which collided at n >= 9)
       if (!(key in memo)) {
-        var sub = rs.filter(function (r, q) { return mask & (1 << q); }), sk = ci + '|' + sub.map(function (r) { return r.id; }).join(',');
-        memo[key] = sk in shared ? shared[sk] : (shared[sk] = layoutCell(cells[ci], sub, R));
+        var sub = [], pm = [0];
+        rs.forEach(function (r, q) { if (mask & (1 << q)) { sub.push(r); pm.push(pm[pm.length - 1] | (1 << q)); } });
+        // a cell layout depends on the cell's size only (rects are cell-local, variants() places them), so cells of
+        // the same size share it (F4-T2, exact: e.g. F / B and CL / CR around a centred stair)
+        var sk = cells[ci].w + 'x' + cells[ci].h + '|' + sub.map(function (r) { return r.id; }).join(',');
+        memo[key] = sk in shared ? shared[sk] : (shared[sk] = layoutCell(cells[ci], sub, R, { pm: pm, memo: colG }));
       }
       return memo[key];
     }
     (function dfs(q) {
       if (q === n) {
-        var masks = cells.map(function () { return 0; }), score = 0, ci;
-        asg.forEach(function (cc, r) { masks[cc] |= 1 << r; });
-        for (ci = 0; ci < k; ci++) { var l = cellLay(ci, masks[ci]); if (!l) return; score += l.score; }
+        var masks = cur, score = 0, ci;                    // cur: the cells' room masks, kept up to date by the search
+        // F4-T2 speed-up (exact): cell scores are >= 0 and the hall bonus below is at most 2, so once the list is full
+        // and the partial sum - bonus already reaches its worst score, this assignment cannot enter the list
+        var bonus = c.stair ? 2 : 0;
+        for (ci = 0; ci < k; ci++) {
+          var l = cellLay(ci, masks[ci]); if (!l) return; score += l.score;
+          if (cands.length >= top && score - bonus >= cands[cands.length - 1].score) return;
+        }
         if (c.stair && cells.some(function (cl, x) { return cl.id[0] === 'C' && !masks[x]; })) score -= 2;   // keep a hall beside the stair
         // keep only the best `top` in (score, discovery order): the same list a full sort would give
         if (cands.length < top || score < cands[cands.length - 1].score) {
           var at = cands.length;
           while (at > 0 && cands[at - 1].score > score) at--;
-          cands.splice(at, 0, { score: score, masks: masks });
+          cands.splice(at, 0, { score: score, masks: masks.slice() });
           if (cands.length > top) cands.pop();
         }
         return;
@@ -2889,19 +2979,34 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       // for them (the first of each set of equivalent assignments, which is the one the search kept anyway).
       for (var cc = q > 0 && twin[q] ? asg[q - 1] : 0; cc < k; cc++) {
         if ((used[cc] + rs[q].area) * R.fMin > cells[cc].w * cells[cc].h + 1e-9) continue;
-        asg[q] = cc; used[cc] += rs[q].area; dfs(q + 1); used[cc] -= rs[q].area;
+        asg[q] = cc; used[cc] += rs[q].area; cur[cc] |= 1 << q; dfs(q + 1); cur[cc] &= ~(1 << q); used[cc] -= rs[q].area;
       }
     })(0);
     if (!cands.length) return { ok: false };
     var best = null;
     cands.some(function (cd) {
       var vs = cd.masks.map(function (m, ci) { return variants(cells[ci], cellLay(ci, m)); }), combos = pairs.length ? Math.pow(4, k) : 1;
+      // F4-T2 speed-up (exact): a pair's adjacency depends only on the mirror variants of its two rooms' cells, so it
+      // is tabulated once per candidate (16 variant pairs) instead of rebuilding every room for each of the combos.
+      var at = {};
+      vs.forEach(function (v, ci) { v[0].forEach(function (r, q) { at[r.id] = [ci, q]; }); });
+      var tab = pairs.map(function (p) {
+        var A = at[p[0]], B = at[p[1]], t = [];
+        for (var va = 0; va < 4; va++) for (var vb = 0; vb < 4; vb++) t.push(A[0] === B[0] && va !== vb ? null : adjacent(vs[A[0]][va][A[1]], vs[B[0]][vb][B[1]]));
+        return { a: A[0], b: B[0], t: t };
+      });
       for (var cb = 0; cb < combos; cb++) {
-        var rects = [], by = {};
-        for (var ci = 0; ci < k; ci++) rects = rects.concat(vs[ci][(cb >> (2 * ci)) & 3]);
-        rects.forEach(function (r) { by[r.id] = r; });
-        var unmet = pairs.filter(function (p) { return !adjacent(by[p[0]], by[p[1]]); }), score = cd.score + 100 * unmet.length;
-        if (!best || score < best.score - 1e-9) best = { score: score, rects: rects, unmet: unmet };
+        var unmet = [];
+        for (var pi = 0; pi < pairs.length; pi++) {
+          var tp = tab[pi];
+          if (!tp.t[((cb >> (2 * tp.a)) & 3) * 4 + ((cb >> (2 * tp.b)) & 3)]) unmet.push(pairs[pi]);
+        }
+        var score = cd.score + 100 * unmet.length;
+        if (!best || score < best.score - 1e-9) {
+          var rects = [];
+          for (var ci = 0; ci < k; ci++) rects = rects.concat(vs[ci][(cb >> (2 * ci)) & 3]);
+          best = { score: score, rects: rects, unmet: unmet };
+        }
         if (!unmet.length) break;
       }
       return best && !best.unmet.length && best.score <= cd.score + 1e-9;
@@ -2937,9 +3042,60 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     return out;
   }
 
+  // CD-5 (PM round 10): ids of the rooms with no way in from the hall or the stair / lift, in room order. Frame P.
+  // A side counts when it is not on the footprint outline; what of it no other room or the core touches (within
+  // adjTol) faces hall. Access: >= HALL_ACCESS.min of hall, or of stair / lift contact. A room without it is reached
+  // through an adjacent reached room that is its pair partner or listed in HALL_ACCESS.hosts for its type; the
+  // rule runs to a fixed point, so chains count. Hall pockets that touch no stair count as hall (known limit).
+  function access(W, D, rooms, c, pairs, types) {
+    var e = K().adjTol, A = PC.C.HALL_ACCESS, blocks = [];
+    rooms.forEach(function (r) { blocks.push({ id: r.id, x: r.x, y: r.y, w: r.w, h: r.h, core: false }); });
+    [c && c.stair, c && c.lift].forEach(function (b) { if (b) blocks.push({ id: '', x: b.x, y: b.y, w: b.w, h: b.h, core: true }); });
+    // sides as [axis, at, from, to]: axis 'x' = a vertical side at x = at spanning y
+    function sides(b) { return [['x', b.x, b.y, b.y + b.h], ['x', b.x + b.w, b.y, b.y + b.h], ['y', b.y, b.x, b.x + b.w], ['y', b.y + b.h, b.x, b.x + b.w]]; }
+    var reached = {};
+    rooms.forEach(function (r) {
+      var hall = 0, touch = 0;
+      sides(r).forEach(function (s) {
+        var edge = s[0] === 'x' ? W : D;
+        if (Math.abs(s[1]) < e || Math.abs(s[1] - edge) < e) return;            // exterior wall
+        var free = [[s[2], s[3]]];
+        blocks.forEach(function (b) {
+          if (!b.core && b.id === r.id) return;
+          sides(b).forEach(function (t) {
+            if (t[0] !== s[0] || Math.abs(t[1] - s[1]) >= e) return;
+            var lo = Math.max(s[2], t[2]), hi = Math.min(s[3], t[3]);
+            if (hi - lo <= 1e-9) return;
+            if (b.core) touch += hi - lo;
+            free = free.reduce(function (out, f) {
+              if (t[3] <= f[0] || t[2] >= f[1]) out.push(f);
+              else { if (t[2] > f[0]) out.push([f[0], t[2]]); if (t[3] < f[1]) out.push([t[3], f[1]]); }
+              return out;
+            }, []);
+          });
+        });
+        free.forEach(function (f) { hall += f[1] - f[0]; });
+      });
+      reached[r.id] = hall >= A.min - 1e-9 || touch >= A.min - 1e-9;
+    });
+    var paired = function (a, b) { return (pairs || []).some(function (p) { return (p[0] === a && p[1] === b) || (p[0] === b && p[1] === a); }); };
+    for (var changed = true; changed;) {
+      changed = false;
+      rooms.forEach(function (r) {
+        if (reached[r.id]) return;
+        var hosts = A.hosts[types[r.id]] || [];
+        if (rooms.some(function (n) { return n.id !== r.id && reached[n.id] && adjacent(r, n) && (paired(r.id, n.id) || hosts.indexOf(types[n.id]) >= 0); })) {
+          reached[r.id] = true; changed = true;
+        }
+      });
+    }
+    return rooms.filter(function (r) { return !reached[r.id]; }).map(function (r) { return r.id; });
+  }
+
   PC.layout = {
     core: core,
     adjacent: adjacent,
+    access: access,
     check: check,
     overlaps: overlaps,
     // input: { W, D, rooms: [{ id, area }], pairs: [[a, b]], stairs, stairPos, lift } ->
@@ -3037,7 +3193,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       var fp = PC.site.analyse(state).footprint, L = PC.levels;
       if (!fp) return null;
       var c = PC.layout.core(fp.w, fp.d, L.stairsExist(state), state.ans.stairPos, L.liftExists(state));
-      return { W: fp.w, D: fp.d, core: { stair: c.stair, lift: c.lift }, grid: PC.C.PLAN_SNAP[state.ans.unit] };
+      return { W: fp.w, D: fp.d, core: { stair: c.stair, lift: c.lift }, grid: PC.C.PLAN_SNAP[state.ans.unit], minSnap: state.ans.unit === 'ft' };
     },
     // Snap candidates for room `id`: for each axis the parallel edges as { v, lo, hi, kind }, where x-edges are the
     // vertical lines x = v spanning y in [lo, hi]. Other rooms ('room'), the stair and lift ('core') and the
@@ -3098,22 +3254,28 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       var MIN = PC.C.ROOM_MIN_SIDE, r = { id: start.id, x: start.x, y: start.y, w: start.w, h: start.h }, x1 = r.x + r.w, y1 = r.y + r.h, sn;
       // the finger position is clamped to the allowed range first (as moveRect does), so an edge dragged past the
       // footprint lands on it, not on the nearest grid line inside it (QA F3-T2 bug 1)
-      var snap = function (v, s0, s1, cands, lo, hi) { return P.snapEdge(Math.min(hi, Math.max(lo, v)), s0, s1, cands, ctx.grid, lo, hi); };
+      // ft (ctx.minSnap): the shrinking limit, 1.5 m from the opposite edge, is one more candidate, so the minimum is
+      // reachable exactly as in m (PM round 8, decision 5). m is unchanged: its 0.5 m grid already lands there.
+      var snap = function (v, s0, s1, cands, lo, hi, limit) {
+        var all = ctx.minSnap ? cands.concat([{ v: limit, lo: s0, hi: s1, kind: 'min' }]) : cands;
+        return P.snapEdge(Math.min(hi, Math.max(lo, v)), s0, s1, all, ctx.grid, lo, hi);
+      };
       if (kind === 'e' || kind === 'w') {
-        sn = kind === 'e' ? snap(x1 + dx, r.y, y1, ctx.cands.x, r.x + MIN, ctx.W) : snap(r.x + dx, r.y, y1, ctx.cands.x, 0, x1 - MIN);
+        sn = kind === 'e' ? snap(x1 + dx, r.y, y1, ctx.cands.x, r.x + MIN, ctx.W, r.x + MIN) : snap(r.x + dx, r.y, y1, ctx.cands.x, 0, x1 - MIN, x1 - MIN);
         if (kind === 'e') r.w = sn.v - r.x; else { r.x = sn.v; r.w = x1 - sn.v; }
       } else {
-        sn = kind === 'n' ? snap(y1 + dy, r.x, x1, ctx.cands.y, r.y + MIN, ctx.D) : snap(r.y + dy, r.x, x1, ctx.cands.y, 0, y1 - MIN);
+        sn = kind === 'n' ? snap(y1 + dy, r.x, x1, ctx.cands.y, r.y + MIN, ctx.D, r.y + MIN) : snap(r.y + dy, r.x, x1, ctx.cands.y, 0, y1 - MIN, y1 - MIN);
         if (kind === 'n') r.h = sn.v - r.y; else { r.y = sn.v; r.h = y1 - sn.v; }
       }
       var axis = kind === 'e' || kind === 'w' ? 'x' : 'y', s0 = axis === 'x' ? r.y : r.x, s1 = s0 + (axis === 'x' ? r.h : r.w);
-      return { rect: round(r), guides: sn.to === 'edge' && sn.at.kind !== 'footprint' ? [{ axis: axis, v: sn.v, lo: Math.min(sn.at.lo, s0), hi: Math.max(sn.at.hi, s1) }] : [] };
+      return { rect: round(r), guides: sn.to === 'edge' && sn.at.kind !== 'footprint' && sn.at.kind !== 'min' ? [{ axis: axis, v: sn.v, lo: Math.min(sn.at.lo, s0), hi: Math.max(sn.at.hi, s1) }] : [] };
     },
     // In-place mutator (inside a commit): store the edited rectangle of one room on level `id`. The level becomes
     // edited, loses its approval and gets its unmet pairs recomputed; no other level is touched.
     applyEdit: function (draft, id, rect) {
       var p = draft.plans[id], was = !!(p && p.approved), i = p ? p.rooms.findIndex(function (r) { return r.id === rect.id; }) : -1;
-      if (i < 0) return { changed: false, wasApproved: was };
+      // CTO F3 round 2: never store an edit into a stale plan or a rectangle without area
+      if (i < 0 || p.sig !== PC.sig.level(draft, id) || !(rect.w > 0 && rect.h > 0)) return { changed: false, wasApproved: was };
       var o = p.rooms[i], n = round(rect);
       if (o.x === n.x && o.y === n.y && o.w === n.w && o.h === n.h) return { changed: false, wasApproved: was };
       p.rooms[i] = n; p.edited = true; p.approved = false;
@@ -3121,6 +3283,40 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       p.unmet = PC.levels.pairsOn(draft, id).map(function (q) { return [q[0], q[1]]; })
         .filter(function (q) { return by[q[0]] && by[q[1]] && !PC.layout.adjacent(by[q[0]], by[q[1]]); });
       return { changed: true, wasApproved: was };
+    },
+    // CD-5: ids of the rooms of level `id` with no way in from the hall or stairs (PC.layout.access), [] for a missing,
+    // failed or stale plan. Derived from the drawn plan, never stored.
+    noAccess: function (state, id) {
+      var p = state.plans[id], c = P.ctx(state, id), types = {};
+      if (!p || p.error || !c || p.sig !== PC.sig.level(state, id)) return [];
+      state.ans.rooms.forEach(function (r) { types[r.id] = r.type; });
+      return PC.layout.access(c.W, c.D, p.rooms, c.core, PC.levels.pairsOn(state, id), types);
+    },
+    // PM round 8: share of the footprint covered by the drawn rooms + stair + lift (0..1), null without a fresh plan.
+    fill: function (state, id) {
+      var p = state.plans[id], c = P.ctx(state, id);
+      if (!p || p.error || !c || p.sig !== PC.sig.level(state, id)) return null;
+      var a = p.rooms.reduce(function (s, r) { return s + r.w * r.h; }, 0);
+      [c.core.stair, c.core.lift].forEach(function (b) { if (b) a += b.w * b.h; });
+      return a / (c.W * c.D);
+    },
+    // The low-fill hint (PM round 8): the whole percent shown when the fill is strictly under C.LOW_FILL, else null.
+    lowFill: function (state, id) {
+      var f = P.fill(state, id);
+      return f !== null && f < PC.C.LOW_FILL ? Math.floor(f * 100 + 1e-9) : null;
+    },
+    // One-step undo (PM round 8 decision 4, F4-T2 Step 0). snap = { level, before, after }: deep copies of the level's
+    // plan around one edit commit. Undoable only while the plan still equals `after`, so a new edit, Regenerate, an
+    // R5 reset, a sync or an approval change ends it by construction (never survives a regeneration).
+    snapshot: function (plan) { return plan ? JSON.parse(JSON.stringify(plan)) : null; },
+    undoable: function (state, snap) {
+      return !!(snap && snap.before && state.plans[snap.level] && JSON.stringify(state.plans[snap.level]) === JSON.stringify(snap.after));
+    },
+    // In-place mutator: puts `before` back (rooms, unmet, edited, approved). -> true when it did.
+    undoEdit: function (draft, snap) {
+      if (!P.undoable(draft, snap)) return false;
+      draft.plans[snap.level] = JSON.parse(JSON.stringify(snap.before));
+      return true;
     },
     // Overlaps on a level (rooms with rooms, rooms with the stair / lift), [] when none. Derived, never stored.
     problems: function (state, id) {
@@ -4732,7 +4928,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   var controllers = {}, shown = 0, ready = false;
   var furthest = 1;                  // furthest stage opened in this session (a step is "done" only once visited)
   var STATIC_ID = 'stage-static', STATIC_TEXT = 'This stage is not built yet: static preview';
-  var STRIP_STAGES = [1, 3, 4];      // sample strip (and the only "Skip to 3D") shows here while the sample is untouched
+  var STRIP_STAGES = [1, 3];         // sample strip (and the only "Skip to 3D") shows here while the sample is untouched (PM round 8: not on 4)
 
   function call(n, method, arg) { var c = controllers[n]; if (c && c[method]) c[method](arg); }
 
@@ -4801,6 +4997,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 
   ui.stages = ui.stages || {};
   ui.shell = {
+    STRIP_STAGES: STRIP_STAGES,       // read-only for tests (QA version marker, F4-T2 Step 0)
     // Stage controllers (A-15): { enter(), leave(), render(state) }, all optional. Later tasks register theirs.
     register: function (n, controller) {
       controllers[n] = controller;
@@ -6596,8 +6793,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       var d = drag, res = null;
       if (!cancelled) step(w);                                  // the release point counts (live = release)
       drag = null;
+      var before = PC.plans.snapshot(PC.store.get().plans[d.level]);
       if (!cancelled && d.level === host.level()) PC.store.commit(function (s) { res = PC.plans.applyEdit(s, d.level, d.cur); });
-      if (res && res.changed) host.committed({ level: d.level, id: d.id, wasApproved: res.wasApproved });
+      // before / after: the one-step undo snapshot (F4-T2 Step 0)
+      if (res && res.changed) host.committed({ level: d.level, id: d.id, wasApproved: res.wasApproved, before: before, after: PC.plans.snapshot(PC.store.get().plans[d.level]) });
       host.changed();
     }
 
@@ -6643,7 +6842,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 (function (PC) {
   'use strict';
   var ui = PC.ui = PC.ui || {}, L = PC.levels, U = PC.units;
-  var view = null, editor = null, level = null, selected = null, labels = [], tabKey = '', note = null;
+  var view = null, editor = null, level = null, selected = null, labels = [], tabKey = '', note = null, undo = null;
   var NO_LAYOUT = 'This floor could not be laid out. Try fewer or smaller rooms on this level, another stair position, or a larger footprint.';
   // Texts: PM round 6 (goals-and-stories.md). The hint fits one line at 360 px (measured: 332 of 336 px), so the
   // PM's long form is used, not the fallback "Drag to move; tap, then drag a handle to resize.".
@@ -6656,7 +6855,12 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     backEdit: '{level} is back to Draft. Approve it again when you are done.', backTap: '{level} is back to Draft.',
     regenTitle: 'Regenerate this floor?', regenTail: ' It will be laid out again from the room list.',
     regenEdited: 'Your manual edits to the {level} will be lost.', regenApproved: "The {level}'s approval will be cleared.",
-    regenBoth: 'Your manual edits to the {level} and its approval will be lost.'
+    regenBoth: 'Your manual edits to the {level} and its approval will be lost.',
+    // warnings: PM round 8 (pair, low fill) and round 10 (hall access, CD-5); Undo messages: round 10
+    unmet: '{a} and {b} are not next to each other. Drag one against the other to join them.',
+    noAccess: 'The {a} has no way in from the hall or stairs. Move or resize a neighbouring room to open one.',
+    lowFill: 'Rooms fill only {p} % of the {level}. Add rooms, choose larger sizes, or lower the footprint % (Q3).',
+    undone: 'Last edit undone.', undoneApproved: 'Last edit undone. {level} approved again.'
   };
   function fill(t, o) { return t.replace(/\{(\w+)\}/g, function (m, k) { return o[k]; }); }
   function cap(t) { return t.charAt(0).toUpperCase() + t.slice(1); }
@@ -6684,7 +6888,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   }
   function setLevel(id) {
     if (id === level) return;
-    level = id; selected = null; note = null; editor.cancel(); render(get()); fit();
+    level = id; selected = null; note = null; undo = null; editor.cancel(); render(get()); fit();   // undo: on the floor you see (PM round 10)
   }
 
   /* ---- drawing ---- */
@@ -6789,7 +6993,12 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   }
   function warnings(s) {
     var p = plan(), names = L.roomNames(s), out = [];
-    if (p && !p.error) p.unmet.forEach(function (q) { out.push({ kind: 'warn', text: names[q[0]] + ' and ' + names[q[1]] + ' are not next to each other.' }); });
+    if (p && !p.error) p.unmet.forEach(function (q) { out.push({ kind: 'warn', text: fill(T.unmet, { a: names[q[0]], b: names[q[1]] }) }); });
+    if (level) {
+      PC.plans.noAccess(s, level).forEach(function (id) { out.push({ kind: 'warn', text: fill(T.noAccess, { a: names[id] }) }); });
+      var pct = PC.plans.lowFill(s, level);
+      if (pct !== null) out.push({ kind: 'warn', text: fill(T.lowFill, { p: pct, level: L.name(level) }) });
+    }
     PC.validate(s).warnings.forEach(function (w) { out.push({ kind: 'warn', text: w.text }); });
     return out;
   }
@@ -6823,6 +7032,20 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     btn.classList.toggle('is-approved', on);
     ui.$('btn-approve-label').textContent = on ? 'Approved' : 'Approve floor';
     ui.$('btn-regenerate').disabled = !p;
+    if (undo && (undo.level !== level || !PC.plans.undoable(s, undo))) undo = null;
+    ui.$('plan-undo').hidden = !undo;
+  }
+  // One-step "Undo last edit" (PM rounds 8 and 10): the shown floor's plan as it was before the last move / resize,
+  // approval included. The snapshot is guarded by content (PC.plans.undoable), so it cannot outlive a new edit,
+  // Regenerate, an R5 reset or an approval change; a floor-tab switch and leaving stage 3 drop it too.
+  function undoLast() {
+    var u = undo, s = get();
+    if (!u || u.level !== level || !PC.plans.undoable(s, u)) { undo = null; renderPanel(s); return; }
+    undo = null; selected = null;
+    var back = u.before.approved && !u.after.approved;
+    note = { level: u.level, text: back ? fill(T.undoneApproved, { level: cap(L.name(u.level)) }) : T.undone };
+    PC.store.commit(function (d) { PC.plans.undoEdit(d, u); });
+    ui.$('btn-regenerate').focus();                     // the pressed button hides; keep the keyboard place (Designer)
   }
   // The stage message line (one at a time): overlap reason (blocks approval), then the latest note on this floor,
   // then "approved", else the hint. Nothing while the no-layout banner speaks.
@@ -6858,7 +7081,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     var text = p.edited && p.approved ? T.regenBoth : p.edited ? T.regenEdited : T.regenApproved;
     var go = PC.plans.hasWork(p) ? ui.dialog.confirm({ title: T.regenTitle, text: fill(text, { level: nameL }) + T.regenTail, ok: 'Regenerate', cancel: 'Cancel' }) : Promise.resolve(true);
     return go.then(function (ok) {
-      if (ok) { selected = null; note = null; PC.store.commit(function (d) { PC.plans.regenerate(d, id); }); }
+      if (ok) { selected = null; note = null; undo = null; PC.store.commit(function (d) { PC.plans.regenerate(d, id); }); }
       return ok;
     });
   }
@@ -6900,12 +7123,16 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
         footprint: function () { var st = site(); return st ? st.footprint : null; },
         changed: function () { renderPanel(get()); view.invalidate(); },
         // an edit on an approved floor returns it to Draft: told once, on that transition (F3-S3)
-        committed: function (r) { note = r.wasApproved ? { level: r.level, text: fill(T.backEdit, { level: cap(L.name(r.level)) }) } : (note && note.level === r.level ? null : note); }
+        committed: function (r) {
+          note = r.wasApproved ? { level: r.level, text: fill(T.backEdit, { level: cap(L.name(r.level)) }) } : (note && note.level === r.level ? null : note);
+          undo = r.before ? { level: r.level, before: r.before, after: r.after } : null;
+        }
       });
       ui.View2D.named.plan = view;
       ui.on(ui.$('plan-fit'), 'click', function () { fit(); view.invalidate(); });
       ui.on(ui.$('btn-regenerate'), 'click', regenerate);
       ui.on(ui.$('btn-approve'), 'click', approve);
+      ui.on(ui.$('plan-undo'), 'click', undoLast);
       ui.on(ui.$('btn-goto-rooms'), 'click', function () {
         var id = level;
         if (PC.store.go(2)) ui.stages.questions.goTo(11, id);
@@ -6914,7 +7141,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
         var panel = ui.$('plan-warn-panel'), open = panel.classList.contains('is-collapsed');
         panel.classList.toggle('is-collapsed', !open); ui.$('plan-warn-toggle').setAttribute('aria-expanded', String(open));
       });
-      PC.store.subscribe(function (s, prev, meta) { if (meta.replace) { level = null; selected = null; tabKey = ''; note = null; editor.cancel(); } });
+      PC.store.subscribe(function (s, prev, meta) { if (meta.replace) { level = null; selected = null; tabKey = ''; note = null; undo = null; editor.cancel(); } });
       Object.assign(PC.debug, {
         planLabels: function () { view.drawNow(); return labels.map(function (l) { return { text: l.text, x: l.x, y: l.y, w: l.w, h: l.h }; }); },
         planView: function () { return { level: level, selected: selected, scale: view.scale }; },
@@ -6922,7 +7149,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
         planHandles: function (id) { var r = view.canvas.getBoundingClientRect(); return editor.spots(id).map(function (h) { return { kind: h.kind, x: r.left + h.x, y: r.top + h.y }; }); },
         planDrag: function () { return editor.dragging(); }
       });
-      ui.shell.register(3, { enter: function () { selected = null; note = null; editor.cancel(); render(get()); fit(); view.invalidate(); }, render: render });
+      ui.shell.register(3, { enter: function () { selected = null; note = null; undo = null; editor.cancel(); render(get()); fit(); view.invalidate(); }, render: render });
     }
   };
 })(globalThis.PC = globalThis.PC || {});

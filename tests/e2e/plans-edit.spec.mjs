@@ -84,14 +84,14 @@ async function edit(vp) {
   r4 = (await k.state()).plans.G.rooms.find((r) => r.id === 'r4');
   T.eq([r4.x, r4.y, r4.w, r4.h], [0, 5, 3.5, 3.5], `${tag} s handle: the front edge snaps to the Majlis wall, the back edge stays`);
   const warns = () => page.evaluate(() => [...document.querySelectorAll('[data-pc="plan-warn-list"] [data-pc="warn-text"]')].map((e) => e.textContent));
-  T.ok((await warns()).includes('Dining and Kitchen are not next to each other.'), `${tag} a broken pair warns`);
+  T.ok((await warns()).includes('Dining and Kitchen are not next to each other. Drag one against the other to join them.'), `${tag} a broken pair warns`);
   T.eq((await k.approve()).aria, 'false', `${tag} a broken pair does not block Approve`);
   // resize the back edge 0.9 m: within 0.3 m of the Dining wall it lands on it, the pair is restored
   h = await k.handle('r4', 'n');
   await G.drag([h.x, h.y], [h.x, h.y - 0.9 * m], async () => { await k.shot('4-resize'); }); await settled(page);
   s = await k.state(); r4 = s.plans.G.rooms.find((r) => r.id === 'r4');
   T.eq([r4.y + r4.h, s.plans.G.unmet], [9.5, []], `${tag} n handle: snapped onto the Dining wall (9.5), shared wall restored`);
-  T.ok(!(await warns()).includes('Dining and Kitchen are not next to each other.'), `${tag} the pair warning is gone`);
+  T.ok(!(await warns()).includes('Dining and Kitchen are not next to each other. Drag one against the other to join them.'), `${tag} the pair warning is gone`);
   // Approve: tab, counter, button state, message; Next still locked (First is Draft)
   await act('btn-approve'); await settled(page);
   T.eq([(await k.state()).plans.G.approved, await k.tabs(), await k.text('plan-counter'), await k.text('plan-msg')], [true, ['Approved', 'Draft'], '1 of 2 floors approved', 'Ground floor approved.'], `${tag} Approve floor`);

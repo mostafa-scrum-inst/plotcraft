@@ -119,3 +119,15 @@
   .pc-plans__regen-txt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .pc-plans .pc-msg { font-size: var(--fs-cap); }
 }
+
+/* F4-T2 Step 0: one-step Undo between Regenerate and Approve (Designer, docs/03-tasks/F4-T2/designer-plan.md §1) */
+.pc-plans .pc-toolrow > .pc-plans__undo { padding: 0; width: var(--tap); flex: none; }
+@media (min-width: 900px) and (min-height: 481px) {          /* side panel: Regenerate + Undo on one line, Approve below */
+  .pc-plans .pc-toolrow { flex-direction: row; flex-wrap: wrap; align-items: stretch; }
+  .pc-plans .pc-toolrow > [data-pc="btn-regenerate"] { flex: 1 1 0; }
+  .pc-plans .pc-toolrow > .pc-toolrow__end { flex: 1 1 100%; }
+}
+@media (max-height: 480px) and (orientation: landscape) and (max-width: 899px) {
+  .pc-plans .pc-toolrow { flex-wrap: nowrap; }
+  .pc-plans .pc-toolrow > .pc-toolrow__end { flex: 1 1 0; min-width: 0; padding: 0 var(--s2); }
+}

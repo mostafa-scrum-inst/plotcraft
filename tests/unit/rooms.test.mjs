@@ -23,13 +23,13 @@ test('addRooms: count, auto names, unique increasing ids, nextRoomId; exact area
 
 test('addRooms refusals leave the draft untouched: full level (free count), area range, count, level', () => {
   const s = sample(), before = JSON.stringify(s);
-  assert.deepEqual(plain(L.addRooms(s, { type: 'bedroom', level: 'G', size: 'M', area: null, count: 2 })), { ok: false, reason: 'full', free: 1, have: 7 });
+  assert.deepEqual(plain(L.addRooms(s, { type: 'bedroom', level: 'G', size: 'M', area: null, count: 4 })), { ok: false, reason: 'full', free: 3, have: 7 });
   for (const a of [3.99, 80.01, NaN]) assert.equal(L.addRooms(s, { type: 'office', level: 'G', size: null, area: a, count: 1 }).reason, 'area', `area ${a}`);
-  for (const c of [0, 1.5, 9]) assert.equal(L.addRooms(s, { type: 'office', level: 'G', size: 'S', area: null, count: c }).reason, 'count', `count ${c}`);
+  for (const c of [0, 1.5, 11]) assert.equal(L.addRooms(s, { type: 'office', level: 'G', size: 'S', area: null, count: c }).reason, 'count', `count ${c}`);
   assert.equal(L.addRooms(s, { type: 'office', level: 'B', size: 'S', area: null, count: 1 }).reason, 'level', 'no basement');
   assert.equal(JSON.stringify(s), before);
   for (const a of [4, 80]) assert.equal(L.addRooms(sample(), { type: 'office', level: 'G', size: null, area: a, count: 1 }).ok, true, `area ${a} accepted`);
-  assert.equal(L.addRooms(sample(), { type: 'bedroom', level: 'G', size: 'M', area: null, count: 1 }).ok, true, 'the 8th room fits');
+  assert.equal(L.addRooms(sample(), { type: 'bedroom', level: 'G', size: 'M', area: null, count: 3 }).ok, true, 'the 10th room fits');
 });
 
 test('updateRoom: a type away from bedroom clears master', () => {
@@ -43,7 +43,7 @@ test('updateRoom: level move to a level with room keeps the room, drops its pair
   const r = L.updateRoom(s, 'r13', { level: 'G' });
   assert.deepEqual(plain(r), { ok: true, pairsDropped: 1 }, 'r8 + r13 pair removed');
   assert.deepEqual(plain(s.ans.pairs), [['r3', 'r4']]);
-  L.addRooms(s, { type: 'office', level: 'G', size: 'S', area: null, count: 1 });     // ground floor: 8
+  L.addRooms(s, { type: 'office', level: 'G', size: 'S', area: null, count: 3 });     // ground floor: 10
   const before = JSON.stringify(s);
   assert.deepEqual(plain(L.updateRoom(s, 'r14', { level: 'G' })), { ok: false, reason: 'full', free: 0 });
   assert.equal(JSON.stringify(s), before);
@@ -105,7 +105,7 @@ test('removeLevels: move / delete, prune, roof rule; texts of the dialog', () =>
   const full = sample(), f2 = plain(full);
   assert.deepEqual(plain(L.removeLevels(f2, change, 'move')), { ok: false, reason: 'full', gone: ['1'] });
   assert.equal(L.removalQuestion(full, ['1'], 'G', null), 'The First floor has 7 rooms. Move them to the Ground floor, or delete them?');
-  assert.equal(L.removalQuestion(full, ['1'], 'G', 'full'), 'The First floor has 7 rooms. They cannot be moved: the Ground floor would have more than 8 rooms. Delete them?');
+  assert.equal(L.removalQuestion(full, ['1'], 'G', 'full'), 'The First floor has 7 rooms. They cannot be moved: the Ground floor would have more than 10 rooms. Delete them?');
   assert.equal(L.removalQuestion(full, ['1'], 'G', 'pairs'), 'The First floor has 7 rooms. They cannot be moved: the Ground floor would have more than 6 pairs. Delete them?');
   const b = fresh(); b.ans.basement = true; b.ans.rooms.push(plain(PC.store.room('r7', 'storage', 'B', 'S'))); b.ans.nextRoomId = 8;
   assert.equal(L.removalQuestion(b, ['B'], 'G', null), 'The Basement has 1 room. Move it to the Ground floor, or delete it?');
