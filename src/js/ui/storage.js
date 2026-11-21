@@ -39,7 +39,12 @@
       if (ok && !oldGone) { PC.draft.KEYS.slice(1).forEach(S.remove); oldGone = true; }
       return ok;
     },
-    removeDraft: function () { PC.draft.KEYS.forEach(S.remove); }
+    removeDraft: function () { PC.draft.KEYS.forEach(S.remove); },
+    // A stored draft that PC.draft.parse rejected: its raw text goes to one side key (overwritten each time, never
+    // read by the app, not in PC.draft.KEYS) before the draft keys are removed, so a validator bug costs a Resume
+    // card, not the project (A-4). Start new and Load sample leave it alone.
+    REJECTED_KEY: 'plotcraft.draft.rejected',
+    keepRejected: function (raw) { return typeof raw === 'string' && S.set(S.REJECTED_KEY, raw); }
   };
   var oldGone = false;
 

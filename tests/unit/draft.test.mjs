@@ -136,8 +136,21 @@ rejects('pair not in id order', (s) => { s.ans.pairs[1] = ['r13', 'r8']; });
 rejects('duplicate pair', (s) => { s.ans.pairs.push(['r3', 'r4']); });
 rejects('7 pairs on one level', (s) => { s.ans.pairs = [['r1', 'r2'], ['r1', 'r3'], ['r1', 'r4'], ['r1', 'r5'], ['r1', 'r6'], ['r1', 'r7'], ['r2', 'r3']]; });
 rejects('plan for a level that does not exist', (s) => { s.plans = { 2: { sig: '', rooms: [], unmet: [], edited: false, approved: false, error: null } }; });
-rejects('plan room from another level', (s) => { s.plans = { G: { sig: '', rooms: [{ id: 'r8', x: 0, y: 0, w: 4, h: 4 }], unmet: [], edited: false, approved: false, error: null } }; });
-rejects('plan room that does not exist', (s) => { s.plans = { G: { sig: '', rooms: [{ id: 'r77', x: 0, y: 0, w: 4, h: 4 }], unmet: [], edited: false, approved: false, error: null } }; });
+// A stale plan may list rooms deleted or moved since it was generated (A-7: the signature decides validity);
+// a fresh plan (current signature) may not, and ids must stay well formed.
+const plan = (s, sig, rooms, unmet = []) => { s.plans = { G: { sig: sig === 'fresh' ? PC.sig.level(s, 'G') : sig, rooms, unmet, edited: false, approved: false, error: null } }; };
+const box = (id) => ({ id, x: 0, y: 0, w: 4, h: 4 });
+rejects('fresh plan room from another level', (s) => plan(s, 'fresh', [box('r1'), box('r8')]));
+rejects('fresh plan room that does not exist', (s) => plan(s, 'fresh', [box('r1'), box('r77')]));
+rejects('fresh plan unmet pair naming another level', (s) => plan(s, 'fresh', [box('r1')], [['r1', 'r8']]));
+accepts('fresh plan with rooms of its level only', (s) => plan(s, 'fresh', [box('r1'), box('r2')], [['r1', 'r2']]));
+accepts('stale plan room from another level', (s) => plan(s, '', [box('r8')], [['r3', 'r8']]));
+accepts('stale plan room that no longer exists', (s) => plan(s, '', [box('r77')], [['r77', 'r1']]));
+rejects('stale plan room id malformed', (s) => plan(s, '', [box('room1')]));
+rejects('stale plan room id not a string', (s) => plan(s, '', [box(7)]));
+rejects('stale plan unmet id malformed', (s) => plan(s, '', [box('r1')], [['r1', 'x2']]));
+rejects('stale plan unmet pair of one room', (s) => plan(s, '', [box('r1')], [['r1', 'r1']]));
+rejects('stale plan unmet entry not a pair', (s) => plan(s, '', [box('r1')], [['r1']]));
 rejects('plan room with zero width', (s) => { s.plans = { G: { sig: '', rooms: [{ id: 'r1', x: 0, y: 0, w: 0, h: 4 }], unmet: [], edited: false, approved: false, error: null } }; });
 rejects('plan room listed twice', (s) => { s.plans = { G: { sig: '', rooms: [{ id: 'r1', x: 0, y: 0, w: 4, h: 4 }, { id: 'r1', x: 4, y: 0, w: 4, h: 4 }], unmet: [], edited: false, approved: false, error: null } }; });
 rejects('plan error value', (s) => { s.plans = { G: { sig: '', rooms: [], unmet: [], edited: false, approved: false, error: 'oops' } }; });
@@ -155,4 +168,52 @@ test('isEmpty: no point placed', () => {
   assert.equal(PC.draft.isEmpty(PC.store.defaults()), true);
   assert.equal(PC.draft.isEmpty(PC.sample.state()), false);
   const s = PC.store.defaults(); s.plot.pts.push([1, 1]); assert.equal(PC.draft.isEmpty(s), false);
+});
+
+// CTO F3 review, finding 1: room-list changes leave a stale plan listing the old room until the next stage-3 visit;
+// the autosaved draft must still restore exactly (it was rejected and Resume silently lost the project).
+const synced = (pre = () => {}) => {
+  const s = sample(); pre(s); PC.plans.sync(s); s.stage = 2; s.sampleClean = false;
+  for (const id of Object.keys(s.plans)) { s.plans[id].edited = true; s.plans[id].approved = true; }
+  return s;
+};
+const roundTrip = (name, change, pre) => test('round trip after ' + name, () => {
+  const s = synced(pre); change(s);
+  const d = PC.draft.parse(PC.draft.serialize(s, 99));
+  assert.notEqual(d, null, 'draft restorable');
+  assert.deepEqual(plain(d.state), plain(s));
+});
+roundTrip('deleting a room', (s) => { assert.equal(PC.levels.removeRoom(s, 'r5').ok, true); assert.ok(s.plans.G.rooms.some((r) => r.id === 'r5')); });
+roundTrip('deleting a paired room (stale unmet / pairs)', (s) => {
+  s.plans.G.unmet = [['r3', 'r4']]; assert.equal(PC.levels.removeRoom(s, 'r4').ok, true);
+});
+roundTrip('moving a room to another level', (s) => {
+  PC.levels.removeRoom(s, 'r7');
+  assert.equal(PC.levels.updateRoom(s, 'r13', { level: 'G' }).ok, true);
+  assert.ok(s.plans['1'].rooms.some((r) => r.id === 'r13'));
+});
+// Removing a level: its own plan is pruned, the plans left list only their own rooms, so the level change by
+// itself never hit the bug; these guard it, alone (rooms removed before the sync) and after a room change.
+roundTrip('removing a level, rooms moved', (s) => {
+  assert.equal(PC.levels.removeLevels(s, (a) => { a.floors = 1; }, 'move').ok, true);
+  assert.deepEqual(Object.keys(s.plans), ['G']); assert.ok(s.ans.rooms.some((r) => r.id === 'r8' && r.level === 'G'));
+}, (s) => { for (const id of ['r5', 'r6', 'r7', 'r10', 'r12', 'r14']) PC.levels.removeRoom(s, id); });   // G 4 + 4 moved = 8
+roundTrip('deleting rooms, then removing a level with its rooms moved', (s) => {
+  for (const id of ['r5', 'r6', 'r7', 'r10', 'r12', 'r14']) PC.levels.removeRoom(s, id);
+  assert.equal(PC.levels.removeLevels(s, (a) => { a.floors = 1; }, 'move').ok, true);
+  assert.ok(s.plans.G.rooms.some((r) => r.id === 'r5'), 'G plan stale, lists a deleted room');
+});
+roundTrip('removing a level, rooms deleted', (s) => {
+  s.ans.basement = true; s.ans.rooms.push({ id: 'r15', type: 'storage', level: 'B', size: 'S', area: null, master: false });
+  s.ans.nextRoomId = 16; PC.plans.sync(s);
+  assert.ok(s.plans.B.rooms.some((r) => r.id === 'r15'));
+  assert.equal(PC.levels.removeLevels(s, (a) => { a.basement = false; }, 'delete').ok, true);
+  assert.deepEqual(Object.keys(s.plans).sort(), ['1', 'G']);
+});
+test('moving a room away and back restores the old signature, plan and edits', () => {
+  const s = synced(), before = plain(s.plans['1']);
+  PC.levels.removeRoom(s, 'r7'); assert.equal(PC.levels.updateRoom(s, 'r12', { level: 'G' }).ok, true);
+  const t = plain(PC.draft.parse(PC.draft.serialize(s, 1)).state);
+  assert.equal(PC.levels.updateRoom(t, 'r12', { level: '1' }).ok, true); PC.plans.sync(t);
+  assert.deepEqual(t.plans['1'], before);
 });

@@ -85,11 +85,12 @@
       var raw = ui.storage.readDraft();
       if (raw !== null) {
         var d = PC.draft.parse(raw);
+        if (!d) ui.storage.keepRejected(raw);          // rejected: keep a copy of the raw text first (A-4)
         if (d && !PC.draft.isEmpty(d.state)) {
           setPending(d);
           var when = new Date(d.savedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
           ui.$('resume-meta').textContent = 'Saved ' + when + ' · stage ' + d.state.stage + ' of 5.';
-        } else ui.storage.removeDraft();               // corrupted or unknown format: discarded silently
+        } else ui.storage.removeDraft();               // rejected (copied above) or empty: not offered
       }
       ui.on(ui.$('btn-resume'), 'click', resume);
       ui.on(ui.$('btn-startnew'), 'click', startNew);

@@ -1,7 +1,21 @@
 # PlotCraft — Product goals and user stories (prototype)
 
-Owner: PM. Source: `docs/00-brief.md`. Status: approved by the CTO (round 2); round 3 edits made at the F1 feature review; round 4 edits apply the client's binding decisions `docs/01-product/client-decisions.md` (CD-1 to CD-3); round 5 edits made at the F2 feature review; rounds 6 and 7 fix user-facing texts at the F3-T2 and F3-T3 plan reviews.
+Owner: PM. Source: `docs/00-brief.md`. Status: approved by the CTO (round 2); round 3 edits made at the F1 feature review; round 4 edits apply the client's binding decisions `docs/01-product/client-decisions.md` (CD-1 to CD-3); round 5 edits made at the F2 feature review; rounds 6 and 7 fix user-facing texts at the F3-T2 and F3-T3 plan reviews; round 8 edits made at the F3 feature review.
 This document says **what** and **how we know it works**. How it is built is the Tech Lead's call.
+
+## Changes in round 8 (2026-11-21, F3 feature review; no story IDs changed)
+
+Decisions recorded in `docs/04-feature-reviews/F3.md` (PM review). Work goes into one FS rider, the "F3 follow-up bundle" (TL places it; PM recommends F4-T2).
+
+| Item | Change |
+|---|---|
+| F3-S1 low fill (QA F3-T1 obs 1; rider "defaults leave most of each floor as hall") | New non-blocking per-level hint when rooms + stair + lift fill under 50 % of the footprint (whole %, rounded down): "Rooms fill only 48 % of the Ground floor. Add rooms, choose larger sizes, or lower the footprint % (Q3)." Default room list unchanged; the sample (84 %) shows no hint. Rooms on an under-filled floor are packed, not spread (known limit). |
+| F3-S1 / F3-S2 unmet pair (QA F3-T1 obs 4) | Warning text gains the fix: "Kitchen and Dining are not next to each other. Drag one against the other to join them." |
+| F3-S2 undo (QA F3-T2 obs 2) | One-step "Undo last edit" on stage 3: restores the current floor's plan as before the last move or resize, approval state included; one step; gone after Regenerate, an R5 reset of that floor or leaving stage 3; 44 px control. Non-goal "Undo history" amended to allow exactly this step. |
+| F3-S2 minimum in ft (QA F3-T2 obs 4) | The 1.5 m minimum is a snap candidate for a shrinking edge, so ft users reach 1.5 m (4.9 ft), as R4 requires (one limit, not two). |
+| F1-S5 sample strip (QA F3-T3 obs 5) | The strip with "Skip to 3D" shows on stages 1 and 3 only; on stage 4 "Build 3D model" is the same one tap. |
+| Known limits acknowledged | Keyboard room editing out of scope; corner resize only if the client asks (F5-T3); Clear then identical redraw keeps the plans; maid bed at 60 % in 1.5 m maid rooms, a few sparse pieces at 0.70 in 3:1 rooms (judged in 3D at F4-T2); no `:has()` shows the Q19 hint in Modern colours. |
+| Pending client answers | (1) Is 8 rooms per floor enough? (4.3 "Levels", F2-S2, G6 maximum house follow the answer.) (2) Must every room open onto the hall or stairs? (no circulation rule today, A-8). Recorded in `client-decisions.md` when answered. |
 
 ## Changes in round 7 (2026-11-21, F3-T3 plan review: Q18 card descriptions; no story IDs changed)
 
@@ -121,7 +135,7 @@ Product answers:
 - Free-form room shapes (rooms are rectangles), dragging the staircase or lift, doors/windows editing, custom furniture placement.
 - Rooms on the roof.
 - Photorealism, external textures/models/fonts; walk-through (first-person) mode.
-- Undo history beyond "undo last point" in plot drawing and "regenerate floor" in plans.
+- Undo history beyond "undo last point" in plot drawing, one-step "Undo last edit" and "regenerate floor" in plans (round 8).
 - Languages other than English; RTL.
 
 ## 2. Product-wide rules (apply to every story; QA checks them on every task)

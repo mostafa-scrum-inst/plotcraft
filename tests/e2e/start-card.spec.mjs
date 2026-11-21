@@ -48,5 +48,60 @@ try {
     T.none(problems(), 'no errors (desktop)');
     await ctx.close();
   }
+  // TL ruling 2 (docs/03-tasks/F3-T3/fs-draft-fix-review.md, A-4): a stored draft that parse rejects is not offered,
+  // its raw text is kept under plotcraft.draft.rejected before the draft keys go; Load sample leaves the side key alone;
+  // an empty draft is removed with no copy; nothing breaks when localStorage throws.
+  const SIDE = 'plotcraft.draft.rejected';
+  const keys = (page) => page.evaluate(() => Object.fromEntries(Object.keys(localStorage).sort().map((k) => [k, localStorage.getItem(k)])));
+  { // corrupted draft under the current key
+    const o = await open(browser, VIEWPORTS[0]), { ctx, page, problems } = o;
+    const raw = await page.evaluate(() => {
+      const s = JSON.parse(JSON.stringify(PC.sample.state())); s.ans.rooms[0].type = 'ballroom';
+      const t = PC.draft.serialize(s, 1700000000000); localStorage.setItem(PC.draft.KEY, t); return t;
+    });
+    await page.reload();
+    T.ok(await page.evaluate(() => document.querySelector('[data-pc="resume-box"]').hidden), 'rejected draft: no Resume card');
+    T.eq(await keys(page), { [SIDE]: raw }, 'rejected draft: draft key removed, side key holds the raw text exactly');
+    await o.act('btn-sample');
+    T.eq((await keys(page))[SIDE], raw, 'Load sample leaves the side key alone');
+    T.none(problems(), 'rejected draft: clean log');
+    await ctx.close();
+  }
+  // Seeded before the page's scripts, once per context (the init script also runs on reloads).
+  const seeded = (items) => open(browser, VIEWPORTS[0], { init: `if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); ${
+    Object.entries(items).map(([k, v]) => `localStorage.setItem(${JSON.stringify(k)}, ${JSON.stringify(v)});`).join(' ')} }` });
+  { // unparseable v1 draft, an older side copy present
+    const { ctx, page, problems } = await seeded({ 'plotcraft.draft.v1': '{not json', [SIDE]: 'older copy' });
+    T.ok(await page.evaluate(() => document.querySelector('[data-pc="resume-box"]').hidden), 'unparseable v1 draft: no Resume card');
+    T.eq(await keys(page), { [SIDE]: '{not json' }, 'unparseable v1 draft: copied over the older copy, draft keys gone');
+    T.none(problems(), 'unparseable v1 draft: clean log');
+    await ctx.close();
+  }
+  { // a valid but empty draft: removed as before, no copy
+    const { ctx, page, problems } = await open(browser, VIEWPORTS[0]);
+    await page.evaluate(() => localStorage.setItem(PC.draft.KEY, PC.draft.serialize(PC.store.defaults(), 1)));
+    await page.reload();
+    T.eq(await keys(page), {}, 'empty draft: removed with no copy');
+    T.none(problems(), 'empty draft: clean log');
+    await ctx.close();
+  }
+  { // localStorage property throws
+    const { ctx, page, problems } = await open(browser, VIEWPORTS[0], { storage: 'throw' });
+    T.ok(await page.evaluate(() => !PC.ui.storage.available && PC.ui.storage.keepRejected('x') === false), 'storage blocked: keepRejected is a no-op');
+    T.none(problems(), 'storage blocked: clean log');
+    await ctx.close();
+  }
+  { // reads work, every write throws (quota), with a corrupted draft stored
+    const init = () => {
+      if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.setItem('plotcraft.draft.v2', '{"v":2,"broken":'); }
+      Storage.prototype.setItem = function () { throw new DOMException('full', 'QuotaExceededError'); };
+    };
+    const { ctx, page, problems } = await open(browser, VIEWPORTS[0], { init });
+    T.ok(await page.evaluate(() => document.querySelector('[data-pc="resume-box"]').hidden && !document.querySelector('[data-pc="start-panel"]').hidden),
+      'quota: rejected draft not offered, start panel shown');
+    T.ok(await page.evaluate(() => localStorage.getItem('plotcraft.draft.rejected') === null && !PC.ui.storage.available), 'quota: no side copy, storage marked unavailable');
+    T.none(problems(), 'quota: clean log');
+    await ctx.close();
+  }
 } finally { await browser.close(); }
 process.exit(T.done() ? 1 : 0);

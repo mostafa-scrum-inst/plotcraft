@@ -311,7 +311,9 @@ async function badDraft(vp) {
     await page.evaluate(([v]) => { PC.ui.autosave.flush(); localStorage.clear(); localStorage.setItem(PC.draft.KEY, v); }, [JSON.stringify(d)]);
     await page.reload();
     T.ok(await k.hidden('resume-box'), `${tag} draft with an override on the ${name}: discarded, nothing offered`);
-    T.eq(await page.evaluate(() => Object.keys(localStorage).filter((x) => x.startsWith('plotcraft.draft'))), [], `${tag} ...and removed`);
+    // TL ruling 2 (F3 fs-draft-fix-review, A-4): the draft keys go; the raw text is kept under the side key only.
+    T.eq(await page.evaluate(() => Object.keys(localStorage).filter((x) => x.startsWith('plotcraft.draft')).sort()), ['plotcraft.draft.rejected'], `${tag} ...and removed`);
+    T.eq(await page.evaluate(() => localStorage.getItem('plotcraft.draft.rejected')), JSON.stringify(d), `${tag} ...its raw text kept under the side key`);
   }
   await k.end('bad drafts');
 }

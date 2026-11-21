@@ -253,8 +253,33 @@ async function pairLimitsAndPlans(vp) {
   await k.end('move vs delete');
 }
 
+// CTO F3 review, finding 1: after the sample is laid out, deleting a room leaves the stored Ground plan listing it
+// until the next stage-3 visit. The autosaved draft must still be offered and restore exactly (it was discarded).
+async function staleDraft(vp) {
+  const k = await kit(vp), { page, act, tag } = k;
+  T.ok((await k.state()).plans.G.rooms.some((r) => r.id === 'r5'), `${tag} the sample is laid out (Ground plan lists r5)`);
+  await k.tapEl(k.rowOf('r5').locator('[data-pc="room-delete"]')); await settled(page);
+  T.ok(!(await k.dialogOpen()) && !(await k.state()).ans.rooms.some((r) => r.id === 'r5'), `${tag} r5 deleted from the room list`);
+  await page.evaluate(() => PC.ui.autosave.flush());
+  const saved = await k.state();
+  T.ok(saved.plans.G.rooms.some((r) => r.id === 'r5'), `${tag} the stored Ground plan is stale and still lists r5`);
+  await page.reload(); await settled(page);
+  const offered = await k.shown('resume-box');
+  T.ok(offered, `${tag} reload: Resume is offered`);
+  T.eq(await page.evaluate(() => { const d = PC.draft.parse(localStorage.getItem(PC.draft.KEY)); return d && d.state; }), saved, `${tag} the stored draft parses to the saved state exactly`);
+  if (!offered) { await k.ctx.close(); return; }
+  await act('btn-resume'); await settled(page);
+  const back = await k.state(), want = JSON.parse(JSON.stringify(saved));
+  T.eq([back.plans['1'], back.plans.G.sig], [saved.plans['1'], await page.evaluate(() => PC.sig.level(PC.debug.state(), 'G'))], `${tag} Resume: the First floor plan kept, only the Ground plan regenerated`);
+  T.ok(!back.plans.G.rooms.some((r) => r.id === 'r5'), `${tag} the regenerated Ground plan no longer lists r5`);
+  delete back.plans.G; delete want.plans.G;
+  T.eq(back, want, `${tag} Resume restores the state (stage, answers, rooms, pairs, other plans)`);
+  await k.end('stale plan draft');
+}
+
 try {
   await staleInvalid(VPS[0]);
+  await staleDraft(VPS[0]);
   for (const vp of VPS) await pairLimitsAndPlans(vp);
   // A-16 trim (F3-T3 first item, QA; docs/03-tasks/F3-T3/qa-trim.md): these three no longer run at 360x640 and 1280x800,
   // where their twins in tests/qa/f2-t3-site-rooms.mjs run with the same input; they keep 640x360 and 768x1024 here.

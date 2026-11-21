@@ -78,7 +78,12 @@
     return true;
   }
 
-  function plansOk(plans, levels, where) {
+  // Plans (A-4 / A-7). A stale plan may still list rooms that were deleted or moved to another level since it was
+  // generated (it is regenerated on the next entry to stage 3), so room ids need only be well formed and unique;
+  // whether a plan belongs to its level is the signature's job. A fresh plan (sig equal to the level's current
+  // signature) must list only rooms of that level, as every generated plan does.
+  function plansOk(s, levels, where) {
+    var plans = s.plans;
     if (!isObj(plans)) return false;
     return Object.keys(plans).every(function (id) {
       var p = plans[id], big = [-1e4, 1e4];
@@ -86,13 +91,14 @@
       if (typeof p.sig !== 'string' || !bool(p.edited) || !bool(p.approved)) return false;
       if (p.error !== null && p.error !== 'no-layout') return false;
       if (!Array.isArray(p.rooms) || !Array.isArray(p.unmet)) return false;
-      var seen = {};
+      var seen = {}, fresh = p.sig === PC.sig.level(s, id);
+      var mine = function (rid) { return isId(rid) && (!fresh || where[rid] === id); };
       return p.rooms.every(function (r) {
-        if (!keys(r, ['id', 'x', 'y', 'w', 'h']) || where[r.id] !== id || seen[r.id]) return false;
+        if (!keys(r, ['id', 'x', 'y', 'w', 'h']) || !mine(r.id) || has.call(seen, r.id)) return false;
         seen[r.id] = true;
         return num(r.x, big) && num(r.y, big) && num(r.w, big) && num(r.h, big) && r.w > 0 && r.h > 0;
       }) && p.unmet.every(function (u) {
-        return Array.isArray(u) && u.length === 2 && where[u[0]] === id && where[u[1]] === id;
+        return Array.isArray(u) && u.length === 2 && mine(u[0]) && mine(u[1]) && u[0] !== u[1];
       });
     });
   }
@@ -107,7 +113,7 @@
       var ov = Object.keys(s.ans.edgeOv);
       if (ov.length && (!s.plot.closed || ov.indexOf(String(PC.frames.streetEdge(s))) >= 0)) return false;
       var levels = PC.levels.ids(s), where = roomsOk(s.ans, levels);
-      return !!where && plansOk(s.plans, levels, where);
+      return !!where && plansOk(s, levels, where);
     } catch (e) { return false; }
   }
 
