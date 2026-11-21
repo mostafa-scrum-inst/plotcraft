@@ -112,3 +112,21 @@ test('each input requests exactly one frame; many moves in one frame coalesce; c
   E.canvas.dispatch('keydown', { key: 'ArrowLeft' });
   assert.equal(calls, 1, 'onInput hook (F5 flight cancel)');
 });
+
+test('F5-T1 (plan review item 2): every acting input calls api.interrupt() before it reads the pose, then set, then onInput', async () => {
+  const { stubCanvas } = await import('../helpers/load3d.mjs');
+  const E = load3d(), c = stubCanvas(), log = [];
+  let pose = E.PC.cam.reset(E.PC.house.build(sampleApproved(E.PC)), 1);
+  E.PC.three.controls.attach(c, {
+    active: () => true, size: () => [360, 400], fov: 45,
+    interrupt: () => log.push('interrupt'), get: () => { log.push('get'); return pose; }, set: (p) => { log.push('set'); pose = p; }, onInput: () => log.push('input')
+  });
+  const ev = (type, p) => c.dispatch(type, Object.assign({ pointerId: 1, pointerType: 'touch', button: 0, clientX: 0, clientY: 0 }, p));
+  ev('pointerdown', {}); assert.deepEqual(log.splice(0), ['interrupt'], 'pointer-down cancels');
+  ev('pointermove', { clientX: 20 }); assert.deepEqual(log.splice(0), ['interrupt', 'get', 'set', 'input'], 'move');
+  ev('pointermove', { clientX: 20 }); assert.deepEqual(log.splice(0), [], 'a zero move does nothing');
+  ev('pointerup', {});
+  ev('wheel', { deltaY: 10 }); assert.deepEqual(log.splice(0), ['interrupt', 'get', 'set', 'input'], 'wheel');
+  c.dispatch('keydown', { key: 'ArrowLeft' }); assert.deepEqual(log.splice(0), ['interrupt', 'get', 'set', 'input'], 'key');
+  c.dispatch('keydown', { key: 'Tab' }); assert.deepEqual(log.splice(0), [], 'an unused key neither cancels nor moves');
+});

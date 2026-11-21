@@ -5,7 +5,16 @@
    (TL required item 3), guarded by a token so PC.view3d.close() during the yield builds nothing.
    Lights: one hemisphere + one sun (the only shadow caster). The look (F4-T3, A-13) is the session's { hour, season }
    (12:00 summer on a page load): setLook stores it and applies PC.sky.compute through PC.three.applyLook (look.js),
-   which recolours and moves lights only; every build (rebuild, context restore) re-applies the stored look. */
+   which recolours and moves lights only; every build (rebuild, context restore) re-applies the stored look.
+   Animation driver (F5-T1, A-12 as built; the F5-T2 tour is its second client): animate({ step(dt) -> done }) runs
+   one animation; while it runs each frame calls step with the real rAF delta (ms, capped at CAM.dtMax = 100; 0 on
+   its first frame) and requests the next frame; when it is done the loop is idle again. flyTo(pose, ms) is one
+   client: from = the current pose (during a flight, the interpolated one: the smooth redirect), to = the clamped
+   pose, smoothstep through PC.cam.lerpPose, clamped every frame, exactly `to` at the end. An input cancels it BEFORE
+   the controls apply their delta (controls api.interrupt, plan review item 2); close(), resetView() and a build
+   (rebuild, context restore) cancel it too. Flights never touch the session look.
+   Selection (A-14): select(roomId | null) puts the one `highlight` mesh (PC.three.highlight, finder.js) on the room,
+   disposing the previous geometry; a build and close() clear it and call the onSelect hook with null. */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
@@ -14,7 +23,8 @@
     house: null, builtKey: null, pose: null, limits: null, size: [0, 0],
     active: false, lost: false, dirty: false, frame: 0, building: 0, token: 0, onState: null,
     meshes: [], level: 'all', roof: false, renders: 0, builds: 0, restores: 0, looks: 0,
-    look: { hour: 12, season: 'summer' }
+    look: { hour: 12, season: 'summer' },
+    anim: null, animT: null, highlight: null, selected: null, onSelect: null, hlMade: 0
   };
   function V() { return PC.C.VIEW3D; }
   function dpr() { var d = typeof devicePixelRatio === 'number' && devicePixelRatio > 0 ? devicePixelRatio : 1; return Math.min(d, V().maxDpr); }
@@ -37,7 +47,48 @@
   function invalidate() { S.dirty = true; request(); }
   // The frame measures the canvas itself (QA F4T1-1): the shell may still be settling its layout when
   // PC.view3d.open() runs (e.g. stage 4's sample strip), so the size is taken when the frame draws.
-  function frame() { S.frame = 0; if (!S.dirty || !S.active || S.lost || !visible()) return; resize(true); S.dirty = false; render(); }
+  function frame(ts) {
+    S.frame = 0;
+    if (!S.active || S.lost || !visible()) return;
+    if (S.anim) {
+      var now = typeof ts === 'number' ? ts : 0, dt = S.animT === null ? 0 : Math.min(PC.C.CAM.dtMax, Math.max(0, now - S.animT));
+      S.animT = now;
+      if (S.anim.step(dt)) stopAnim();
+      S.dirty = true;
+    }
+    if (!S.dirty) return;
+    resize(true); S.dirty = false; render();
+    if (S.anim) { S.dirty = true; request(); }
+  }
+  function animate(a) { S.anim = a; S.animT = null; invalidate(); }
+  function stopAnim() { S.anim = null; S.animT = null; }
+  function flyTo(pose, ms) {
+    if (!S.house || !S.pose || !S.limits || !pose) return false;
+    var f = { kind: 'flight', from: PC.cam.copy(S.pose), to: PC.cam.clamp(pose, S.limits), ms: ms > 0 ? ms : PC.C.CAM.flightMs, t: 0 };
+    f.step = function (dt) {
+      f.t += dt;
+      var k = Math.min(1, f.t / f.ms);
+      S.pose = k >= 1 ? PC.cam.copy(f.to) : PC.cam.clamp(PC.cam.lerpPose(f.from, f.to, k), S.limits);
+      return k >= 1;
+    };
+    animate(f);
+    return true;
+  }
+  function clearSelection() {
+    var had = S.selected !== null;
+    if (S.highlight) { if (S.highlight.parent) S.highlight.parent.remove(S.highlight); S.highlight.geometry.dispose(); S.highlight = null; }
+    S.selected = null;
+    if (had && S.onSelect) S.onSelect(null);
+  }
+  function select(id) {
+    if (id === null || id === undefined || !S.house || !PC.cam.roomOf(S.house, id)) { clearSelection(); invalidate(); return false; }
+    if (S.highlight) { S.world.remove(S.highlight); S.highlight.geometry.dispose(); S.highlight = null; }
+    S.highlight = three.highlight(S.house, id, S.mats.batch);
+    S.world.add(S.highlight);
+    S.selected = id; S.hlMade++;
+    invalidate();
+    return true;
+  }
   function render() {
     var p = S.pose, e = PC.cam.position(p), cam = S.camera, n = PC.cam.near(p);
     cam.position.set(e[0], e[1], e[2]);
@@ -93,12 +144,15 @@
       set: function (p) { S.pose = PC.cam.clamp(p, S.limits); invalidate(); },
       size: function () { return S.size[0] ? S.size : [canvas.clientWidth || 1, canvas.clientHeight || 1]; },
       fov: PC.C.CAM.fov,
+      interrupt: function () { stopAnim(); },
       onInput: function () { if (S.onInput) S.onInput(); }
     });
   }
 
   // Every geometry and material of the last build, exactly once (the meshes are tracked: nodes are not probed).
   function dispose() {
+    stopAnim();
+    clearSelection();
     S.meshes.forEach(function (m) { m.geometry.dispose(); });
     Object.keys(S.mats || {}).forEach(function (k) { S.mats[k].dispose(); });
     S.world.children.slice().forEach(function (c) { S.world.remove(c); });
@@ -173,7 +227,7 @@
       });
       return { ok: true };
     },
-    close: function () { S.active = false; S.building = 0; cancelFrame(); },
+    close: function () { S.active = false; S.building = 0; cancelFrame(); stopAnim(); clearSelection(); },
     invalidate: invalidate,
     setLevel: function (sel) { S.level = sel; applyVisibility(); invalidate(); },
     setRoof: function (on) { S.roof = !!on; applyVisibility(); invalidate(); },
@@ -184,14 +238,26 @@
       if (S.house && S.mats) { lights(S.house); invalidate(); }
     },
     look: function () { return { hour: S.look.hour, season: S.look.season }; },
-    resetView: function () { if (!S.house) return; S.pose = PC.cam.reset(S.house, aspect()); invalidate(); },
+    resetView: function () { if (!S.house) return; stopAnim(); S.pose = PC.cam.reset(S.house, aspect()); invalidate(); },
     setOnInput: function (fn) { S.onInput = fn; },
+    // F5-T1: the animation driver, flights and the room selection (A-12, A-14 as built).
+    animate: function (a) { if (S.house && a && typeof a.step === 'function') animate(a); },
+    stopAnimation: stopAnim,
+    flyTo: flyTo,
+    flying: function () { return !!(S.anim && S.anim.kind === 'flight'); },
+    select: select,
+    selected: function () { return S.selected; },
+    setOnSelect: function (fn) { S.onSelect = fn; },
+    house: function () { return S.house; },
+    limits: function () { return S.limits; },
     pose: function () { return S.pose ? PC.cam.copy(S.pose) : null; },
     // Read-only snapshot for tests and PC.debug.scene().
     info: function () {
       return { renderer: S.renderer, scene: S.scene, camera: S.camera, world: S.world, house: S.house, active: S.active, lost: S.lost,
         building: !!S.building, frame: !!S.frame, dirty: S.dirty, renders: S.renders, builds: S.builds, restores: S.restores,
-        meshCount: S.meshes.length, meshes: S.meshes.slice(), level: S.level, roof: S.roof, look: { hour: S.look.hour, season: S.look.season }, looks: S.looks, size: S.size.slice(), renderNow: function () { if (S.house && !S.lost) render(); } };
+        meshCount: S.meshes.length + (S.highlight ? 1 : 0), meshes: S.meshes.concat(S.highlight ? [S.highlight] : []),
+        flight: S.anim && S.anim.kind === 'flight' ? { from: PC.cam.copy(S.anim.from), to: PC.cam.copy(S.anim.to), t: S.anim.t, ms: S.anim.ms } : null,
+        animating: !!S.anim, selected: S.selected, highlight: S.highlight, highlightsMade: S.hlMade, level: S.level, roof: S.roof, look: { hour: S.look.hour, season: S.look.season }, looks: S.looks, size: S.size.slice(), renderNow: function () { if (S.house && !S.lost) render(); } };
     }
   };
 })(globalThis.PC = globalThis.PC || {});

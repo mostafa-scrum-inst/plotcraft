@@ -15,6 +15,10 @@
   font-size: var(--fs-sm); font-weight: 600;
 }
 .pc-caption__text { padding-right: var(--s2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* F5-T1 (PM round 12): "Room · Level"; the room name stays whole, the level part truncates first */
+.pc-caption__text:has(> .pc-caption__room) { display: flex; }
+.pc-caption__room { flex: none; }
+.pc-caption__level { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }   /* pre keeps the leading " · " space */
 
 /* Overlay panel. Phone: bottom dock, one pane at a time (tabs). */
 .pc-v3panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; background: var(--surface); border-top: 1px solid var(--ink); box-shadow: var(--e2); }

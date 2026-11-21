@@ -6,15 +6,21 @@
    switch is enabled since F4-T2. Light tab (F4-T3, A-13; Designer F4-T3 plan 3): the time slider (0-24 h, 0.25), four
    presets (8 / 12 / 17.5 / 22; aria-pressed only while the hour equals the preset) and the season select set the
    session look through PC.view3d.setLook (no rebuild, camera untouched); the readout shows HH:MM. The look lives in
-   PC.view3d (session; 12:00 summer on a page load). This file never touches three.js (ui layer, A-2). */
+   PC.view3d (session; 12:00 summer on a page load). This file never touches three.js (ui layer, A-2).
+   Room finder (F5-T1, F5-S1; A-14 as built): v3-room lists every room in one <optgroup> per level, lowest first
+   (PC.cam.roomGroups, plan names), refilled when the house's rooms change. A pick runs PC.three.finder.goTo (Roof
+   off, the room's level, highlight, 1.2 s flight), syncs the Roof switch and the level radios, and shows the caption
+   "Room · Level" (caption(), shared with the F5-T2 tour; PM round 12). The select keeps the chosen room (PM Q7).
+   The selection is cleared by any manual level change (All included), Reset view, Roof on, "Go to room…", and by
+   PC.view3d itself on a rebuild or close (onSelect(null)); orbit / zoom / pan keep it (TL ruling Q3). */
 (function (PC) {
   'use strict';
   var ui = PC.ui = PC.ui || {};
   ui.stages = ui.stages || {};
-  var LATER = ['v3-room', 'v3-tour-start', 'v3-tour-pause', 'v3-tour-stop'];
+  var LATER = ['v3-tour-start', 'v3-tour-pause', 'v3-tour-stop'];
   var PRESETS = ['morning', 'noon', 'evening', 'night'];
   var TABS = ['view', 'light', 'tour'];
-  var open = false, house = null, level = 'all', levelsKey = '';
+  var open = false, house = null, level = 'all', levelsKey = '', roomsKey = '';
 
   function shortName(id) { return PC.C.LEVEL_LABEL[id].replace(/ floor$/, ''); }
   function onState(s) {
@@ -40,12 +46,51 @@
     });
     if (level !== 'all' && h.levels.every(function (l) { return l.id !== level; })) level = 'all';
   }
+  // One <optgroup> per level (full level name), one <option> per room (plan name); the placeholder stays first.
+  function fillRooms(h) {
+    var groups = PC.cam.roomGroups(h), key = JSON.stringify(groups);
+    if (key === roomsKey) return;
+    roomsKey = key;
+    var sel = ui.$('v3-room');
+    Array.prototype.slice.call(sel.querySelectorAll('optgroup')).forEach(function (g) { sel.removeChild(g); });
+    groups.forEach(function (g) {
+      var og = document.createElement('optgroup');
+      og.label = g.label;
+      g.rooms.forEach(function (r) { var o = document.createElement('option'); o.value = r.id; o.textContent = r.name; og.appendChild(o); });
+      sel.appendChild(og);
+    });
+    sel.value = '';
+  }
+  // The room caption (PM round 12): the room name whole, then " · " + the full level name, which truncates first
+  // (CSS). parts = [room name, level label] | null (hidden). Shared with the F5-T2 tour.
+  function caption(parts) {
+    var box = ui.$('v3-caption'), t = ui.$('v3-caption-text');
+    while (t.firstChild) t.removeChild(t.firstChild);
+    if (parts) {
+      var a = document.createElement('span'), b = document.createElement('span');
+      a.className = 'pc-caption__room'; a.textContent = parts[0];
+      b.className = 'pc-caption__level'; b.textContent = ' · ' + parts[1];
+      t.appendChild(a); t.appendChild(b);
+    }
+    ui.show(box, !!parts);
+  }
+  // The selection's UI side: the select back to "Go to room…" and no caption (PC.view3d calls it on a rebuild / close).
+  function unselected() { ui.$('v3-room').value = ''; caption(null); }
+  function clearRoom() { PC.three.finder.clear(); unselected(); }
+  function goRoom(id) {
+    if (!id || !house || !PC.three.finder || !PC.three.finder.goTo(id)) { clearRoom(); return; }
+    var f = PC.cam.roomOf(house, id);
+    level = f.level.id;
+    renderLevels();
+    ui.$('v3-roof').checked = false;
+    caption(PC.cam.caption(house, id));
+  }
   function renderLevels() {
     Array.prototype.slice.call(ui.$('v3-level').querySelectorAll('input')).forEach(function (inp) { inp.checked = inp.value === level; });
   }
   function show(state) {
     house = PC.house.build(state);
-    if (house) fillLevels(house);
+    if (house) { fillLevels(house); fillRooms(house); }
     renderLevels();
     PC.view3d.open(house, ui.$('v3-canvas'), onState);
     if (house) PC.view3d.setLevel(level);
@@ -77,10 +122,13 @@
       ui.on(ui.$('v3-level'), 'change', function (e) {
         if (!e.target || e.target.name !== 'v3-level' || !e.target.checked) return;
         level = e.target.value;
+        clearRoom();
         PC.view3d.setLevel(level);
       });
-      ui.on(ui.$('v3-roof'), 'change', function (e) { PC.view3d.setRoof(e.target.checked); });
-      ui.on(ui.$('v3-reset'), 'click', function () { PC.view3d.resetView(); });
+      ui.on(ui.$('v3-roof'), 'change', function (e) { if (e.target.checked) clearRoom(); PC.view3d.setRoof(e.target.checked); });
+      ui.on(ui.$('v3-reset'), 'click', function () { clearRoom(); PC.view3d.resetView(); });
+      ui.on(ui.$('v3-room'), 'change', function (e) { goRoom(e.target.value); });
+      PC.view3d.setOnSelect(function (id) { if (id === null) unselected(); });
       ui.on(ui.$('v3-time'), 'input', function (e) { setLook({ hour: parseFloat(e.target.value) }); });
       ui.on(ui.$('v3-season'), 'change', function (e) { setLook({ season: e.target.value }); });
       PRESETS.forEach(function (p) { ui.on(ui.$('v3-preset-' + p), 'click', function () { setLook({ hour: PC.sky.PRESETS[p] }); }); });

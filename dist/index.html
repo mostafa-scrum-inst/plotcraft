@@ -1051,6 +1051,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   font-size: var(--fs-sm); font-weight: 600;
 }
 .pc-caption__text { padding-right: var(--s2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* F5-T1 (PM round 12): "Room · Level"; the room name stays whole, the level part truncates first */
+.pc-caption__text:has(> .pc-caption__room) { display: flex; }
+.pc-caption__room { flex: none; }
+.pc-caption__level { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }   /* pre keeps the leading " · " space */
 
 /* Overlay panel. Phone: bottom dock, one pane at a time (tabs). */
 .pc-v3panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; background: var(--surface); border-top: 1px solid var(--ink); box-shadow: var(--e2); }
@@ -1820,7 +1824,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     SITE: { wallH: 1.2, wallT: 0.2, gateW: 3, post: 0.4, postH: 1.4, seat: 3, edgeClear: 0.3, pathHalf: 1,
       marker: { k: 0.06, min: 1.5, max: 3, spare: 0.5, step: 0.25 } },
     CAM: { fov: 45, nearMin: 0.5, nearK: 0.02, farK: 20, phiMin: 5, phiMax: 85, rMin: 4, rMaxK: 3, rMaxReset: 1.2,
-      eyeMin: 1, resetK: 2.2, resetFit: 1.05, resetTheta: 30, resetPhi: 50, keyDeg: 5, keyZoom: 1.1, wheelK: 0.0015 },
+      eyeMin: 1, resetK: 2.2, resetFit: 1.05, resetTheta: 30, resetPhi: 50, keyDeg: 5, keyZoom: 1.1, wheelK: 0.0015 ,
+      // F5-T1 (A-14 + plan review item 1): finder pose, flight time, frame-delta cap
+      finderLift: 0.5, finderK: 1.6, finderRMin: 6, finderPhi: 35, finderPhiB: 15, flightMs: 1200, dtMax: 100 },
     VIEW3D: { maxDpr: 2, shadowMap: 1024, shadowBias: -0.0005, shadowNormalBias: 0.02, sunDist: 2.5, shadowK: 2.5, shadowR: 1.2 },
     FOOTPRINT_ROUND: 0.5, FOOTPRINT_MAX_RATIO: 2, FOOTPRINT_STRETCH_RATIO: 3, FOOTPRINT_STRETCH_EXTRA: 0.5, BACK_ANGLE: 40
   };
@@ -4105,13 +4111,24 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
    positive towards +X), phi = angle from the vertical. The eye is target + radius (sin phi sin theta, cos phi,
    sin phi cos theta). Limits come from the house model and the canvas aspect (the reset radius is aspect-aware,
    TL F4-T1 plan review ruling 1): phi in [5, 85] degrees, radius in [4, rMax], target in the plot bounding box with
-   Y in [0, roof base], then phi is lowered until the eye is 1 m or more above ground. */
+   Y in [lowest floorY, roof base] (F5-T1 ruling Q1: -pitch + 0.2 with a basement, else 0), then phi is lowered until
+   the eye is 1 m or more above ground.
+   F5-T1 room finder (A-14): roomOf(house, id), roomGroups(house) (levels lowest first, rooms in plan order, plan names)
+   and forRoom(house, id, current, limits): target = room centre at floorY + 0.5, theta kept, phi 35 degrees (15 for a
+   basement room, plan review item 1), radius = clamp(1.6 x max(w, d) + storeyH, 6, 3 x house.radius), then clamped. */
 (function (PC) {
   'use strict';
   var D = Math.PI / 180;
   function K() { return PC.C.CAM; }
   function clampN(x, a, b) { return Math.max(a, Math.min(b, x)); }
   function wrapAngle(a) { a = a % (2 * Math.PI); if (a > Math.PI) a -= 2 * Math.PI; if (a <= -Math.PI) a += 2 * Math.PI; return a; }
+  // Lowest floor level of the house (frame T, Y up), never above ground: the target's Y floor (F5-T1 ruling Q1).
+  function floorMin(house) {
+    var y = 0, s = PC.C.HOUSE.slab;
+    house.levels.forEach(function (l) { y = Math.min(y, l.baseY + s); });
+    return y;
+  }
+  function byIndex(house) { return house.levels.slice().sort(function (a, b) { return a.index - b.index; }); }
   function copy(p) { return { target: [p.target[0], p.target[1], p.target[2]], radius: p.radius, theta: p.theta, phi: p.phi }; }
 
   var C = PC.cam = {
@@ -4126,7 +4143,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       return {
         phiMin: k.phiMin * D, phiMax: k.phiMax * D, rMin: k.rMin,
         rMax: Math.max(k.rMaxK * house.radius, k.rMaxReset * C.resetRadius(house, aspect)),
-        box: { x0: Math.min.apply(null, xs), x1: Math.max.apply(null, xs), y0: 0, y1: Math.max(0, house.roof.baseY),
+        box: { x0: Math.min.apply(null, xs), x1: Math.max.apply(null, xs), y0: floorMin(house), y1: Math.max(0, house.roof.baseY),
           z0: Math.min.apply(null, zs), z1: Math.max.apply(null, zs) },
         eyeMin: k.eyeMin
       };
@@ -4168,7 +4185,32 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
         radius: a.radius + (b.radius - a.radius) * s, theta: wrapAngle(a.theta + dT * s), phi: a.phi + (b.phi - a.phi) * s
       };
     },
-    copy: copy
+    copy: copy,
+    // { room, level, label } for a room id of the house, or null.
+    roomOf: function (house, id) {
+      for (var i = 0; i < house.levels.length; i++) {
+        var lv = house.levels[i];
+        for (var j = 0; j < lv.rooms.length; j++) if (lv.rooms[j].id === id) return { room: lv.rooms[j], level: lv, label: PC.C.LEVEL_LABEL[lv.id] };
+      }
+      return null;
+    },
+    // The finder dropdown model: [{ level, label, rooms: [{ id, name }] }], lowest level first.
+    roomGroups: function (house) {
+      return byIndex(house).map(function (lv) {
+        return { level: lv.id, label: PC.C.LEVEL_LABEL[lv.id], rooms: lv.rooms.map(function (r) { return { id: r.id, name: r.name }; }) };
+      });
+    },
+    // Caption text (PM round 12): "Room · Level", the full level name.
+    caption: function (house, id) { var f = C.roomOf(house, id); return f ? [f.room.name, f.label] : null; },
+    forRoom: function (house, id, current, L) {
+      var f = C.roomOf(house, id);
+      if (!f) return null;
+      var k = K(), r = f.room, lv = f.level;
+      var target = [r.u + r.w / 2 - house.center[0], lv.baseY + PC.C.HOUSE.slab + k.finderLift, -(r.v + r.d / 2 - house.center[1])];
+      var radius = clampN(k.finderK * Math.max(r.w, r.d) + house.storeyH, k.finderRMin, k.rMaxK * house.radius);
+      var phi = (lv.index < 0 ? k.finderPhiB : k.finderPhi) * D, theta = current ? current.theta : k.resetTheta * D;
+      return C.clamp({ target: target, radius: radius, theta: theta, phi: phi }, L);
+    }
   };
 })(globalThis.PC = globalThis.PC || {});
 
@@ -5079,7 +5121,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
    fov, onInput() }. One pointer (mouse left without Shift, or one finger) orbits; mouse right button or Shift+drag
    pans; two pointers pinch (distance ratio -> zoom) and pan (midpoint shift) together; wheel zooms (passive: false,
    preventDefault); context menu suppressed; keys on the focused canvas: arrows orbit, + / - zoom. Every input calls
-   api.onInput() (F5: cancels flights and tours). No THREE here. */
+   api.onInput() (F5: cancels flights and tours). F5-T1 (plan review item 2): every input that acts calls
+   api.interrupt() FIRST, before it reads the pose, so a flight or tour stops and the gesture's delta applies to the
+   current interpolated pose (no snap, no lost first delta). No THREE here. */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
@@ -5090,11 +5134,13 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       var pts = new Map(), mode = null, two = null;
       function K() { return PC.C.CAM; }
       function minSide() { var s = api.size(); return Math.max(1, Math.min(s[0], s[1])); }
+      function stop() { if (api.interrupt) api.interrupt(); }
       function apply(p) { api.set(p); if (api.onInput) api.onInput(); }
       function twoState() { var a = Array.from(pts.values()); return { d: Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) || 1, mx: (a[0].x + a[1].x) / 2, my: (a[0].y + a[1].y) / 2 }; }
       function down(e) {
         if (!api.active()) return;
         if (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 2) return;
+        stop();
         // QA F4T1-2: preventDefault below cancels the click's focus, so a mouse press focuses the canvas itself
         // (keys act on the focused canvas, A-12); touch does not, to keep the on-screen keyboard closed.
         if (e.pointerType === 'mouse' && canvas.focus) canvas.focus({ preventScroll: true });
@@ -5109,8 +5155,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
         if (!q || !api.active()) return;
         var dx = e.clientX - q.x, dy = e.clientY - q.y;
         q.x = e.clientX; q.y = e.clientY;
+        if (!dx && !dy) return;
+        stop();
         var p = api.get(), s = api.size();
-        if (!p || (!dx && !dy)) return;
+        if (!p) return;
         if (pts.size >= 2) {
           if (pts.size > 2) return;
           var n = twoState(), mpp = PC.cam.metresPerPx(p, api.fov, s[1]);
@@ -5129,14 +5177,21 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
         else mode = null;
       }
       function wheel(e) {
-        if (!api.active() || !api.get()) return;
+        if (!api.active()) return;
+        stop();
+        var p = api.get();
+        if (!p) return;
         e.preventDefault();
-        apply(PC.cam.zoom(api.get(), Math.exp(e.deltaY * K().wheelK)));
+        apply(PC.cam.zoom(p, Math.exp(e.deltaY * K().wheelK)));
       }
       function menu(e) { e.preventDefault(); }
       function key(e) {
-        if (!api.active() || !api.get()) return;
-        var p = api.get(), st = K().keyDeg * D, z = K().keyZoom, k = e.key;
+        if (!api.active()) return;
+        var st = K().keyDeg * D, z = K().keyZoom, k = e.key;
+        if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '+', '=', '-', '_'].indexOf(k) < 0) return;
+        stop();
+        var p = api.get();
+        if (!p) return;
         if (k === 'ArrowLeft') p = PC.cam.orbit(p, -st, 0);
         else if (k === 'ArrowRight') p = PC.cam.orbit(p, st, 0);
         else if (k === 'ArrowUp') p = PC.cam.orbit(p, 0, -st);
@@ -5229,6 +5284,52 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 })(globalThis.PC = globalThis.PC || {});
 
 </script>
+<script>/* js/three/finder.js */
+/* PC.three.highlight / PC.three.finder: the F5-T1 room finder (F5-S1; A-14 as built, F5-T1 plan + plan review).
+   highlight(house, roomId, material) -> Mesh 'highlight': a thin outline frame on the room rectangle, 4 BoxBatch bars
+   (FINDER.bar m wide, FINDER.h high, bottom at floorY + FINDER.lift, so above the room tint at 0.015 m), inset
+   FINDER.inset from the room edges, so they sit inside the partitions (0.15 m, centred on the edge) and the exterior
+   walls; colour PC.data.siteColors.highlight (#C2410C). A UI mark: casts and receives no shadow. scene.js owns it
+   (select / clear, one geometry per pick, the old one disposed; counted in the mesh budget).
+   finder.goTo(roomId): Roof off, level = the room's level (a basement room opens the ground), the highlight on the
+   room, then a CAM.flightMs flight to PC.cam.forRoom from the current (interpolated) pose. Never touches the look.
+   THREE only inside functions. */
+(function (PC) {
+  'use strict';
+  var three = PC.three = PC.three || {};
+  var F = { bar: 0.08, h: 0.04, lift: 0.02, inset: 0.15 };
+
+  three.highlight = function (house, id, material) {
+    var f = PC.cam.roomOf(house, id), r = f.room, b = new three.BoxBatch(), hex = PC.data.siteColors.highlight;
+    var cu = house.center[0], cv = house.center[1], y = f.level.baseY + PC.C.HOUSE.slab + F.lift + F.h / 2;
+    var u0 = r.u + F.inset, u1 = r.u + r.w - F.inset, v0 = r.v + F.inset, v1 = r.v + r.d - F.inset;
+    var w = u1 - u0, d = v1 - v0, X = function (u) { return u - cu; }, Z = function (v) { return -(v - cv); };
+    b.add(X(u0 + w / 2), y, Z(v0 + F.bar / 2), w, F.h, F.bar, hex);                       // street-side bar
+    b.add(X(u0 + w / 2), y, Z(v1 - F.bar / 2), w, F.h, F.bar, hex);                       // back bar
+    b.add(X(u0 + F.bar / 2), y, Z(v0 + d / 2), F.bar, F.h, d - 2 * F.bar, hex);           // side bars between them
+    b.add(X(u1 - F.bar / 2), y, Z(v0 + d / 2), F.bar, F.h, d - 2 * F.bar, hex);
+    var m = b.build(material, 'highlight');
+    m.castShadow = false; m.receiveShadow = false;
+    m.userData.room = id;
+    return m;
+  };
+  three.highlight.SIZES = F;
+
+  three.finder = {
+    goTo: function (id) {
+      var V = PC.view3d, h = V.house(), f = h && PC.cam.roomOf(h, id);
+      if (!f) return false;
+      V.setRoof(false);
+      V.setLevel(f.level.id);
+      V.select(id);
+      V.flyTo(PC.cam.forRoom(h, id, V.pose(), V.limits()), PC.C.CAM.flightMs);
+      return true;
+    },
+    clear: function () { if (PC.view3d.selected() !== null) PC.view3d.select(null); }
+  };
+})(globalThis.PC = globalThis.PC || {});
+
+</script>
 <script>/* js/three/scene.js */
 /* PC.view3d: renderer, on-demand loop, resize, visibility, context loss, lights, open / close (A-10, F4-T1 plan §4).
    THREE only inside functions: the file loads without it, and PC.view3d.open() then reports 'unavailable'.
@@ -5237,7 +5338,16 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
    (TL required item 3), guarded by a token so PC.view3d.close() during the yield builds nothing.
    Lights: one hemisphere + one sun (the only shadow caster). The look (F4-T3, A-13) is the session's { hour, season }
    (12:00 summer on a page load): setLook stores it and applies PC.sky.compute through PC.three.applyLook (look.js),
-   which recolours and moves lights only; every build (rebuild, context restore) re-applies the stored look. */
+   which recolours and moves lights only; every build (rebuild, context restore) re-applies the stored look.
+   Animation driver (F5-T1, A-12 as built; the F5-T2 tour is its second client): animate({ step(dt) -> done }) runs
+   one animation; while it runs each frame calls step with the real rAF delta (ms, capped at CAM.dtMax = 100; 0 on
+   its first frame) and requests the next frame; when it is done the loop is idle again. flyTo(pose, ms) is one
+   client: from = the current pose (during a flight, the interpolated one: the smooth redirect), to = the clamped
+   pose, smoothstep through PC.cam.lerpPose, clamped every frame, exactly `to` at the end. An input cancels it BEFORE
+   the controls apply their delta (controls api.interrupt, plan review item 2); close(), resetView() and a build
+   (rebuild, context restore) cancel it too. Flights never touch the session look.
+   Selection (A-14): select(roomId | null) puts the one `highlight` mesh (PC.three.highlight, finder.js) on the room,
+   disposing the previous geometry; a build and close() clear it and call the onSelect hook with null. */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
@@ -5246,7 +5356,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     house: null, builtKey: null, pose: null, limits: null, size: [0, 0],
     active: false, lost: false, dirty: false, frame: 0, building: 0, token: 0, onState: null,
     meshes: [], level: 'all', roof: false, renders: 0, builds: 0, restores: 0, looks: 0,
-    look: { hour: 12, season: 'summer' }
+    look: { hour: 12, season: 'summer' },
+    anim: null, animT: null, highlight: null, selected: null, onSelect: null, hlMade: 0
   };
   function V() { return PC.C.VIEW3D; }
   function dpr() { var d = typeof devicePixelRatio === 'number' && devicePixelRatio > 0 ? devicePixelRatio : 1; return Math.min(d, V().maxDpr); }
@@ -5269,7 +5380,48 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   function invalidate() { S.dirty = true; request(); }
   // The frame measures the canvas itself (QA F4T1-1): the shell may still be settling its layout when
   // PC.view3d.open() runs (e.g. stage 4's sample strip), so the size is taken when the frame draws.
-  function frame() { S.frame = 0; if (!S.dirty || !S.active || S.lost || !visible()) return; resize(true); S.dirty = false; render(); }
+  function frame(ts) {
+    S.frame = 0;
+    if (!S.active || S.lost || !visible()) return;
+    if (S.anim) {
+      var now = typeof ts === 'number' ? ts : 0, dt = S.animT === null ? 0 : Math.min(PC.C.CAM.dtMax, Math.max(0, now - S.animT));
+      S.animT = now;
+      if (S.anim.step(dt)) stopAnim();
+      S.dirty = true;
+    }
+    if (!S.dirty) return;
+    resize(true); S.dirty = false; render();
+    if (S.anim) { S.dirty = true; request(); }
+  }
+  function animate(a) { S.anim = a; S.animT = null; invalidate(); }
+  function stopAnim() { S.anim = null; S.animT = null; }
+  function flyTo(pose, ms) {
+    if (!S.house || !S.pose || !S.limits || !pose) return false;
+    var f = { kind: 'flight', from: PC.cam.copy(S.pose), to: PC.cam.clamp(pose, S.limits), ms: ms > 0 ? ms : PC.C.CAM.flightMs, t: 0 };
+    f.step = function (dt) {
+      f.t += dt;
+      var k = Math.min(1, f.t / f.ms);
+      S.pose = k >= 1 ? PC.cam.copy(f.to) : PC.cam.clamp(PC.cam.lerpPose(f.from, f.to, k), S.limits);
+      return k >= 1;
+    };
+    animate(f);
+    return true;
+  }
+  function clearSelection() {
+    var had = S.selected !== null;
+    if (S.highlight) { if (S.highlight.parent) S.highlight.parent.remove(S.highlight); S.highlight.geometry.dispose(); S.highlight = null; }
+    S.selected = null;
+    if (had && S.onSelect) S.onSelect(null);
+  }
+  function select(id) {
+    if (id === null || id === undefined || !S.house || !PC.cam.roomOf(S.house, id)) { clearSelection(); invalidate(); return false; }
+    if (S.highlight) { S.world.remove(S.highlight); S.highlight.geometry.dispose(); S.highlight = null; }
+    S.highlight = three.highlight(S.house, id, S.mats.batch);
+    S.world.add(S.highlight);
+    S.selected = id; S.hlMade++;
+    invalidate();
+    return true;
+  }
   function render() {
     var p = S.pose, e = PC.cam.position(p), cam = S.camera, n = PC.cam.near(p);
     cam.position.set(e[0], e[1], e[2]);
@@ -5325,12 +5477,15 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       set: function (p) { S.pose = PC.cam.clamp(p, S.limits); invalidate(); },
       size: function () { return S.size[0] ? S.size : [canvas.clientWidth || 1, canvas.clientHeight || 1]; },
       fov: PC.C.CAM.fov,
+      interrupt: function () { stopAnim(); },
       onInput: function () { if (S.onInput) S.onInput(); }
     });
   }
 
   // Every geometry and material of the last build, exactly once (the meshes are tracked: nodes are not probed).
   function dispose() {
+    stopAnim();
+    clearSelection();
     S.meshes.forEach(function (m) { m.geometry.dispose(); });
     Object.keys(S.mats || {}).forEach(function (k) { S.mats[k].dispose(); });
     S.world.children.slice().forEach(function (c) { S.world.remove(c); });
@@ -5405,7 +5560,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       });
       return { ok: true };
     },
-    close: function () { S.active = false; S.building = 0; cancelFrame(); },
+    close: function () { S.active = false; S.building = 0; cancelFrame(); stopAnim(); clearSelection(); },
     invalidate: invalidate,
     setLevel: function (sel) { S.level = sel; applyVisibility(); invalidate(); },
     setRoof: function (on) { S.roof = !!on; applyVisibility(); invalidate(); },
@@ -5416,14 +5571,26 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       if (S.house && S.mats) { lights(S.house); invalidate(); }
     },
     look: function () { return { hour: S.look.hour, season: S.look.season }; },
-    resetView: function () { if (!S.house) return; S.pose = PC.cam.reset(S.house, aspect()); invalidate(); },
+    resetView: function () { if (!S.house) return; stopAnim(); S.pose = PC.cam.reset(S.house, aspect()); invalidate(); },
     setOnInput: function (fn) { S.onInput = fn; },
+    // F5-T1: the animation driver, flights and the room selection (A-12, A-14 as built).
+    animate: function (a) { if (S.house && a && typeof a.step === 'function') animate(a); },
+    stopAnimation: stopAnim,
+    flyTo: flyTo,
+    flying: function () { return !!(S.anim && S.anim.kind === 'flight'); },
+    select: select,
+    selected: function () { return S.selected; },
+    setOnSelect: function (fn) { S.onSelect = fn; },
+    house: function () { return S.house; },
+    limits: function () { return S.limits; },
     pose: function () { return S.pose ? PC.cam.copy(S.pose) : null; },
     // Read-only snapshot for tests and PC.debug.scene().
     info: function () {
       return { renderer: S.renderer, scene: S.scene, camera: S.camera, world: S.world, house: S.house, active: S.active, lost: S.lost,
         building: !!S.building, frame: !!S.frame, dirty: S.dirty, renders: S.renders, builds: S.builds, restores: S.restores,
-        meshCount: S.meshes.length, meshes: S.meshes.slice(), level: S.level, roof: S.roof, look: { hour: S.look.hour, season: S.look.season }, looks: S.looks, size: S.size.slice(), renderNow: function () { if (S.house && !S.lost) render(); } };
+        meshCount: S.meshes.length + (S.highlight ? 1 : 0), meshes: S.meshes.concat(S.highlight ? [S.highlight] : []),
+        flight: S.anim && S.anim.kind === 'flight' ? { from: PC.cam.copy(S.anim.from), to: PC.cam.copy(S.anim.to), t: S.anim.t, ms: S.anim.ms } : null,
+        animating: !!S.anim, selected: S.selected, highlight: S.highlight, highlightsMade: S.hlMade, level: S.level, roof: S.roof, look: { hour: S.look.hour, season: S.look.season }, looks: S.looks, size: S.size.slice(), renderNow: function () { if (S.house && !S.lost) render(); } };
     }
   };
 })(globalThis.PC = globalThis.PC || {});
@@ -7912,15 +8079,21 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
    switch is enabled since F4-T2. Light tab (F4-T3, A-13; Designer F4-T3 plan 3): the time slider (0-24 h, 0.25), four
    presets (8 / 12 / 17.5 / 22; aria-pressed only while the hour equals the preset) and the season select set the
    session look through PC.view3d.setLook (no rebuild, camera untouched); the readout shows HH:MM. The look lives in
-   PC.view3d (session; 12:00 summer on a page load). This file never touches three.js (ui layer, A-2). */
+   PC.view3d (session; 12:00 summer on a page load). This file never touches three.js (ui layer, A-2).
+   Room finder (F5-T1, F5-S1; A-14 as built): v3-room lists every room in one <optgroup> per level, lowest first
+   (PC.cam.roomGroups, plan names), refilled when the house's rooms change. A pick runs PC.three.finder.goTo (Roof
+   off, the room's level, highlight, 1.2 s flight), syncs the Roof switch and the level radios, and shows the caption
+   "Room · Level" (caption(), shared with the F5-T2 tour; PM round 12). The select keeps the chosen room (PM Q7).
+   The selection is cleared by any manual level change (All included), Reset view, Roof on, "Go to room…", and by
+   PC.view3d itself on a rebuild or close (onSelect(null)); orbit / zoom / pan keep it (TL ruling Q3). */
 (function (PC) {
   'use strict';
   var ui = PC.ui = PC.ui || {};
   ui.stages = ui.stages || {};
-  var LATER = ['v3-room', 'v3-tour-start', 'v3-tour-pause', 'v3-tour-stop'];
+  var LATER = ['v3-tour-start', 'v3-tour-pause', 'v3-tour-stop'];
   var PRESETS = ['morning', 'noon', 'evening', 'night'];
   var TABS = ['view', 'light', 'tour'];
-  var open = false, house = null, level = 'all', levelsKey = '';
+  var open = false, house = null, level = 'all', levelsKey = '', roomsKey = '';
 
   function shortName(id) { return PC.C.LEVEL_LABEL[id].replace(/ floor$/, ''); }
   function onState(s) {
@@ -7946,12 +8119,51 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     });
     if (level !== 'all' && h.levels.every(function (l) { return l.id !== level; })) level = 'all';
   }
+  // One <optgroup> per level (full level name), one <option> per room (plan name); the placeholder stays first.
+  function fillRooms(h) {
+    var groups = PC.cam.roomGroups(h), key = JSON.stringify(groups);
+    if (key === roomsKey) return;
+    roomsKey = key;
+    var sel = ui.$('v3-room');
+    Array.prototype.slice.call(sel.querySelectorAll('optgroup')).forEach(function (g) { sel.removeChild(g); });
+    groups.forEach(function (g) {
+      var og = document.createElement('optgroup');
+      og.label = g.label;
+      g.rooms.forEach(function (r) { var o = document.createElement('option'); o.value = r.id; o.textContent = r.name; og.appendChild(o); });
+      sel.appendChild(og);
+    });
+    sel.value = '';
+  }
+  // The room caption (PM round 12): the room name whole, then " · " + the full level name, which truncates first
+  // (CSS). parts = [room name, level label] | null (hidden). Shared with the F5-T2 tour.
+  function caption(parts) {
+    var box = ui.$('v3-caption'), t = ui.$('v3-caption-text');
+    while (t.firstChild) t.removeChild(t.firstChild);
+    if (parts) {
+      var a = document.createElement('span'), b = document.createElement('span');
+      a.className = 'pc-caption__room'; a.textContent = parts[0];
+      b.className = 'pc-caption__level'; b.textContent = ' · ' + parts[1];
+      t.appendChild(a); t.appendChild(b);
+    }
+    ui.show(box, !!parts);
+  }
+  // The selection's UI side: the select back to "Go to room…" and no caption (PC.view3d calls it on a rebuild / close).
+  function unselected() { ui.$('v3-room').value = ''; caption(null); }
+  function clearRoom() { PC.three.finder.clear(); unselected(); }
+  function goRoom(id) {
+    if (!id || !house || !PC.three.finder || !PC.three.finder.goTo(id)) { clearRoom(); return; }
+    var f = PC.cam.roomOf(house, id);
+    level = f.level.id;
+    renderLevels();
+    ui.$('v3-roof').checked = false;
+    caption(PC.cam.caption(house, id));
+  }
   function renderLevels() {
     Array.prototype.slice.call(ui.$('v3-level').querySelectorAll('input')).forEach(function (inp) { inp.checked = inp.value === level; });
   }
   function show(state) {
     house = PC.house.build(state);
-    if (house) fillLevels(house);
+    if (house) { fillLevels(house); fillRooms(house); }
     renderLevels();
     PC.view3d.open(house, ui.$('v3-canvas'), onState);
     if (house) PC.view3d.setLevel(level);
@@ -7983,10 +8195,13 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       ui.on(ui.$('v3-level'), 'change', function (e) {
         if (!e.target || e.target.name !== 'v3-level' || !e.target.checked) return;
         level = e.target.value;
+        clearRoom();
         PC.view3d.setLevel(level);
       });
-      ui.on(ui.$('v3-roof'), 'change', function (e) { PC.view3d.setRoof(e.target.checked); });
-      ui.on(ui.$('v3-reset'), 'click', function () { PC.view3d.resetView(); });
+      ui.on(ui.$('v3-roof'), 'change', function (e) { if (e.target.checked) clearRoom(); PC.view3d.setRoof(e.target.checked); });
+      ui.on(ui.$('v3-reset'), 'click', function () { clearRoom(); PC.view3d.resetView(); });
+      ui.on(ui.$('v3-room'), 'change', function (e) { goRoom(e.target.value); });
+      PC.view3d.setOnSelect(function (id) { if (id === null) unselected(); });
       ui.on(ui.$('v3-time'), 'input', function (e) { setLook({ hour: parseFloat(e.target.value) }); });
       ui.on(ui.$('v3-season'), 'change', function (e) { setLook({ season: e.target.value }); });
       PRESETS.forEach(function (p) { ui.on(ui.$('v3-preset-' + p), 'click', function () { setLook({ hour: PC.sky.PRESETS[p] }); }); });

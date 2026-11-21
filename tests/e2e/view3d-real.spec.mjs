@@ -63,6 +63,23 @@ async function looks(page, tag) {
   let casters = await page.evaluate(() => { let n = 0; PC.debug.scene().scene.traverse((o) => { if (o.isDirectionalLight && o.castShadow) n++; if (o.isLight && !o.isDirectionalLight && o.castShadow) n += 100; }); return n; });
   T.eq(casters, 1, `${tag} one shadow-casting directional light`);
 }
+// F5-T1 (plan section 6): after a pick on a ground-floor room and the flight, the highlight shows in the real frame:
+// pixels that change when the highlight is hidden, and are #C2410C-like (red well above green and blue).
+async function highlight(page, tag) {
+  await page.evaluate(() => { const s = document.querySelector('[data-pc="v3-room"]'); s.value = 'r1'; s.dispatchEvent(new Event('change', { bubbles: true })); });
+  await page.waitForFunction(() => !PC.view3d.flying() && !PC.debug.scene().frame, null, { timeout: 15000 });
+  const n = await page.evaluate(() => {
+    const i = PC.debug.scene(), gl = i.renderer.getContext(), m = i.world.getObjectByName('highlight');
+    const read = () => { i.renderNow(); const W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, px = new Uint8Array(W * H * 4); gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px); return px; };
+    const on = read(); m.visible = false; const off = read(); m.visible = true; i.renderNow();
+    let k = 0, orange = 0;
+    for (let j = 0; j < on.length; j += 4) if (on[j] !== off[j] || on[j + 1] !== off[j + 1] || on[j + 2] !== off[j + 2]) { k++; if (on[j] > 120 && on[j] - on[j + 1] > 40 && on[j] - on[j + 2] > 70) orange++; }
+    return { k, orange, caption: document.querySelector('[data-pc="v3-caption-text"]').textContent };
+  });
+  T.ok(n.orange >= 40 && n.orange >= 0.6 * n.k && n.caption === 'Living · Ground floor', `${tag} highlight drawn on the real r128: ${n.orange} orange of ${n.k} changed pixels; caption "${n.caption}"`);
+  await page.evaluate(() => { const s = document.querySelector('[data-pc="v3-room"]'); s.value = ''; s.dispatchEvent(new Event('change', { bubbles: true })); PC.view3d.resetView(); });
+  await page.waitForFunction(() => !PC.debug.scene().frame && !PC.view3d.selected());
+}
 function notBlank(res, back, msg) {
   const differ = res.out.filter((c) => c.some((v, k) => Math.abs(v - back[k]) > 12)).length;
   const distinct = new Set(res.out.map((c) => c.join())).size;
@@ -128,6 +145,7 @@ async function scene(vp, dpr) {
   await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' }); document.dispatchEvent(new Event('visibilitychange')); });
   await ready(page);
   await looks(page, tag);
+  await highlight(page, tag);
   if (SHOTS) {
     mkdirSync(SHOT_DIR, { recursive: true });
     const exts = vp.w > 900 ? ['sand', 'white', 'terracotta', 'grey'] : ['sand'];
