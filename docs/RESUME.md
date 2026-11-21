@@ -42,11 +42,15 @@ Everything lives on disk under /home/claude/plotcraft (cloud sessions: /home/use
 - Republished same URL (v3): https://claude.ai/artifact/LDbG9XdU1UeAMcVwqmxAB9 ; testing doc https://claude.ai/artifact/8bhboWAnZq2JL9aA977MJj
 - Vegetation moved to F4-T3 by plan.
 
-## Next batch (batch 11): F4-T3 + F4 feature review
-1. F4-T3 per TL routing in docs/03-tasks/F4-T2/outcome-review.md: vegetation (seeded scatter, existing exclusions + seating pad, 0.7 m from boundary, instanced, mesh budget <= 40), time of day + seasons (A-13 exactly, applyLook recolour only, Light tab enabled), shadows cover building + yard, G6 budget with look applied.
-2. Default camera: PM/Designer call before plan review; TL recommends keep street-side Reset (option a).
-3. F4 feature review (PM + CTO) with the 7-item hand-off list in outcome-review.md; waits on client CD-6 phone answers (ask again after F4-T3 if missing).
-4. Then F5.
+## Batch 11 result: F4-T3 DONE (F4 review pending)
+- Vegetation (seeded scatter, PC.data.vegetation, caps 120/200, instanced), sky per A-13 (PC.sky.compute = Designer 16-row table exactly), applyLook recolour-only, Light tab live, seasons, veg-short warning (80 % of min(veg.area, 1020 m2), PM+TL option a). Camera Reset stays street side, no hint line (camera-decision.md).
+- TL plan/impl/outcome APPROVED; QA PASSED 393.8 s. App v4 same URL; testing doc https://claude.ai/artifact/TVkPgkC5K4Fbah3cgtEVha (section 6 = phone check).
+- F4 feature review (PM + CTO) waits ONLY on the client phone answers (CD-6); hand-off pack, acceptance matrix and F5 debt list are in F4-T3/outcome-review.md.
+
+## Next batch (batch 12): F5-T1 room finder
+1. F5-T1 room finder (FS), then F5-T2 drone tour; F5-T3 Designer pass waits for the F4 review notes (phone answers).
+2. TL riders for F5 plan: max house 40 rooms; finder/tour must not reset look; highlight mesh counts toward 40-mesh budget (21 used); tour camera above tree tops (4.83 m). O-1 shadow tuning goes to F5-T3 sky-table data.
+3. Run the F4 feature review as soon as the phone answers arrive.
 
 ## Known limits owned by Designer F5-T3
 Overridden-edge label pile-up; legend wraps at 1280x800 with "* set by you"; area label wider than narrow footprints; no Parking/Pool legend entries; pool-size note wrap at 360 px.
