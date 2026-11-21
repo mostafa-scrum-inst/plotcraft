@@ -141,11 +141,12 @@ await guard('A 1280x800', async () => {
   // every room by selection, from the current pose each time
   const p = []; let n = 0;
   for (const gr of groups) for (const rm of gr.rooms) { if (rm.id === (await S.page.evaluate(() => document.querySelector('[data-pc="v3-room"]').value))) continue;
-    await S.page.evaluate(() => PC.view3d.setRoof(true)); // a state the pick must undo (the Roof UI clears the selection, so via the API)
+    // Roof on through the switch (TL Q3: it clears the selection); the next pick must turn it off again (that path must not clear)
+    if (!(await S.page.evaluate(() => document.querySelector('[data-pc="v3-roof"]').checked))) { await S.act('v3-roof'); await S.settle(); p.push(...clearedProblems(await S.page.evaluate(STATE), `Roof on before ${rm.name}`)); }
     const c = await chooseIn(S, rm.id); await landed(S); rec = await recStop(S); st = await S.page.evaluate(STATE); n++;
     p.push(...selectedProblems(st, h, rm.id, rm.name)); const d = F.poseDiff(st.pose, expectPose(h, L, rm.id, c.before)); if (d) p.push(`${rm.name}: lands at ${d}`);
     const fl = flightProblems(rec, 0, st.pose, rm.name); p.push(...(fl.f || fl)); }
-  R.check(`${T}: each of the other ${n} rooms picked in turn (Roof turned on before each): the same rules, landing on my pose from the pose at the pick`, cut(p, 10));
+  R.check(`${T}: each of the other ${n} rooms picked in turn (Roof switched on before each, which clears the selection, TL Q3): the same rules, landing on my pose from the pose at the pick`, cut(p, 10));
   // redirect mid-flight
   const r = [], [ra, rb] = [groups[0].rooms[1].id, groups[groups.length - 1].rooms[2].id];
   await chooseIn(S, ra); await S.page.waitForTimeout(500); const mid = await chooseIn(S, rb);
