@@ -40,6 +40,8 @@ The roof, furniture, site and vegetation criteria are F4-T2 / F4-T3 by plan.
   - *Accepting ~500 s.* F4-T2 adds roof, furniture and site suites plus the bundle's stage-3 tests, and would push the run past 8 minutes.
 - **If a flake appears at `--jobs 3`,** the remedy is to fix the flaky spec, not to fall back silently. Report it in the status line.
 
+**Result (TL, same day):** the second `--jobs 3` full run on `ff48039` was green: exit 0, all steps passed in 384.9 s. The condition is met, so FS switches the default to 3 as F4-T2's first commit.
+
 ## F4 feature review and the phone check
 - **F4-T2 starts now.**
   - Step 0 is the F3 follow-up bundle with CD-4 (10 rooms per floor; the generator is re-proven at 10) and CD-5 (the hall-access warning), as placed at the plan review.
