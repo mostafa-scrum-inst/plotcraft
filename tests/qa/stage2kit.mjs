@@ -49,7 +49,7 @@ export const READ = () => {
     units: ['q-setback-front-unit', 'q-setback-back-unit', 'q-setback-side-unit', 'q-ceiling-unit'].map(t),
     sl: Object.fromEntries(['q-footprint', 'q-veg', 'q-ceiling'].map((h) => [h, { v: q(h).value, out: t(h + '-out'), min: q(h).min, max: q(h).max, step: q(h).step }])),
     radios: Object.fromEntries(['q-unit', 'unit-toggle', 'q-floors', 'q-roof', 'q-exterior', 'q-pool-size', 'q-gate'].map((h) => [h, radio(h)])),
-    disabled: { roof: dis('q-roof'), pool: dis('q-pool-size') },
+    disabled: { roof: dis('q-roof'), pool: dis('q-pool-size'), gate: dis('q-gate') }, q7: typeof PC.site.gateU === 'function',
     sw: Object.fromEntries(['q-basement', 'q-usable-roof', 'q-parking-covered', 'q-pool', 'q-wall', 'q-seating'].map((h) => [h, q(h).checked])),
     north: t('q-north-value'), street: t('q-street-value'), poolNote: t('q-pool-size-note'), roofNote: !q('q-roof-note').hidden,
     sum: { plot: t('sum-plot'), buildable: t('sum-buildable'), fp: t('sum-footprint'), veg: t('sum-veg'), status: t('sum-status'), kind: q('summary').dataset.kind },
@@ -80,6 +80,8 @@ export async function syncProblems(page) {
   for (const [h, v] of Object.entries(rw)) if (P.radios[h] !== v) f.push(`${h} shows ${P.radios[h]}, state ${v}`);
   if (P.disabled.roof.pitched !== a.usableRoof) f.push(`Pitched disabled=${P.disabled.roof.pitched} with usable roof ${a.usableRoof}`);
   if (Object.values(P.disabled.pool).some((d) => d !== !a.pool.on)) f.push(`pool sizes disabled ${JSON.stringify(P.disabled.pool)} with pool ${a.pool.on}`);
+  // F4-T2 (PM round 10 Q7; marker PC.site.gateU): no gate without the wall, so the Gate radios are disabled while the wall is off
+  if (Object.values(P.disabled.gate).some((d) => d !== (P.q7 ? !a.extras.wall : false))) f.push(`gate radios disabled ${JSON.stringify(P.disabled.gate)} with wall ${a.extras.wall}`);
   const sw = { 'q-basement': a.basement, 'q-usable-roof': a.usableRoof, 'q-parking-covered': a.parking.covered, 'q-pool': a.pool.on, 'q-wall': a.extras.wall, 'q-seating': a.extras.seating };
   for (const [h, v] of Object.entries(sw)) if (P.sw[h] !== v) f.push(`${h} checked=${P.sw[h]}, state ${v}`);
   const pn = ['S', 'M', 'L'].map((k) => { const [w, d] = Q.POOL[k]; return `${k} ${len(w)} × ${len(d)} ${u}`; }).join(DOT); if (P.poolNote !== pn) f.push(`pool note "${P.poolNote}" vs "${pn}"`);

@@ -341,10 +341,12 @@ await guard('G controls', async () => {
   await S.layout(`${T} View tab, 5 levels`);
   await S.shot('g-view-5levels');
   // disabled set
-  const LATER = ['v3-time', 'v3-preset-morning', 'v3-preset-noon', 'v3-preset-evening', 'v3-preset-night', 'v3-season', 'v3-room', 'v3-tour-start', 'v3-tour-pause', 'v3-tour-stop', 'v3-roof'];
+  // F4-T2 (marker: PC.three.buildRoof exists): the Roof switch is live by design, so it leaves the later-task set
+  const ROOF_LIVE = await S.page.evaluate(() => typeof PC.three.buildRoof === 'function');
+  const LATER = ['v3-time', 'v3-preset-morning', 'v3-preset-noon', 'v3-preset-evening', 'v3-preset-night', 'v3-season', 'v3-room', 'v3-tour-start', 'v3-tour-pause', 'v3-tour-stop'].concat(ROOF_LIVE ? [] : ['v3-roof']);
   const dis = await S.page.evaluate((L) => ({ hooks: L.filter((h) => !document.querySelector(`[data-pc="${h}"]`).disabled), speed: [...document.querySelectorAll('[data-pc="v3-tour-speed"] input')].filter((i) => !i.disabled).map((i) => i.value),
-    live: ['v3-reset', 'v3-panel-toggle', 'v3-tab-view', 'v3-tab-light', 'v3-tab-tour'].filter((h) => document.querySelector(`[data-pc="${h}"]`).disabled) }), LATER);
-  R.check(`${T}: later controls disabled (time, 4 presets, season, room finder, tour start / pause / stop, speed radios, Roof); Reset, panel toggle and tabs live`, dis.hooks.length || dis.speed.length || dis.live.length ? [JSON.stringify(dis)] : []);
+    live: ['v3-reset', 'v3-panel-toggle', 'v3-tab-view', 'v3-tab-light', 'v3-tab-tour'].filter((h) => document.querySelector(`[data-pc="${h}"]`).disabled), roofOff: document.querySelector('[data-pc="v3-roof"]').disabled }), LATER);
+  R.check(`${T}: later controls disabled (time, 4 presets, season, room finder, tour start / pause / stop, speed radios${ROOF_LIVE ? '' : ', Roof'}); Reset, panel toggle and tabs live${ROOF_LIVE ? ', Roof switch enabled (F4-T2)' : ''}`, dis.hooks.length || dis.speed.length || dis.live.length || (ROOF_LIVE && dis.roofOff) ? [JSON.stringify(dis)] : []);
   // looks disabled: computed styles (TL condition 1) and pixels, disabled vs the same control enabled
   const css = async () => S.page.evaluate(() => { const v = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), q = (h) => document.querySelector(`[data-pc="${h}"]`), cs = (e) => getComputedStyle(e);
     const toRgb = (hex) => { const d = document.createElement('i'); d.style.color = hex; document.body.appendChild(d); const c = getComputedStyle(d).color; d.remove(); return c; };
@@ -366,7 +368,7 @@ await guard('G controls', async () => {
   R.check(`${T}: disabled Light controls look disabled: slider not-allowed with no accent thumb (pixels), readout --ink-3, selects --sunk / --ink-3 / not-allowed, preset icons <= 0.5 opacity`, f);
   // every disabled control renders differently from the same control enabled
   const g = [];
-  for (const [tab, hooks] of [['light', ['v3-preset-morning', 'v3-preset-night', 'v3-season']], ['tour', ['v3-room', 'v3-tour-start', 'v3-tour-pause', 'css:[data-pc="v3-tour-speed"]']], ['view', ['css:.pc-switch:has([data-pc="v3-roof"])']]]) {
+  for (const [tab, hooks] of [['light', ['v3-preset-morning', 'v3-preset-night', 'v3-season']], ['tour', ['v3-room', 'v3-tour-start', 'v3-tour-pause', 'css:[data-pc="v3-tour-speed"]']]].concat(ROOF_LIVE ? [] : [['view', ['css:.pc-switch:has([data-pc="v3-roof"])']]])) {
     await S.act('v3-tab-' + tab);
     for (const h of hooks) {
       const sel = h.startsWith('css:') ? h.slice(4) : `[data-pc="${h}"]`, set = (on) => S.page.evaluate(([s, on]) => { const e = document.querySelector(s); (e.matches('input,select,button') ? [e] : [...e.querySelectorAll('input')]).forEach((x) => { x.disabled = !on; }); }, [sel, on]);
@@ -375,7 +377,13 @@ await guard('G controls', async () => {
     }
     if (tab === 'light' || tab === 'tour') await S.shot(`g-${tab}-disabled`);
   }
-  R.check(`${T}: each disabled control (presets, season, room finder, tour start / pause, speed radios, Roof) renders differently from itself enabled`, g);
+  R.check(`${T}: each disabled control (presets, season, room finder, tour start / pause, speed radios${ROOF_LIVE ? '' : ', Roof'}) renders differently from itself enabled`, g);
+  if (ROOF_LIVE) { // F4-T2: the Roof switch is live: a tap turns the roof on (state, roof group shown with All) and changes the render
+    await S.act('v3-tab-view'); await S.act(pick('all')); await ready(S); const c0 = await pixels(S, '[data-pc="v3-canvas"]'), i0 = await info(S);
+    await S.act('v3-roof'); await ready(S); const c1 = await pixels(S, '[data-pc="v3-canvas"]'), i1 = await info(S), v = await visOnly(S);
+    const roofG = (v.groups.find((x) => x[0] === 'roof') || [])[1];
+    R.check(`${T}: Roof switch (F4-T2): a tap turns the roof on (roof group visible with All) and the render changes`, !i0.roof && i1.roof && roofG === true && differ(c0, c1) ? [] : [JSON.stringify({ before: i0.roof, after: i1.roof, roofG, differ: differ(c0, c1) })]);
+    await S.act('v3-roof'); await ready(S); }
   // taps on disabled controls do nothing
   await S.act('v3-tab-light');
   const before = await S.page.evaluate(() => [document.querySelector('[data-pc="v3-time"]').value, document.querySelector('[data-pc="v3-time-out"]').textContent]);

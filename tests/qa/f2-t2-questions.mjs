@@ -98,8 +98,10 @@ try {
     await S.act(lab('q-pool-size', 'M')); R.check(`${V} A Q16 size M`, (await S.ans()).pool.size === 'M'); await sync(S, 'A Q16 M');
     await S.act('q-pool'); R.check(`${V} A Q16 pool off, sizes disabled, M kept`, (await S.ans()).pool.on === false && (await S.ans()).pool.size === 'M'); await sync(S, 'A Q16 off');
     await S.act('q-pool'); await sync(S, 'A Q16 on');
-    await S.act('q-wall'); await S.act(lab('q-gate', 'left')); await S.act('q-seating');
-    { const a = await S.ans(); R.check(`${V} A Q17 wall off, gate left, seating off`, !a.extras.wall && a.extras.gate === 'left' && !a.extras.seating); } await sync(S, 'A Q17');
+    // F4-T2 (PM round 10 Q7): the gate is chosen while the wall is on; with the wall off it is disabled and kept
+    await S.act(lab('q-gate', 'left')); await S.act('q-wall'); await S.act('q-seating');
+    { const a = await S.ans(), q7 = await S.page.evaluate(() => typeof PC.site.gateU === 'function'), dis = await S.page.evaluate(() => [...document.querySelectorAll('[data-pc="q-gate"] input')].every((i) => i.disabled));
+      R.check(`${V} A Q17 gate left, wall off${q7 ? ' (gate disabled, left kept)' : ''}, seating off`, !a.extras.wall && a.extras.gate === 'left' && !a.extras.seating && dis === q7); } await sync(S, 'A Q17');
     // nothing stale after a unit switch (both ways) and after Resume
     { const a0 = await S.ans(); await S.act('unit-m'); await sync(S, 'A unit -> m'); await S.act('unit-ft'); await sync(S, 'A unit -> ft');
       R.check(`${V} A unit switches m -> ft never commit a length`, eq({ ...(await S.ans()), unit: 'x' }, { ...a0, unit: 'x' })); }
