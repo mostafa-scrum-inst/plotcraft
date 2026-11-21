@@ -1,7 +1,14 @@
 # PlotCraft — Product goals and user stories (prototype)
 
-Owner: PM. Source: `docs/00-brief.md`. Status: approved by the CTO (round 2); round 3 edits made at the F1 feature review; round 4 edits apply the client's binding decisions `docs/01-product/client-decisions.md` (CD-1 to CD-3); round 5 edits made at the F2 feature review; rounds 6 and 7 fix user-facing texts at the F3-T2 and F3-T3 plan reviews; round 8 edits made at the F3 feature review; round 9 fixes the stage-5 level selector labels at the F4-T1 plan review; round 10 applies CD-4 / CD-5 and answers the F4-T2 plan questions; round 11 records the default-camera decision and the vegetation-shortfall warning at the F4-T3 start.
+Owner: PM. Source: `docs/00-brief.md`. Status: approved by the CTO (round 2); round 3 edits made at the F1 feature review; round 4 edits apply the client's binding decisions `docs/01-product/client-decisions.md` (CD-1 to CD-3); round 5 edits made at the F2 feature review; rounds 6 and 7 fix user-facing texts at the F3-T2 and F3-T3 plan reviews; round 8 edits made at the F3 feature review; round 9 fixes the stage-5 level selector labels at the F4-T1 plan review; round 10 applies CD-4 / CD-5 and answers the F4-T2 plan questions; round 11 records the default-camera decision and the vegetation-shortfall warning at the F4-T3 start; round 12 fixes the room-finder caption and dropdown state at the F5-T1 plan.
 This document says **what** and **how we know it works**. How it is built is the Tech Lead's call.
+
+## Changes in round 12 (2026-11-21, F5-T1 plan: room-finder caption and dropdown state; no story IDs changed)
+
+| Item | Decision |
+|---|---|
+| Q6 caption text | **Room name + level**, not the name alone: "Bedroom 2 · First floor". The room name is the plans' name; the level is the full name (`LEVEL_LABEL`, as the floor tabs and the level selector's screen-reader names give it); the separator is " · ". Reason: on a phone the panel is often collapsed, so the level selector is not visible, and the client watching needs to know which floor this is. The F5-T2 tour uses the same caption helper and format (F5-S2). If the caption overflows at 360 px, the room name stays whole and the level part is truncated with an ellipsis (Designer checks the shot with "Master bedroom · Basement"). |
+| Q7 dropdown after a choice | **Confirmed as FS proposed.** The select shows the chosen room until the selection is cleared (by "All", another level, Reset view, "Go to room…" or a rebuild); then it shows "Go to room…" again. Choosing the same room again does nothing (a native select fires no change). |
 
 ## Changes in round 11 (2026-11-21, F4-T3 start: default camera; F4-S2 / F4-S3 checked; no story IDs changed)
 
@@ -485,7 +492,7 @@ Draw the land as a polygon with live measurements; includes the stage navigation
 
 **F5-S1 Jump to a room.** As an architect, I want to pick a room from a dropdown so that the camera takes me straight to it.
 - A dropdown in the 3D view lists every room grouped by level, using the names from the plans.
-- Selecting a room flies the camera smoothly (about 1–2 s, no jump cut) to a view where that room is centred and its interior visible; the roof is switched off, levels above the room are hidden (for a basement room the ground is opened, 3.2), and the room is highlighted or labelled.
+- Selecting a room flies the camera smoothly (about 1–2 s, no jump cut) to a view where that room is centred and its interior visible; the roof is switched off, levels above the room are hidden (for a basement room the ground is opened, 3.2), and the room is highlighted, with a caption giving its name and level ("Bedroom 2 · First floor", round 12). The dropdown keeps showing the chosen room until the selection is cleared, then shows "Go to room…" again.
 - Selecting another room during a flight redirects smoothly; any manual camera gesture cancels the flight and gives control back immediately.
 - The dropdown is usable on a phone (>= 44 px target).
 
