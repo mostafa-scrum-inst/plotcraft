@@ -139,3 +139,25 @@ Reviewed: commit `e0fd473`, `designer-fix.md`, `fs-outerk.md`, the CSS and const
 Nothing blocks the publish.
 
 VERDICT: APPROVED
+
+## Round 2 — QA bug fixes F4T1-1 and F4T1-2 (TL, 2026-11-21)
+
+Reviewed: commit `ff48039` (`scene.js`, `camera.js`, `load3d.mjs`, `scene.test`, `camera.test`) and `outcome.md` §6.
+
+**F4T1-1 (two frames on returning to stage 5): fix approved.**
+- **The cause is right.** `enter` runs while stage 4's sample strip is still laid out. `open()` measured the canvas at 641 px; the strip then hid and the ResizeObserver reported 690 px, a real size change, so a second frame was drawn.
+- **The fix** has three parts:
+  - `resize()` is a no-op when the client size and the capped pixel ratio are unchanged (this also saves a `setSize` that would clear the buffer);
+  - a same-key reopen no longer measures in `open()`;
+  - `frame()` calls `resize(true)` just before it draws: it measures the settled layout and requests no new frame.
+- **The first build still measures in `open()`**, so the reset pose gets an aspect. A later settle only re-clamps that pose; it is not re-fitted. The difference is the strip's ~50 px, which is acceptable.
+- **The ResizeObserver path is intact.** A real size change still updates the camera aspect and limits and invalidates. So does a pixel-ratio change, which is tracked in `S.pr`.
+- **Tests and mutations.** The `scene.test` cases cover a layout shift between open and frame (one render at the settled size), an unchanged observer callback (no `setSize`, no frame) and a real change (one frame). Removing the same-size check or the in-frame measure each fails a test.
+
+**F4T1-2 (a mouse click did not focus the canvas): fix approved.**
+- `down()` calls `canvas.focus({ preventScroll: true })` for mouse pointers only, before its `preventDefault`. Touch does not focus, so no on-screen keyboard appears. This matches A-12 ("keys on the focused canvas").
+- `camera.test` checks both cases, and the mutation that removes the call is caught.
+
+**Probes.** `node build.mjs && node tests/run-all.mjs --three --e2e --qa --only view3d,f4-t1`: all green in 57.3 s. That is three 0 fail, view3d 46/0, view3d-real 38/0, QA F4-T1 model 10/0 and view 163/0. QA's KNOWN entries have been removed (`f4-t1-view.mjs` line 20 comment). FS full run exit 0 in 486.9 s.
+
+VERDICT: APPROVED
