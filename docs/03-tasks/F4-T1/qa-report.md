@@ -285,4 +285,34 @@ Both are marked KNOWN in `f4-t1-view.mjs` (`R.known`), so they are listed and do
 - `g-stage2-steppers-limit`;
 - `g-stage2-stepper-forced-disabled`.
 
+## Round 1 addendum: re-test of F4T1-1 and F4T1-2 (FS fix, commit `ff48039`)
+
+Date: 2026-11-21. The two KNOWN entries are removed from `f4-t1-view.mjs`, so both checks now fail the run if the bug
+returns.
+
+**F4T1-1 (two frames on return to stage 5): fixed.**
+- My check now runs at 1280x800 and at 360x640 (D runs at both viewports). In both, Back to stage 4 and then Next draws
+  **exactly one** frame, with no rebuild and the pose kept.
+- The path covers the cause FS found: the sample strip is still shown on stage 4 when the view reopens.
+- Against the pre-fix `scene.js` / `camera.js` (from `1a46677`, on a throwaway copy), both viewports fail with `renders +2`.
+- New own check: the fix makes `resize()` a no-op when the size is unchanged, so I test that a real size change still
+  draws.
+  - With the viewport 40 px narrower, the view redraws at the new canvas size (backing store = CSS size), then stays
+    idle (0 rAF, 0 renders).
+  - Mutation "`resize()` never applies after the first size": caught (2 failed).
+
+**F4T1-2 (a mouse click does not focus the canvas): fixed.**
+- At 1280x800 a click on the model focuses `v3-canvas`.
+- The arrow keys (exactly 5°) and `+` / `-` (exactly 1.1) work.
+- The page does not scroll: `scrollY` 0 and `visualViewport.scale` 1 after the gesture run, which includes clicks.
+- It fails on the pre-fix copy.
+
+**Run:** `node tests/run-all.mjs --qa --only f4-t1`: exit 0 in 62.7 s.
+- model 10/0;
+- view 174/0 (was 163; the new checks are D at 360x640 and the resize checks);
+- no KNOWN entries.
+
+No full run (the FS full run after the fix: 486.9 s, exit 0). The runtime point in section 8 is unchanged and waits for
+the TL's ruling.
+
 VERDICT: PASSED

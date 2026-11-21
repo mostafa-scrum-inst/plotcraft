@@ -17,9 +17,7 @@ import * as Q from './f2-t1-ref.mjs';
 import * as H from './f4-t1-ref.mjs';
 
 const R = collector('F4-T1 view');
-// Open minor bugs accepted by docs/03-tasks/F4-T1/qa-report.md (listed as KNOWN, they do not fail the run):
-R.known.push({ re: /return to stage 5: exactly one frame.*renders \+2, builds (\d+) -> \1,/, bug: 'F4T1-1 second identical frame on return (ResizeObserver)' });
-R.known.push({ re: /a click on the model focuses the canvas/, bug: 'F4T1-2 a mouse click does not focus the canvas' });
+// F4T1-1 (two frames on return) and F4T1-2 (a click did not focus the canvas): fixed by FS, KNOWN entries removed (qa-report Round 1).
 const noShots = process.argv.includes('--no-shots'), shots = join(ROOT, 'tests/qa/shots/f4-t1');
 if (!noShots) mkdirSync(shots, { recursive: true });
 const session = sessions({ R, shots, noShots });
@@ -260,12 +258,13 @@ async function gestures(vp) {
 for (const vp of [VP.phone, VP.land, VP.desk]) await guard(`C ${vp.tag}`, () => gestures(vp));
 
 // ================= D: render loop (real r128) =================
-await guard('D loop', async () => {
-  const S = await session(browser, VP.desk, { three: 'real', init: [RAF] }), T = 'D 1280x800 real';
+for (const vp of [VP.desk, VP.phone]) await guard(`D loop ${vp.tag}`, async () => {   // 360x640 added in Round 1 (F4T1-1 re-test: the stage-4 strip case)
+  const S = await session(browser, vp, { three: 'real', init: [RAF] }), T = `D ${vp.tag} real`;
   await to5(S);
   const idle = async (ms = 600) => { await S.page.evaluate(() => { window.__raf = 0; }); const r0 = (await info(S)).renders; await S.page.waitForTimeout(ms); const i = await info(S); return { raf: i.raf, renders: i.renders - r0 }; };   // the idle span is the thing under test
   let z = await idle(); R.check(`${T}: idle open view: 0 rAF and 0 renders in 600 ms`, z.raf === 0 && z.renders === 0 ? [] : [JSON.stringify(z)]);
-  await S.page.mouse.move(640, 300); await S.page.mouse.down(); await S.page.mouse.move(700, 320, { steps: 4 }); await S.page.mouse.up(); await S.settle();
+  const [cx, cy] = await S.page.evaluate(() => { const r = document.querySelector('[data-pc="v3-canvas"]').getBoundingClientRect(); return [r.left + r.width * 0.3, r.top + r.height * 0.3]; });
+  await S.page.mouse.move(cx, cy); await S.page.mouse.down(); await S.page.mouse.move(cx + 40, cy + 20, { steps: 4 }); await S.page.mouse.up(); await S.settle();
   const pose = (await info(S)).pose, b0 = (await info(S)).builds;
   await S.act('btn-back'); z = await idle();
   const st4 = await S.stages();
@@ -274,7 +273,7 @@ await guard('D loop', async () => {
   R.check(`${T}: return to stage 5: exactly one frame, no rebuild (same key), pose kept`, i.renders === r1 + 1 && i.builds === b0 && poseEq(i.pose, pose) ? [] : [`renders +${i.renders - r1}, builds ${b0} -> ${i.builds}, ${pf(pose)} -> ${pf(i.pose)}`]);
   // hidden: input while hidden draws nothing; becoming visible draws one frame
   await S.page.evaluate(() => { window.__vis = 'hidden'; Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => window.__vis }); Object.defineProperty(document, 'hidden', { configurable: true, get: () => window.__vis === 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); window.__raf = 0; });
-  const r2 = (await info(S)).renders; await S.page.mouse.move(640, 300); await S.page.mouse.wheel(0, 200); await S.page.waitForTimeout(400);
+  const r2 = (await info(S)).renders; await S.page.mouse.move(cx, cy); await S.page.mouse.wheel(0, 200); await S.page.waitForTimeout(400);
   i = await info(S); const hid = { raf: i.raf, renders: i.renders - r2, radiusChanged: i.pose.radius !== pose.radius };
   await S.page.evaluate(() => { window.__vis = 'visible'; document.dispatchEvent(new Event('visibilitychange')); }); await S.settle(); await S.settle();
   i = await info(S);
@@ -286,6 +285,11 @@ await guard('D loop', async () => {
   const { X } = await expect(S);
   R.check(`${T}: Q10 changed in stage 2 (terracotta) and back to 5: one rebuild, pose kept, walls terracotta`, ans.exterior === 'terracotta' && i.builds === bq + 1 && poseEq(i.pose, pk) ? H.shellProblems(await world(S), X, D) : [`exterior ${ans.exterior}, builds ${bq} -> ${i.builds}, ${pf(pk)} -> ${pf(i.pose)}`]);
   z = await idle(); R.check(`${T}: idle after the rebuild: 0 rAF, 0 renders`, z.raf === 0 && z.renders === 0 ? [] : [JSON.stringify(z)]);
+  // Round 1 (F4T1-1 fix makes resize() a no-op for an unchanged size): a real size change still redraws once at the new size
+  { const r0 = (await info(S)).renders; await S.page.setViewportSize({ width: vp.w - 40, height: vp.h }); await S.until(async () => (await info(S)).renders > r0, 3000); await S.settle();
+    const g = await S.page.evaluate(() => { const c = document.querySelector('[data-pc="v3-canvas"]'); return { bw: c.width, cw: c.clientWidth, renders: PC.debug.scene().renders, size: PC.debug.scene().size }; });
+    R.check(`${T}: viewport 40 px narrower: redrawn (${g.renders - r0} frame(s)) at the new canvas size`, g.renders - r0 >= 1 && g.renders - r0 <= 2 && g.bw === g.cw && g.size[0] === g.cw ? [] : [JSON.stringify(g)]);
+    z = await idle(); R.check(`${T}: idle after the resize: 0 rAF, 0 renders`, z.raf === 0 && z.renders === 0 ? [] : [JSON.stringify(z)]); }
   await S.end(T);
 });
 
