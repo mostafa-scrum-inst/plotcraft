@@ -1,4 +1,4 @@
-# PlotCraft — resume note (2026-11-21, end of batch 8; client asked to continue straight into batch 9)
+# PlotCraft — resume note (2026-11-21, end of batch 9; client asked to continue through all batches)
 
 Everything lives on disk under /home/claude/plotcraft (cloud sessions: /home/user/plotcraft, repo mostafa-scrum-inst/plotcraft). Read this, then the tail of docs/status.md. All role agents run on **Opus 5.5** (docs/TEAM-PROTOCOL.md, Models section). Client wants work in **batches, pausing after each**.
 
@@ -31,10 +31,16 @@ Everything lives on disk under /home/claude/plotcraft (cloud sessions: /home/use
 - Client questions OPEN (cards sent 2026-11-21): (1) 8 rooms per floor enough? PM rec raise to 10; (2) hall access: PM rec non-blocking warning; (3) CTO: phone check right after F4-T1 (rec yes). Answers go into client-decisions.md / F1.md; work from (1)/(2) joins the F3 follow-up bundle.
 - CTO conditions for F4: H1-H6 in F3.md (mock first, vendored r128 from npm for tests, house model from approved plans + PC.layout.core, Q14 test, A-11/A-13 rules, phone look at F4-T1 publish before F4 review). F4-plan.md riders added by TL.
 
-## Next batch (batch 9): F4-T1 (first real three.js 3D)
-1. TL: place the F3 follow-up bundle (PM rec F4-T2) and the client answers when they arrive.
-2. F4-T1 per F4-plan.md + CTO H1-H6: plan -> TL plan review -> implement -> TL review -> QA -> outcome. Environment: cdnjs blocked here, npm registry reachable (tests/vendor/three-r128.min.js).
-3. Republish for the phone check; testing-steps doc.
+## Batch 9 result: F4-T1 DONE
+- First real 3D (house model from approved plans + PC.layout.core, mock-first, vendored r128 tests, render on demand, level selector, camera). TL plan/impl/outcome APPROVED; QA PASSED (F4T1-1/-2 fixed). Full run 487 s at --jobs 2; TL ruling: default --jobs 3 (target 420 s) after a 2nd green --jobs 3 run (QA's first: 366.9 s) — FS switches as first commit of F4-T2.
+- Client decisions CD-4 (10 rooms/floor), CD-5 (hall-access warning), CD-6 (phone check after F4-T1). cdnjs now reachable here (identical to vendored r128).
+- Republished (same URL): https://claude.ai/artifact/LDbG9XdU1UeAMcVwqmxAB9 ; phone check doc https://claude.ai/artifact/ScLvtVirdhoeCwEwoB1CLv. F4 feature review waits for the client's phone answers (ask again after F4-T3 if missing).
+- Client instruction 2026-11-21 18:09: continue through all batches until the full app is done; summary + republish + testing steps at each batch end, no pause.
+
+## Next batch (batch 10): F4-T2
+1. Step 0: --jobs 3 switch (if 2nd run green), F3 follow-up bundle (PM round 8 items 1,2,4,5,9) + CD-4 (10 rooms, TL re-proves generator) + CD-5 (hall-access warning) + CTO debt 6 + applyEdit guard + TL item 2 (stages 1-2 refusal test).
+2. F4-T2 proper: roof, furniture (PC.furnish per A-11 with 1e-9 slack), outdoor items, vegetation.
+3. Then batch 11: F4-T3 (time of day, seasons) + F4 feature review; then F5.
 
 ## Known limits owned by Designer F5-T3
 Overridden-edge label pile-up; legend wraps at 1280x800 with "* set by you"; area label wider than narrow footprints; no Parking/Pool legend entries; pool-size note wrap at 360 px.
