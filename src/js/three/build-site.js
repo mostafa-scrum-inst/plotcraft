@@ -7,7 +7,12 @@
      (paving), a 0.9 x 0.9 x 0.75 m table and two 1.6 x 0.45 x 0.45 m benches 0.9 m either side (seating), parallel
      to the nearest facade; entrance step 1.2 x 0.6 x 0.15 m in front of the door (trim); north needle: two flat
      triangles 0.04 m high (BoxBatch.addFlat), the N half in northMarker, the S half in poolRim, length L.
-   - "poolWater": a flush opaque PlaneGeometry over exactly the pool rectangle at Y 0.03 (rotated -PI/2 about X). */
+   - "poolWater": a flush opaque PlaneGeometry over exactly the pool rectangle at Y 0.03 (rotated -PI/2 about X).
+   - Vegetation (F4-T3; A-11; Designer F4-T3 plan 1): InstancedMesh "trunks", "canopies", "shrubs" from the model's
+     trees / shrubs, geometry from PC.data.vegetation (trunk cylinder, canopy cone with its base at canopyY0, shrub
+     cone), one instance matrix per item = translate (u, base x s, v) x uniform scale s. frustumCulled false (the
+     instances spread beyond the geometry's own bounds); cast, never receive. A kind with no items gets no mesh.
+     Materials mats.trunk / mats.canopy / mats.shrub are recoloured by applyLook (look.js). */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
@@ -19,6 +24,28 @@
     var r = house.northDeg * Math.PI / 180, nu = Math.sin(r), nv = Math.cos(r), L = nm.L, w = 0.175 * L, c = house.center;
     var T = function (du, dv) { return [nm.u + du - c[0], -(nm.v + dv - c[1])]; };
     return { tipN: T(nu * L / 2, nv * L / 2), tipS: T(-nu * L / 2, -nv * L / 2), east: T(nv * w, -nu * w), west: T(-nv * w, nu * w), L: L };
+  };
+
+  three.buildVegetation = function (house, g, mats) {
+    var V = PC.data.vegetation, T = V.tree, S = V.shrub, cu = house.center[0], cv = house.center[1], out = [];
+    function inst(name, geo, mat, items, y0) {
+      if (!items.length) return;
+      var mesh = new THREE.InstancedMesh(geo(), mat, items.length), m = new THREE.Matrix4(), q = new THREE.Quaternion();
+      items.forEach(function (it, i) {
+        var s = it[2];
+        m.compose(new THREE.Vector3(it[0] - cu, y0 * s, -(it[1] - cv)), q, new THREE.Vector3(s, s, s));
+        mesh.setMatrixAt(i, m);
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.name = name; mesh.frustumCulled = false; mesh.castShadow = true; mesh.receiveShadow = false;
+      g.add(mesh); out.push(mesh);
+    }
+    var trees = house.site.trees, shrubs = house.site.shrubs;
+    // geometries are centred on their own origin: the base sits half a height below it
+    inst('trunks', function () { return new THREE.CylinderGeometry(T.trunkR, T.trunkR, T.trunkH, T.trunkSeg); }, mats.trunk, trees, T.trunkH / 2);
+    inst('canopies', function () { return new THREE.ConeGeometry(T.canopyR, T.canopyH, T.canopySeg); }, mats.canopy, trees, T.canopyY0 + T.canopyH / 2);
+    inst('shrubs', function () { return new THREE.ConeGeometry(S.r, S.h, S.seg); }, mats.shrub, shrubs, S.h / 2);
+    return out;
   };
 
   three.buildSite = function (house, world, mats) {
@@ -81,6 +108,7 @@
       b.addFlat([nd.tipN, nd.east, nd.west], 0, 0.04, SC.northMarker);
       b.addFlat([nd.tipS, nd.west, nd.east], 0, 0.04, SC.poolRim);
     }
+    three.buildVegetation(house, g, mats).forEach(function (x) { made.push(x); });
     var m = b.build(mats.batch, 'siteBatch');
     if (m) { g.add(m); made.push(m); }
     if (q) {

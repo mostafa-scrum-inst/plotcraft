@@ -30,6 +30,7 @@
     PARKING: { w: 2.5, d: 5.0, area: 12.5 },
     POOL: { S: { w: 3, d: 6, area: 18 }, M: { w: 4, d: 8, area: 32 }, L: { w: 5, d: 10, area: 50 } },
     POOL_CLEAR: 1,
+    VEG_SHORT: 0.8,                    // F4-T3, PM round 11: warn when placed planting < 80 % of veg.area
     GRID: { m: { square: 1, snap: 0.5 }, ft: { square: 1.524, snap: 0.3048 } },   // ft mode: 5 ft squares, snap 1 ft
     PLAN_SNAP: { m: 0.5, ft: 0.3048 },
     PLAN_EDGE_SNAP: 0.3,                          // 4.4: a dragged edge snaps to a neighbouring edge within 0.3 m first (A-15)

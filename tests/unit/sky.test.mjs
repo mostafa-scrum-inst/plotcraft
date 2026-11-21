@@ -112,3 +112,15 @@ test('PC.sky.mix is the A-10 rule (round per channel, upper case)', () => {
   assert.equal(PC.sky.mix('#0a0b0c', '#0A0B0C', 0.3), '#0A0B0C');
   assert.equal(PC.sky.mix('#102030', '#203040', 0), '#102030');
 });
+
+test('night: the light is the moon (-s.x, |s.y|, -s.z) of the A-13 path, then Y kept at 0.15 (horizontal part rescaled)', () => {
+  for (const s of SEASONS) for (const N of [0, 90, 213]) for (const h of [0, 2, 4.5, 19.5, 21, 22, 23.75]) {
+    const E = SKY.seasons[s].elevMax * D, n = [Math.sin(N * D), 0, -Math.cos(N * D)], e = [Math.cos(N * D), 0, Math.sin(N * D)], a = (h - 6) / 12 * Math.PI;
+    const p = [0, 1, 2].map((i) => e[i] * Math.cos(a) + ((i === 1 ? Math.sin(E) : 0) - n[i] * Math.cos(E)) * Math.sin(a));
+    assert.ok(p[1] < 0, 'below the horizon');
+    let m = [-p[0], -p[1], -p[2]];
+    if (m[1] < 0.15) { const k = Math.sqrt(1 - 0.0225) / Math.hypot(m[0], m[2]); m = [m[0] * k, 0.15, m[2] * k]; }
+    const L = K(h, s, N);
+    assert.equal(L.moon, true); near(L.sunDir, m, 1e-12, `${s} ${h} N ${N}`);
+  }
+});

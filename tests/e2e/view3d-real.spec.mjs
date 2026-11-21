@@ -2,7 +2,8 @@
 // only on the exact cdnjs URL) in headless Chrome on SwiftShader WebGL. Budget <= 30 s.
 // Part A (H1 checkpoint): the strict mock (tests/three-mock.js) conforms to r128 — every whitelisted member exists on a
 // real instance, and the mock's maths gives r128's numbers.
-// Usage: node tests/e2e/view3d-real.spec.mjs [--shots]   (--shots writes docs/03-tasks/F4-T1/shots/, never in run-all)
+// Usage: node tests/e2e/view3d-real.spec.mjs [--shots]   (--shots writes docs/03-tasks/F4-T3/shots/, never in run-all;
+// the F4-T1 shots stay as that task's record)
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -12,7 +13,7 @@ import { ROOT } from '../helpers/load.mjs';
 import { FACTORIES, MATHS } from '../helpers/three-factories.mjs';
 
 const T = suite('e2e view3d-real'), browser = await launch(), SHOTS = process.argv.includes('--shots');
-const SHOT_DIR = join(ROOT, 'docs', '03-tasks', 'F4-T1', 'shots');
+const SHOT_DIR = join(ROOT, 'docs', '03-tasks', 'F4-T3', 'shots');
 const countRaf = () => { const o = window.requestAnimationFrame.bind(window); window.__raf = 0; window.requestAnimationFrame = (cb) => { window.__raf++; return o(cb); }; };
 const ready = (page) => page.waitForFunction(() => { const i = PC.debug.scene(); return i.renders > 0 && !i.frame && !i.building && !i.lost; }, null, { timeout: 15000 });
 
@@ -29,7 +30,39 @@ const sample = (page) => page.evaluate(() => {
   i.world.visible = true; i.renderNow();
   return { out, sky, calls: i.renderer.info.render.calls, pr: i.renderer.getPixelRatio(), W, cw: i.renderer.domElement.clientWidth, meshes: i.meshCount };
 });
-const bg = (page) => page.evaluate(() => { const h = PC.three.noonLook().background; return [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16)); });
+const bg = (page) => page.evaluate(() => { const h = PC.sky.compute(12, 'summer', 0).background; return [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16)); });
+// F4-T3: renders now and reads the whole buffer: mean luma and a checksum (for "same frame" / "darker" checks).
+const frame = (page, prep) => page.evaluate((prep) => {
+  const i = PC.debug.scene(), gl = i.renderer.getContext();
+  if (prep) (new Function('i', prep))(i);
+  i.renderNow();
+  const W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, px = new Uint8Array(W * H * 4);
+  gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  let sum = 0, h = 0;
+  for (let k = 0; k < px.length; k += 4) { sum += 0.2126 * px[k] + 0.7152 * px[k + 1] + 0.0722 * px[k + 2]; h = (h * 31 + px[k] + px[k + 1] * 7 + px[k + 2] * 13) >>> 0; }
+  return { luma: sum / (W * H), hash: h };
+}, prep || '');
+// F4-T3 look checks on the real r128 (TL F4-T3 plan review Q7 / other checks): in this page load, no new launch.
+async function looks(page, tag) {
+  const set = (hour, season) => page.evaluate((l) => PC.view3d.setLook(l), { hour, season });
+  const L = {};
+  for (const [k, h] of [['noon', 12], ['evening', 17.5], ['night', 22]]) { await set(h, 'summer'); L[k] = (await frame(page)).luma; }
+  T.ok(L.noon > L.evening && L.evening > L.night, `${tag} mean luma noon ${L.noon.toFixed(1)} > evening ${L.evening.toFixed(1)} > night ${L.night.toFixed(1)}`);
+  // vegetation shadows at 17.5 h: casting trunks / canopies / shrubs darken the frame
+  await set(17.5, 'summer');
+  const lit = await frame(page, "['trunks','canopies','shrubs'].forEach((n) => { const m = i.world.getObjectByName(n); if (m) m.castShadow = false; });");
+  const shaded = await frame(page, "['trunks','canopies','shrubs'].forEach((n) => { const m = i.world.getObjectByName(n); if (m) m.castShadow = true; });");
+  T.ok(shaded.luma < lit.luma - 0.05, `${tag} 17.5 h: vegetation shadows darken the ground (${shaded.luma.toFixed(2)} < ${lit.luma.toFixed(2)})`);
+  // winter: no canopy pixels (= the frame with the canopies removed); summer: canopies show
+  await set(12, 'winter');
+  const w = await frame(page), wNo = await frame(page, "i.world.getObjectByName('canopies').visible = false;");
+  await set(12, 'summer');
+  const sm = await frame(page), smNo = await frame(page, "i.world.getObjectByName('canopies').visible = false;");
+  await page.evaluate(() => PC.view3d.setLook({ hour: 12, season: 'summer' }));
+  T.ok(w.hash === wNo.hash && sm.hash !== smNo.hash, `${tag} winter frame has no canopy pixels; summer frame has`);
+  let casters = await page.evaluate(() => { let n = 0; PC.debug.scene().scene.traverse((o) => { if (o.isDirectionalLight && o.castShadow) n++; if (o.isLight && !o.isDirectionalLight && o.castShadow) n += 100; }); return n; });
+  T.eq(casters, 1, `${tag} one shadow-casting directional light`);
+}
 function notBlank(res, back, msg) {
   const differ = res.out.filter((c) => c.some((v, k) => Math.abs(v - back[k]) > 12)).length;
   const distinct = new Set(res.out.map((c) => c.join())).size;
@@ -94,6 +127,7 @@ async function scene(vp, dpr) {
   T.eq(await page.evaluate(() => window.__raf), 0, `${tag} hidden: no requestAnimationFrame`);
   await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' }); document.dispatchEvent(new Event('visibilitychange')); });
   await ready(page);
+  await looks(page, tag);
   if (SHOTS) {
     mkdirSync(SHOT_DIR, { recursive: true });
     const exts = vp.w > 900 ? ['sand', 'white', 'terracotta', 'grey'] : ['sand'];
@@ -104,6 +138,21 @@ async function scene(vp, dpr) {
       await ready(page);
       await page.screenshot({ path: join(SHOT_DIR, `${vp.tag}-${ext}-noon.png`) });
     }
+    for (const [name, hour, season] of [['morning', 8, 'spring'], ['evening', 17.5, 'summer'], ['night', 22, 'summer'], ['autumn', 12, 'autumn'], ['winter', 12, 'winter']]) {
+      // through the Light controls, so the panel in the shot shows the look
+      if (await page.locator('[data-pc="v3-tab-light"]').isVisible()) await page.locator('[data-pc="v3-tab-light"]').click();
+      await page.evaluate((l) => {
+        const t = document.querySelector('[data-pc="v3-time"]'), se = document.querySelector('[data-pc="v3-season"]');
+        t.value = String(l.hour); t.dispatchEvent(new Event('input', { bubbles: true }));
+        se.value = l.season; se.dispatchEvent(new Event('change', { bubbles: true }));
+      }, { hour, season });
+      await ready(page);
+      await page.screenshot({ path: join(SHOT_DIR, `${vp.tag}-${name}.png`) });
+    }
+    await page.evaluate(() => {
+      const t = document.querySelector('[data-pc="v3-time"]'), se = document.querySelector('[data-pc="v3-season"]');
+      t.value = '12'; t.dispatchEvent(new Event('input', { bubbles: true })); se.value = 'summer'; se.dispatchEvent(new Event('change', { bubbles: true }));
+    });
   }
   T.none(problems(), `${tag} no page errors, console errors or THREE. warnings`);
   await o.ctx.close();

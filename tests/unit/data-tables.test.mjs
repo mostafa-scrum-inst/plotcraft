@@ -188,3 +188,14 @@ test('F4-T3 vegetation table (Designer section 1): exact keys, sizes, counting a
   assert.ok(V.tree.trunkH > 1.2, 'bare tree stands above the 1.2 m wall');
   assert.equal(V.scale.length, 2); assert.ok(V.scale[0] >= 0.5 && V.scale[0] < V.scale[1] && V.scale[1] <= 1.5);
 });
+
+test('F4-T3 time-slider track (Designer plan 3): both gradients = PC.data.sky.keys, stop at h / 24 in the key background', () => {
+  const css = readFileSync(join(SRC, 'css/44-stage-3d.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const want = SKY.keys.map((k) => [k.background, Math.round(k.h / 24 * 100 * 1e4) / 1e4]);
+  for (const pseudo of ['::-webkit-slider-runnable-track', '::-moz-range-track']) {
+    const m = new RegExp('\\.pc-range--sky' + pseudo + '\\s*\\{[^}]*linear-gradient\\(to right, ([^)]*)\\)').exec(css);
+    assert.ok(m, pseudo);
+    const got = m[1].split(',').map((x) => x.trim().split(/\s+/)).map(([c, p]) => [c, parseFloat(p)]);
+    assert.deepEqual(got, want, pseudo);
+  }
+});

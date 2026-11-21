@@ -64,7 +64,8 @@
           entrance: { u: fp.u + fp.w / 2, v: fp.v, w: H.door },
           parking: copy(site.parking), pool: copy(site.pool),
           wall: !!a.extras.wall, gate: gu === null ? null : { u: gu, w: PC.C.SITE.gateW }, seating: copy(site.seating),
-          trees: [], shrubs: [], vegPct: site.veg ? site.veg.pct : 0,
+          trees: site.trees.map(function (t) { return t.slice(); }), shrubs: site.shrubs.map(function (t) { return t.slice(); }),
+          vegPct: site.veg ? site.veg.pct : 0, vegPlaced: site.vegPlaced,
           northMarker: copy(site.northMarker)
         }
       };

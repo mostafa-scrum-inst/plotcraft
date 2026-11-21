@@ -16,8 +16,9 @@ const ready = (page) => page.waitForFunction(() => { const i = PC.debug.scene();
 const info = (page) => page.evaluate(() => { const i = PC.debug.scene(); return { renders: i.renders, builds: i.builds, size: i.size, active: i.active, frame: i.frame, aspect: i.camera.aspect }; });
 const cam = (page) => page.evaluate(() => PC.debug.cam());
 const scroll = (page) => page.evaluate(() => [window.scrollX, window.scrollY, document.scrollingElement.scrollTop, window.visualViewport ? window.visualViewport.scale : 1]);
-const DISABLED = ['v3-time', 'v3-preset-morning', 'v3-preset-noon', 'v3-preset-evening', 'v3-preset-night', 'v3-season', 'v3-room', 'v3-tour-start', 'v3-tour-pause', 'v3-tour-stop'];
-const ENABLED = ['v3-reset', 'v3-panel-toggle', 'v3-tab-view', 'v3-tab-light', 'v3-tab-tour', 'v3-roof'];   // Roof enabled since F4-T2
+const DISABLED = ['v3-room', 'v3-tour-start', 'v3-tour-pause', 'v3-tour-stop'];   // F5 (room finder, tour)
+const ENABLED = ['v3-reset', 'v3-panel-toggle', 'v3-tab-view', 'v3-tab-light', 'v3-tab-tour', 'v3-roof',   // Roof enabled since F4-T2
+  'v3-time', 'v3-preset-morning', 'v3-preset-noon', 'v3-preset-evening', 'v3-preset-night', 'v3-season'];   // Light tab since F4-T3
 
 async function phone() {
   const vp = VIEWPORTS[0], tag = vp.tag + ' mock', o = await open(browser, vp, { three: 'mock', init: countRaf }), { page, act, hook, problems } = o;
@@ -37,18 +38,18 @@ async function phone() {
   T.ok(fill.same, `${tag} canvas rectangle = its wrap`);
   T.eq(fill.size, [...fill.client, false], `${tag} setSize(clientWidth, clientHeight, false)`);
   // controls: later tasks disabled, these enabled
-  T.eq(await page.evaluate((L) => L.map((h) => document.querySelector(`[data-pc="${h}"]`).disabled), DISABLED), DISABLED.map(() => true), `${tag} later-task controls disabled (time, presets, season, room, tour)`);
+  T.eq(await page.evaluate((L) => L.map((h) => document.querySelector(`[data-pc="${h}"]`).disabled), DISABLED), DISABLED.map(() => true), `${tag} later-task controls disabled (room, tour; F5)`);
   T.ok(await page.evaluate(() => [...document.querySelectorAll('[data-pc="v3-tour-speed"] input')].every((i) => i.disabled)), `${tag} tour speed disabled`);
-  T.eq(await page.evaluate((L) => L.map((h) => document.querySelector(`[data-pc="${h}"]`).disabled), ENABLED), ENABLED.map(() => false), `${tag} Reset, panel toggle, tabs and Roof (F4-T2) enabled`);
+  T.eq(await page.evaluate((L) => L.map((h) => document.querySelector(`[data-pc="${h}"]`).disabled), ENABLED), ENABLED.map(() => false), `${tag} Reset, panel toggle, tabs, Roof (F4-T2) and the Light tab (F4-T3) enabled`);
   // Designer (TL F4-T1 condition 1): the disabled controls look disabled (muted set of .pc-btn:disabled: sunk / ink-3)
   T.eq(await page.evaluate(() => {
     const q = (h) => document.querySelector(`[data-pc="${h}"]`), cs = (e, p) => getComputedStyle(e, p), root = cs(document.documentElement);
     const v = (n) => { const d = document.createElement('i'); d.style.color = root.getPropertyValue(n); document.body.append(d); const c = cs(d).color; d.remove(); return c; };
     const sunk = v('--sunk'), ink3 = v('--ink-3');
-    return [cs(q('v3-time')).cursor, cs(q('v3-time-out')).color === ink3,
-      ...['v3-season', 'v3-room'].map((h) => cs(q(h)).backgroundColor === sunk && cs(q(h)).color === ink3),
-      cs(q('v3-preset-noon').querySelector('.pc-i')).opacity];
-  }), ['not-allowed', true, true, true, '0.5'], `${tag} disabled slider, selects and preset icons drawn muted`);   // thumb / track: pseudo-elements, see designer-fix.md shots
+    // F4-T3 (Designer plan 3): the check moves to the controls that stay disabled; the live Light controls are not muted
+    return [cs(q('v3-room')).backgroundColor === sunk && cs(q('v3-room')).color === ink3, cs(q('v3-tour-start')).cursor,
+      cs(q('v3-time')).cursor, cs(q('v3-time-out')).color === ink3, cs(q('v3-season')).backgroundColor === sunk, cs(q('v3-preset-noon').querySelector('.pc-i')).opacity];
+  }), [true, 'not-allowed', 'pointer', false, false, '1'], `${tag} room finder and tour drawn muted; slider, season and presets live`);   // thumb / track: pseudo-elements, see designer-fix.md shots
   // level selector: PM round 9 labels, aria-labels, no overflow
   const lv = await page.evaluate(() => [...document.querySelectorAll('[data-pc="v3-level"] label')].map((l) => { const i = l.querySelector('input'), t = l.querySelector('.pc-seg__txt'); return [t.textContent, i.getAttribute('aria-label'), i.value, i.checked, i.disabled, t.scrollWidth <= t.clientWidth + 1]; }));
   T.eq(lv, [['All', 'All floors', 'all', true, false, true], ['Ground', 'Ground floor', 'G', false, false, true], ['First', 'First floor', '1', false, false, true]], `${tag} level labels, All selected on open, no overflow`);

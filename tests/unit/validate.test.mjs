@@ -89,8 +89,11 @@ test('warnings: clamped footprint, reduced vegetation, parking omitted, pool omi
   assert.match(w[1].text, /^Parking does not fit/);
   const sq = PC.store.defaults(); sq.plot = { pts: [[0, 0], [20, 0], [20, 20], [0, 20]], closed: true }; sq.ans.streetEdge = 0; sq.ans.pool = { on: true, size: 'L' }; sq.ans.vegPct = 80; sq.ans.footprintPct = 20;
   const v = plain(V(sq).warnings), s2 = PC.site.analyse(sq);
-  assert.deepEqual(v.map((x) => [x.code, x.q]), [['veg-reduced', 4], ['pool-omitted', 16]]);
+  // F4-T3 (PM round 11): the reduced area does not fit around the building either, so the shortfall shows too
+  assert.deepEqual(v.map((x) => [x.code, x.q]), [['veg-reduced', 4], ['pool-omitted', 16], ['veg-short', 4]]);
   assert.equal(v[0].text, `Vegetation was reduced to what fits: ${Math.round(s2.veg.area)} m² (${Math.round(s2.veg.pct * 10) / 10} %).`);
+  const r1 = (x) => Math.round(x * 10) / 10;
+  assert.equal(v[2].text, `Only ${Math.round(s2.vegPlaced)} m² (${r1(s2.vegPlaced / s2.plotArea * 100)} % of the plot) of planting fits around the building, parking and pool: the 3D garden is smaller than the ${r1(s2.veg.pct)} % asked. Try a lower footprint %, fewer cars or a smaller pool.`);
   assert.deepEqual(codes(V(sq).blocking), [], 'warnings do not block');
   assert.equal(PC.stages.status(sq)[2].valid, true);
 });
@@ -103,7 +106,7 @@ test('summary numbers', () => {
 
 test('rule table: every code has a kind and a text; results are cached only for frozen (store) states', () => {
   for (const [code, r] of Object.entries(V.RULES)) { assert.ok(r.kind === 'block' || r.kind === 'warn', code); assert.ok(r.text.length > 10, code); }
-  assert.deepEqual(Object.keys(V.RULES).length, 12);   // F4-T2: seating-omitted (PM round 10 Q8)
+  assert.deepEqual(Object.keys(V.RULES).length, 13);   // F4-T2: seating-omitted (PM round 10 Q8); F4-T3: veg-short (round 11)
   const s = sample(); V(s); s.ans.floors = 3; assert.deepEqual(codes(V(s).blocking), ['floor-empty'], 'a plain object mutated in place is re-evaluated');
   PC.store.init(sample()); const a = V(PC.store.get()); assert.equal(V(PC.store.get()), a, 'same store state: same result object');
 });
