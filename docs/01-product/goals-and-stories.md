@@ -1,7 +1,14 @@
 # PlotCraft — Product goals and user stories (prototype)
 
-Owner: PM. Source: `docs/00-brief.md`. Status: approved by the CTO (round 2); round 3 edits made at the F1 feature review; round 4 edits apply the client's binding decisions `docs/01-product/client-decisions.md` (CD-1 to CD-3); round 5 edits made at the F2 feature review; rounds 6 and 7 fix user-facing texts at the F3-T2 and F3-T3 plan reviews; round 8 edits made at the F3 feature review; round 9 fixes the stage-5 level selector labels at the F4-T1 plan review; round 10 applies CD-4 / CD-5 and answers the F4-T2 plan questions.
+Owner: PM. Source: `docs/00-brief.md`. Status: approved by the CTO (round 2); round 3 edits made at the F1 feature review; round 4 edits apply the client's binding decisions `docs/01-product/client-decisions.md` (CD-1 to CD-3); round 5 edits made at the F2 feature review; rounds 6 and 7 fix user-facing texts at the F3-T2 and F3-T3 plan reviews; round 8 edits made at the F3 feature review; round 9 fixes the stage-5 level selector labels at the F4-T1 plan review; round 10 applies CD-4 / CD-5 and answers the F4-T2 plan questions; round 11 records the default-camera decision at the F4-T3 start.
 This document says **what** and **how we know it works**. How it is built is the Tech Lead's call.
+
+## Changes in round 11 (2026-11-21, F4-T3 start: default camera; F4-S2 / F4-S3 checked; no story IDs changed)
+
+| Item | Decision |
+|---|---|
+| Default camera (TL F4-T2 outcome review item 6) | PM + Designer: **Reset stays on the street side** (A-12, option (a)); no "Garden" view, no yard-facing Reset. If the F4-T3 sample shots at Reset hide the pool and seating completely, the 3D panel gets one line: "Drag to turn the model and see the garden." Record: `docs/03-tasks/F4-T3/camera-decision.md`. F4-S2 Reset criterion amended. |
+| F4-S1 vegetation, F4-S3 time of day and seasons | Re-read for F4-T3: current. They match the F4-plan / TL F4-T3 hand-off: slider 0–24 h, presets morning / noon / evening / night (8 / 12 / 17.5 / 22 h), Q5-oriented sun, seasons with vegetation and ground tone, no rebuild and no camera move, "approximate — not real solar data", opens at noon in summer, vegetation about the effective % and never in the building, parking, pool, seating or entrance path. No text change. |
 
 ## Changes in round 10 (2026-11-21, F4-T2 plan + plan review: CD-4 / CD-5 applied, PM questions Q2, Q3, Q5, Q7, Q8 and the Roof-on view; no story IDs changed)
 
@@ -459,7 +466,7 @@ Draw the land as a polygon with live measurements; includes the stage navigation
 
 **F4-S2 Look from any angle.** As an architect, I want free camera control so that I can inspect the model from anywhere.
 - Mouse: drag orbits, wheel zooms, right-drag (or Shift+drag) pans. Touch: one finger orbits, two-finger pinch zooms, two-finger drag pans. Keyboard: arrow keys orbit, +/- zoom.
-- The camera cannot go below ground level or flip over the top; zoom is clamped so the model can be neither lost nor entered through the ground; a "Reset view" control frames the whole plot.
+- The camera cannot go below ground level or flip over the top; zoom is clamped so the model can be neither lost nor entered through the ground; a "Reset view" control frames the whole plot from the street side (the view the 3D opens with; the yard behind the house is one drag away; round 11, `docs/03-tasks/F4-T3/camera-decision.md`).
 - The 3D canvas fills the available space, keeps the correct aspect ratio on resize and orientation change, and does not scroll or zoom the page while being touched.
 - Controls overlay the canvas without covering more than about a third of it at 360x640 (collapsible panel).
 - Leaving stage 5 (or hiding the tab) stops rendering (no animation frames requested); returning resumes with the same camera position.
