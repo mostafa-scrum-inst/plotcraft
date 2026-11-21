@@ -174,3 +174,17 @@ test('F3-T3 data files are in the manifest data layer, after room-labels, in the
   const files = manifest().js.filter((j) => j.layer === 'data').map((j) => j.file);
   assert.deepEqual(files.slice(files.indexOf('js/data/room-labels.js') + 1, files.indexOf('js/data/room-labels.js') + 4), ['js/data/look3d.js', 'js/data/furniture.js', 'js/data/sky.js']);
 });
+
+test('F4-T3 vegetation table (Designer section 1): exact keys, sizes, counting areas within 10 %, canopy on its trunk, bare tree above the wall', () => {
+  const V = plain(PC.data.vegetation);
+  assert.deepEqual(Object.keys(V), ['tree', 'shrub', 'scale']);
+  assert.deepEqual(Object.keys(V.tree), ['trunkR', 'trunkH', 'canopyR', 'canopyY0', 'canopyH', 'trunkSeg', 'canopySeg']);
+  assert.deepEqual(Object.keys(V.shrub), ['r', 'h', 'seg']);
+  for (const v of [...Object.values(V.tree), ...Object.values(V.shrub)]) assert.ok(typeof v === 'number' && v > 0);
+  for (const n of [V.tree.trunkSeg, V.tree.canopySeg, V.shrub.seg]) assert.ok(Number.isInteger(n) && n >= 3);
+  assert.ok(Math.abs(Math.PI * V.tree.canopyR ** 2 - 6) <= 0.6, 'tree counts 6 m2 (A-9)');
+  assert.ok(Math.abs(Math.PI * V.shrub.r ** 2 - 1.5) <= 0.15, 'shrub counts 1.5 m2 (A-9)');
+  assert.ok(V.tree.canopyY0 < V.tree.trunkH, 'canopy sits on its trunk');
+  assert.ok(V.tree.trunkH > 1.2, 'bare tree stands above the 1.2 m wall');
+  assert.equal(V.scale.length, 2); assert.ok(V.scale[0] >= 0.5 && V.scale[0] < V.scale[1] && V.scale[1] <= 1.5);
+});
