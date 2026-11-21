@@ -298,7 +298,7 @@ async function previewAndConflicts(vp) {
   // 9 x 40 m at 25 %: 5 m wide inside the setbacks; step 4b's 1:3 try gives 5 x 16 m, capped at 3 x 5 + 0.5 = 15.5 m (A-6 step 8) and the proportion wording applies (F2-S3 round 4)
   T.ok(/^The building is limited to 5\.0 × 15\.5 m \(\d+ m², \d+(\.\d)? % of the plot\): on this narrow plot it may be at most 3 times/.test((await k.rows())[0].text), `${tag} clamped footprint shows its dimensions, effective area and % (${(await k.rows())[0].text})`);
   await page.evaluate(() => PC.store.commit((s) => { s.plot.pts = [[0, 0], [20, 0], [20, 20], [0, 20]]; s.ans.parking.cars = 1; s.ans.pool = { on: true, size: 'L' }; s.ans.vegPct = 80; s.ans.footprintPct = 20; }));
-  await same('square plot', ['veg-reduced', 'pool-omitted']);
+  await same('square plot', ['veg-reduced', 'pool-omitted', 'veg-short']);
   await page.setViewportSize({ width: vp.w + (vp.w > 700 ? -120 : 60), height: vp.h });
   await page.waitForFunction(() => { const s = PC.debug.site(), r = document.querySelector('[data-pc="site-canvas"]').getBoundingClientRect(); return s.ptsL.every((p) => { const q = PC.debug.toScreen('site', p[0], p[1]); return q[0] >= r.left + 4 && q[0] <= r.right - 4 && q[1] >= r.top + 4 && q[1] <= r.bottom - 4; }); }, null, { timeout: 3000 });
   T.ok(true, `${tag} preview is fitted again after a resize`);

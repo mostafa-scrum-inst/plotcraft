@@ -79,9 +79,9 @@
   },
   "s2-rooms": {
    "minContrast": 5,
-   "textNodes": 128,
+   "textNodes": 140,
    "disabledLow": [],
-   "tabStops": 84
+   "tabStops": 94
   },
   "s2-rooms-nostairs": {
    "minContrast": 5.55,
@@ -157,16 +157,14 @@
   },
   "s4": {
    "minContrast": 6.55,
-   "textNodes": 29,
+   "textNodes": 27,
    "disabledLow": [],
-   "tabStops": 11
+   "tabStops": 10
   },
   "s5-view": {
    "minContrast": 6.42,
    "textNodes": 20,
-   "disabledLow": [
-    "v3-pane-view > span \"Roof\" 4.36 (rgb(22, 33, 43) on rgb(255,255,255))"
-   ],
+   "disabledLow": [],
    "panel": {
     "panelW": 360,
     "panelH": 144,
@@ -175,7 +173,7 @@
     "heightShare": 0.2938775510204082,
     "areaShare": 0.2938775510204082
    },
-   "tabStops": 14
+   "tabStops": 15
   },
   "s5-light": {
    "minContrast": 6.42,
@@ -189,7 +187,7 @@
     "heightShare": 0.3306122448979592,
     "areaShare": 0.3306122448979592
    },
-   "tabStops": 12
+   "tabStops": 18
   },
   "s5-tour": {
    "minContrast": 6.42,
@@ -213,9 +211,7 @@
   "s5-building": {
    "minContrast": 6.42,
    "textNodes": 19,
-   "disabledLow": [
-    "v3-pane-view > span \"Roof\" 4.36 (rgb(22, 33, 43) on rgb(255,255,255))"
-   ]
+   "disabledLow": []
   },
   "s5-unavailable": {
    "minContrast": 7.89,
@@ -239,7 +235,7 @@
   },
   "x-banners": {
    "minContrast": 6.55,
-   "textNodes": 31,
+   "textNodes": 29,
    "disabledLow": []
   }
  },
@@ -286,7 +282,7 @@
   },
   "s2-rooms": {
    "minContrast": 5,
-   "textNodes": 132,
+   "textNodes": 144,
    "disabledLow": []
   },
   "s2-rooms-nostairs": {
@@ -361,15 +357,13 @@
   },
   "s4": {
    "minContrast": 6.55,
-   "textNodes": 33,
+   "textNodes": 31,
    "disabledLow": []
   },
   "s5-view": {
    "minContrast": 6.42,
    "textNodes": 24,
-   "disabledLow": [
-    "v3-pane-view > span \"Roof\" 4.36 (rgb(22, 33, 43) on rgb(255,255,255))"
-   ],
+   "disabledLow": [],
    "panel": {
     "panelW": 768,
     "panelH": 144,
@@ -413,9 +407,7 @@
   "s5-building": {
    "minContrast": 6.42,
    "textNodes": 23,
-   "disabledLow": [
-    "v3-pane-view > span \"Roof\" 4.36 (rgb(22, 33, 43) on rgb(255,255,255))"
-   ]
+   "disabledLow": []
   },
   "s5-unavailable": {
    "minContrast": 7.89,
@@ -439,7 +431,7 @@
   },
   "x-banners": {
    "minContrast": 6.55,
-   "textNodes": 35,
+   "textNodes": 33,
    "disabledLow": []
   }
  },
@@ -489,9 +481,9 @@
   },
   "s2-rooms": {
    "minContrast": 5,
-   "textNodes": 147,
+   "textNodes": 159,
    "disabledLow": [],
-   "tabStops": 85
+   "tabStops": 95
   },
   "s2-rooms-nostairs": {
    "minContrast": 5.55,
@@ -567,16 +559,14 @@
   },
   "s4": {
    "minContrast": 6.55,
-   "textNodes": 33,
+   "textNodes": 31,
    "disabledLow": [],
-   "tabStops": 11
+   "tabStops": 10
   },
   "s5-view": {
    "minContrast": 5.55,
    "textNodes": 33,
-   "disabledLow": [
-    "v3-pane-view > span \"Roof\" 4.36 (rgb(22, 33, 43) on rgb(255,255,255))"
-   ],
+   "disabledLow": [],
    "panel": {
     "panelW": 320,
     "panelH": 575.390625,
@@ -585,14 +575,12 @@
     "heightShare": 0.8338994565217391,
     "areaShare": 0.20847486413043478
    },
-   "tabStops": 11
+   "tabStops": 18
   },
   "s5-light": {
    "minContrast": 5.55,
    "textNodes": 31,
-   "disabledLow": [
-    "v3-pane-view > span \"Roof\" 4.36 (rgb(22, 33, 43) on rgb(255,255,255))"
-   ],
+   "disabledLow": [],
    "panel": {
     "panelW": 320,
     "panelH": 575.390625,
@@ -601,14 +589,12 @@
     "heightShare": 0.8338994565217391,
     "areaShare": 0.20847486413043478
    },
-   "tabStops": 11
+   "tabStops": 18
   },
   "s5-tour": {
    "minContrast": 5.55,
    "textNodes": 32,
-   "disabledLow": [
-    "v3-pane-view > span \"Roof\" 4.36 (rgb(22, 33, 43) on rgb(255,255,255))"
-   ],
+   "disabledLow": [],
    "panel": {
     "panelW": 320,
     "panelH": 575.390625,
@@ -617,7 +603,7 @@
     "heightShare": 0.8338994565217391,
     "areaShare": 0.20847486413043478
    },
-   "tabStops": 15
+   "tabStops": 22
   },
   "s5-collapsed": {
    "minContrast": 6.81,
@@ -627,9 +613,7 @@
   "s5-building": {
    "minContrast": 5.55,
    "textNodes": 32,
-   "disabledLow": [
-    "v3-pane-view > span \"Roof\" 4.36 (rgb(22, 33, 43) on rgb(255,255,255))"
-   ]
+   "disabledLow": []
   },
   "s5-unavailable": {
    "minContrast": 6.81,
@@ -653,7 +637,7 @@
   },
   "x-banners": {
    "minContrast": 6.55,
-   "textNodes": 35,
+   "textNodes": 33,
    "disabledLow": []
   }
  },
@@ -700,7 +684,7 @@
   },
   "s2-rooms": {
    "minContrast": 5,
-   "textNodes": 128,
+   "textNodes": 140,
    "disabledLow": []
   },
   "s2-rooms-nostairs": {
@@ -775,15 +759,13 @@
   },
   "s4": {
    "minContrast": 6.55,
-   "textNodes": 27,
+   "textNodes": 26,
    "disabledLow": []
   },
   "s5-view": {
    "minContrast": 6.42,
    "textNodes": 19,
-   "disabledLow": [
-    "v3-pane-view > span \"Roof\" 4.36 (rgb(22, 33, 43) on rgb(255,255,255))"
-   ],
+   "disabledLow": [],
    "panel": {
     "panelW": 272,
     "panelH": 262,
@@ -827,9 +809,7 @@
   "s5-building": {
    "minContrast": 6.42,
    "textNodes": 18,
-   "disabledLow": [
-    "v3-pane-view > span \"Roof\" 4.36 (rgb(22, 33, 43) on rgb(255,255,255))"
-   ]
+   "disabledLow": []
   },
   "s5-unavailable": {
    "minContrast": 6.67,
@@ -853,7 +833,7 @@
   },
   "x-banners": {
    "minContrast": 6.55,
-   "textNodes": 29,
+   "textNodes": 28,
    "disabledLow": []
   }
  }

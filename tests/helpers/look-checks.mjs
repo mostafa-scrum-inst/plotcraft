@@ -2,12 +2,12 @@
 // time slider by touch and keyboard, presets by tap and Space (aria-pressed only on the matching hour), season select,
 // HH:MM readout, the "approximate" label, no rebuild and no camera move, the look kept across leaving stage 5; the
 // Designer layout check at 360x640; and the PM round 11 vegetation shortfall warning on stage 2. Two viewports, one
-// page load each (TL Q7).
-import { launch, open, suite, settled, VIEWPORTS } from '../helpers/browser.mjs';
-import { gestures } from '../helpers/touch.mjs';
-import { loadCore, plain } from '../helpers/load.mjs';
+// page load each (TL Q7). Folded into view3d.spec (run-all time, TL Q7): view3d.spec calls lookChecks(browser, T).
+import { open, settled, VIEWPORTS } from './browser.mjs';
+import { gestures } from './touch.mjs';
+import { loadCore, plain } from './load.mjs';
 
-const T = suite('e2e view3d-look'), browser = await launch();
+let T, browser;
 const ready = (page) => page.waitForFunction(() => { const i = PC.debug.scene(); return i.renders > 0 && !i.frame && !i.building; });
 const PRESETS = ['morning', 'noon', 'evening', 'night'];
 const state = (page) => page.evaluate((P) => {
@@ -18,7 +18,7 @@ const state = (page) => page.evaluate((P) => {
 }, PRESETS);
 
 async function run(vp) {
-  const o = await open(browser, vp, { three: 'mock' }), { page, act, hook, problems } = o, tag = vp.tag + ' mock';
+  const o = await open(browser, vp, { three: 'mock' }), { page, act, hook, problems } = o, tag = vp.tag + ' mock look';
   await act('btn-sample'); await act('btn-skip3d'); await ready(page);
   if (await hook('v3-tab-light').isVisible()) { await act('v3-tab-light'); await settled(page); }   // wide layouts show every pane
   let s = await state(page);
@@ -89,5 +89,7 @@ async function run(vp) {
   await o.ctx.close();
 }
 
-try { await run(VIEWPORTS[0]); await run(VIEWPORTS[2]); } catch (e) { T.ok(false, 'spec crashed: ' + (e && e.stack || e)); } finally { await browser.close(); }
-process.exit(T.done() ? 1 : 0);
+export async function lookChecks(b, suiteT) {
+  browser = b; T = suiteT;
+  try { await run(VIEWPORTS[0]); await run(VIEWPORTS[2]); } catch (e) { T.ok(false, 'look checks crashed: ' + (e && e.stack || e)); }
+}

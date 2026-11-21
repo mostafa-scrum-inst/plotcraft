@@ -6,6 +6,7 @@ import { launch, open, suite, settled, VIEWPORTS } from '../helpers/browser.mjs'
 import { gestures } from '../helpers/touch.mjs';
 import { loadCore } from '../helpers/load.mjs';
 import { maxHouse } from '../helpers/houses.mjs';
+import { lookChecks } from '../helpers/look-checks.mjs';   // F4-T3 Light tab (folded in, TL Q7)
 
 const T = suite('e2e view3d'), browser = await launch();
 // Counts the app's animation-frame requests. The tests below never call requestAnimationFrame themselves while
@@ -199,6 +200,6 @@ async function fiveLevels() {
 }
 
 try {
-  await Promise.all([phone(), desktop(), unavailable(), fiveLevels()]);
+  await Promise.all([phone(), desktop(), unavailable(), fiveLevels(), lookChecks(browser, T)]);
 } finally { await browser.close(); }
 process.exit(T.done() ? 1 : 0);
