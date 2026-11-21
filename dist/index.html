@@ -357,6 +357,19 @@ canvas { display: block; }
   width: 14px; height: 26px; background: var(--accent); border: 2px solid var(--surface);
   border-radius: var(--r1); box-shadow: 0 0 0 1px var(--accent);
 }
+/* Disabled slider / select / icon button (F4-T1 TL condition 1): same muted set as .pc-btn:disabled (sunk, rule, ink-3),
+   so a control that is not available yet never looks live. */
+.pc-range:disabled { cursor: not-allowed; }
+.pc-range:disabled::-webkit-slider-runnable-track { background: var(--rule); }
+.pc-range:disabled::-moz-range-track { background: var(--rule); }
+.pc-range:disabled::-webkit-slider-thumb { background: var(--sunk); box-shadow: 0 0 0 1px var(--border); }
+.pc-range:disabled::-moz-range-thumb { background: var(--sunk); box-shadow: 0 0 0 1px var(--border); }
+.pc-range:disabled + output { color: var(--ink-3); }
+.pc-select:disabled {
+  background-color: var(--sunk); border-color: var(--rule); color: var(--ink-3); cursor: not-allowed; opacity: 1;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%), linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
+}
+.pc-btn--icon:disabled > .pc-i, .pc-btn--icon[aria-disabled="true"] > .pc-i { opacity: 0.5; }
 
 /* Switch */
 .pc-switch {
@@ -1764,7 +1777,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       retry: { fMin: 0.75, fMax: 1.25 } },          // 4.4: retry only when the first pass finds no layout (F3-T2)
     // 3D (F4-T1; A-9, A-10, A-12). HOUSE: slab 0.2 m (pitch = Q8 + slab; floor at baseY + slab), dollhouse walls
     // 1.2 m x 0.15 m, entrance door 1.2 m wide, z-offsets of A-10. CAM: angles in degrees, see A-12.
-    HOUSE: { slab: 0.2, wallH: 1.2, wallT: 0.15, door: 1.2, tintLift: 0.015, capLift: 0.01, outerDrop: 0.05, outerK: 8 },
+    HOUSE: { slab: 0.2, wallH: 1.2, wallT: 0.15, door: 1.2, tintLift: 0.015, capLift: 0.01, outerDrop: 0.05, outerK: 36 },
     CAM: { fov: 45, nearMin: 0.5, nearK: 0.02, farK: 20, phiMin: 5, phiMax: 85, rMin: 4, rMaxK: 3, rMaxReset: 1.2,
       eyeMin: 1, resetK: 2.2, resetFit: 1.05, resetTheta: 30, resetPhi: 50, keyDeg: 5, keyZoom: 1.1, wheelK: 0.0015 },
     VIEW3D: { maxDpr: 2, shadowMap: 1024, shadowBias: -0.0005, shadowNormalBias: 0.02, sunDist: 2.5, shadowK: 2.5, shadowR: 1.2 },

@@ -73,6 +73,14 @@ test('close() during the Building... yield builds nothing and requests no frame;
   assert.deepEqual([E.info().builds, E.R().renders], [1, 1]);
 });
 
+test('close() then reopen with the same house inside the yield: exactly one build and one render (token, TL impl review FS 1)', () => {
+  const E = opened({ ready: false });
+  E.PC.view3d.close();
+  E.PC.view3d.open(E.house, E.canvas, (x) => E.log.push(x));
+  E.ready(); E.ready();
+  assert.deepEqual([E.info().builds, E.R().renders], [1, 1]);
+});
+
 test('scene graph names, sample = 7 meshes, one shadow light with a 1024 map, lights from the noon table', () => {
   const E = opened(), n = names(E), i = E.info();
   for (const k of ['world', 'ground', 'groundOuter', 'groundPlot', 'groundCap', 'level-G', 'level-1', 'slab', 'walls', 'roof', 'site', 'hemi', 'sun']) assert.ok(n.includes(k), k);
