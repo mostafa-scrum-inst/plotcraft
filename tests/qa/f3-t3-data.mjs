@@ -9,9 +9,7 @@ import { ROOT, collector } from './lib.mjs';
 import { loadTables, mix, Lab, dE, hueDeg, floorOf, blend, topLight, isNight, furnish, rng, ch } from './f3-t3-ref.mjs';
 
 const R = collector('F3-T3 data');
-// Open minor bug (docs/03-tasks/F3-T3/qa-report.md, bug 1, Designer): the bedroom wardrobe ('left', centred on the left
-// wall) has no room beside the 2 m bed in narrow deep bedrooms (2-2.5 m wide, 4-5 m deep), so sparse drops it.
-R.known.push({ re: /every sparse piece placed: bedroom .*: wardrobe$/, bug: 'F3-T3 bug 1' });
+// F3-T3 bug 1 (bedroom wardrobe dropped in narrow deep bedrooms) fixed by the Designer (anchor 'fl'); KNOWN entry removed.
 const verbose = process.argv.includes('--verbose');
 const SRC = process.env.QA_SRC || join(ROOT, 'src');      // QA_SRC: a throwaway copy for mutation runs
 const D = loadTables(SRC);

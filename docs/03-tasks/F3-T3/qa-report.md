@@ -127,4 +127,14 @@ The interiors `white` and exteriors `wallInner` / `slab` / `parapet` values have
 ### Verdict
 All 7 focus items and the F3-plan acceptance criteria are met: F3-S4 hint, and the F4-S1 / F4-S3 data preconditions. One minor bug is open, bug 1 (Designer, bedroom wardrobe anchor, KNOWN). It has no effect until F4-T2 and should be fixed before F4-T2 consumes the table. Observation 1 (the lint gap, FS / TL) and observation 2 (the overlap epsilon for `furnish`, FS F4-T2 / TL A-11) are routed for action. Neither blocks F3-T3.
 
+**Round 1 addendum: bug 1 fixed and confirmed.** The Designer anchored the bedroom wardrobe `fl` (`src/js/data/furniture.js`). I re-ran my own A-11 simulation (`f3-t3-data.mjs`):
+- **No sparse drop anywhere.** All 3 093 judged rooms pass, including the three generated bedrooms that failed before (2.5 × 4 m, 2.5 × 4.5 m, 8 × 16 ft). The wardrobe also no longer drops in the 1 000 tolerance-band rooms (it was dropped 20 times there).
+- **Scale.** In those three rooms and in 2.5 × 5 m, the wardrobe is placed at s 1.00. Before, it was dropped, or placed at s 0.60 on the 0.01 m edge. Full places all 6 bedroom pieces there.
+- **Below s 0.75.** The wardrobe is no longer on the list. What is left is maid.bed 0.60 (a known limit), living.coffeeTable 0.70 and majlis.lowTable 0.70.
+- **Test changes and runs.**
+  - I removed the KNOWN entry, which matched nothing any more.
+  - `node tests/run-all.mjs --qa --only f3-t3`: data 16/0, look 234/0, in 6.7 s.
+  - `tests/unit/data-tables.test.mjs`: 9/0.
+  - No full run: only a data file changed (orchestrator).
+
 VERDICT: PASSED

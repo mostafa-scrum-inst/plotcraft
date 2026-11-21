@@ -82,3 +82,21 @@ None.
 7. Your trim: fix the `rooms.spec` comment (note 1). Then the mandatory full run `node build.mjs && node tests/run-all.mjs` with its time. Target ≤ 8 min at `--jobs 2`.
 
 VERDICT: APPROVED
+
+
+## Round 2 — 2026-11-21 (post-QA fix: QA bug 1, bedroom wardrobe)
+
+- **Change:** `src/js/data/furniture.js`, one value. Bedroom `wardrobe` anchor `left` → `fl`. Nothing else changed in `src/` (`git diff HEAD -- src` shows only this line).
+- **Reading.** Under A-11 a corner anchor lays `w` along x, so the 1.2 × 0.6 m wardrobe now stands flush in the front-left corner, clear of the 2.0 m bed at the back wall. That is what failed before: centred on the left wall, the bed's foot blocked it in 2–2.5 m-wide deep rooms.
+  - In full it shares the front wall with the `fr` armchair. In narrow rooms that armchair scales or drops; it is full-only, so A-11 allows this.
+  - `fl` was QA's probed choice: 0 sparse drops in 3 093 judged rooms plus the tolerance band, and the wardrobe never below s 0.75. `front` was worse.
+- **My runs:**
+  - `verify/check-colours.mjs`: all binding requirements met (90 rooms, no sparse drop, full > sparse);
+  - `data-tables.test.mjs`: 9/0;
+  - `node tests/run-all.mjs --qa --only f3-t3`: data 16/0 + look 234/0. QA has already removed its KNOWN entry (`tests/qa/f3-t3-data.mjs` header).
+- **Not affected:** no other test or source refers to the wardrobe. The stage-4 vignettes show the living room only.
+
+### Required changes
+None.
+
+VERDICT: APPROVED
