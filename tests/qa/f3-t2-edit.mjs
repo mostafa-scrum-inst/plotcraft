@@ -24,7 +24,7 @@ const myUnmet = (s, lv, rooms) => { const by = Object.fromEntries(rooms.map((r) 
 
 // ---------- states under test ----------
 function stateOf(mut) { const s = Q.plain(PC.sample.state()); if (mut) mut(s); s.plans = {}; PC.plans.sync(s); return s; }
-const envOf = (s, lv, rooms) => { const c = PC.plans.ctx(s, lv); return { W: c.W, D: c.D, grid: GRID[s.ans.unit], core: c.core, rooms, ctx: c }; };
+const envOf = (s, lv, rooms) => { const c = PC.plans.ctx(s, lv); return { W: c.W, D: c.D, grid: GRID[s.ans.unit], core: c.core, rooms, ctx: c, minSnap: c.minSnap === true }; };
 const appCtx = (s, lv, rooms, id) => { const c = PC.plans.ctx(s, lv); c.cands = PC.plans.edgeCands(rooms, id, c); return c; };
 const STATES = [];
 for (const unit of ['m', 'ft']) for (const pos of ['centre', 'fl', 'fr', 'bl', 'br']) for (const lift of [false, true]) for (const fpPct of [25, 40])

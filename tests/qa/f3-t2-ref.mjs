@@ -31,12 +31,16 @@ export function myMove(start, dx, dy, env, span0 = 'room') {
     r[p] = useHi ? hi.v - r[s] : lo.v; }
   return rnd2(r);
 }
+// F4-T2 Step 0.6 (PM round 8 decision 5, ft only; marker PC.plans.ctx(state, id).minSnap === true, undefined before):
+// the shrinking limit (1.5 m from the opposite edge) is one more snap candidate, over the moving edge's own span, so
+// the minimum side is reachable exactly in ft too. m unchanged (its 0.5 m grid already lands there). No guide is drawn.
 export function myResize(start, kind, dx, dy, env) {
   const { W, D, grid, rooms, core } = env, r = { ...start }, x1 = r.x + r.w, y1 = r.y + r.h;
+  const plus = (C, v) => (env.minSnap ? C.concat([{ v, lo: -1e9, hi: 1e9, kind: 'min' }]) : C);
   if (kind === 'e' || kind === 'w') { const C = myCands(rooms, start.id, core, W, D, 'x');
-    if (kind === 'e') r.w = mySnap(x1 + dx, r.y, y1, C, grid, r.x + MINS, W).v - r.x; else { const v = mySnap(r.x + dx, r.y, y1, C, grid, 0, x1 - MINS).v; r.x = v; r.w = x1 - v; } }
+    if (kind === 'e') r.w = mySnap(x1 + dx, r.y, y1, plus(C, r.x + MINS), grid, r.x + MINS, W).v - r.x; else { const v = mySnap(r.x + dx, r.y, y1, plus(C, x1 - MINS), grid, 0, x1 - MINS).v; r.x = v; r.w = x1 - v; } }
   else { const C = myCands(rooms, start.id, core, W, D, 'y');
-    if (kind === 'n') r.h = mySnap(y1 + dy, r.x, x1, C, grid, r.y + MINS, D).v - r.y; else { const v = mySnap(r.y + dy, r.x, x1, C, grid, 0, y1 - MINS).v; r.y = v; r.h = y1 - v; } }
+    if (kind === 'n') r.h = mySnap(y1 + dy, r.x, x1, plus(C, r.y + MINS), grid, r.y + MINS, D).v - r.y; else { const v = mySnap(r.y + dy, r.x, x1, plus(C, y1 - MINS), grid, 0, y1 - MINS).v; r.y = v; r.h = y1 - v; } }
   return rnd2(r);
 }
 // ---------- QA's overlap / adjacency (A-8) ----------

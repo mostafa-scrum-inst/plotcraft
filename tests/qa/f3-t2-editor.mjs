@@ -39,7 +39,7 @@ const G = () => { const s = PC.debug.state(), v = PC.debug.planView(), site = PC
   const p = s.plans[v.level], core = PC.layout.core(fp.w, fp.d, PC.levels.stairsExist(s), s.ans.stairPos, PC.levels.liftExists(s)), btn = q('btn-approve');
   const tab = (id) => { const b = q('plan-tabs').querySelector(`[data-level="${id}"]`); return b ? b.querySelector('[data-pc="tab-state"]').textContent : null; };
   return { s: JSON.parse(JSON.stringify(s)), level: v.level, selected: v.selected, scale: v.scale, W: fp.w, D: fp.d, ax: [[ex[0] - o[0], ex[1] - o[1]], [ey[0] - o[0], ey[1] - o[1]]],
-    rooms: p && !p.error ? p.rooms.map((r) => ({ ...r, box: box(r) })) : [], core: { stair: core.stair || null, lift: core.lift || null }, stairBox: core.stair ? box(core.stair) : null,
+    rooms: p && !p.error ? p.rooms.map((r) => ({ ...r, box: box(r) })) : [], core: { stair: core.stair || null, lift: core.lift || null }, minSnap: !!(PC.plans.ctx && PC.plans.ctx(s, v.level).minSnap === true), stairBox: core.stair ? box(core.stair) : null,
     sel: [t('plan-room-name'), t('plan-room-dims'), t('plan-room-area')], msg: t('plan-msg'), kind: q('plan-msg').dataset.kind, counter: t('plan-counter'), tabs: { G: tab('G'), 1: tab('1') },
     approve: { disabled: btn.disabled, ariaDis: btn.getAttribute('aria-disabled'), pressed: btn.getAttribute('aria-pressed'), label: t('btn-approve-label'), on: btn.classList.contains('is-approved') },
     commits: window.__qaCommits, drag: PC.debug.planDrag(), view: PC.debug.view('plan'), page: [window.scrollX, window.scrollY, window.visualViewport ? window.visualViewport.scale : 1],
@@ -70,7 +70,7 @@ try {
         return !L.some((l) => l.x + l.w / 2 >= x0 && l.x + l.w / 2 <= x1 && l.y + l.h / 2 >= y0 && l.y + l.h / 2 <= y1); }).map((r) => r.id); });
     await S.page.evaluate(() => { window.__qaCommits = 0; PC.store.subscribe(() => { window.__qaCommits++; }); });
     for (let i = 0; i < 3 && (await S.stages()) !== '3'; i++) { await S.act('btn-next'); await S.settle(); }
-    let A = await P(); const names = myNames(A.s.ans), roomOf = (id) => A.s.ans.rooms.find((r) => r.id === id), env = (X) => ({ W: X.W, D: X.D, grid: GRID[X.s.ans.unit], rooms: X.rooms.map(({ box, ...r }) => r), core: X.core });
+    let A = await P(); const names = myNames(A.s.ans), roomOf = (id) => A.s.ans.rooms.find((r) => r.id === id), env = (X) => ({ W: X.W, D: X.D, grid: GRID[X.s.ans.unit], rooms: X.rooms.map(({ box, ...r }) => r), core: X.core, minSnap: X.minSnap });
     R.check(`${V} 0 sample on stage 3, Ground floor, scale ${A.scale.toFixed(2)} px/m${touch ? ' (>= 14 on phones)' : ''}`, A.level === 'G' && A.rooms.length === 7 && (!touch || A.scale >= 14 - 1e-9) ? [] : [JSON.stringify([A.level, A.rooms.length, A.scale])]);
     // every room labelled at the default fit, both floors, m and ft (DP 3: tiers down to tiny)
     { const un = []; for (const u of ['m', 'ft']) { await S.act('unit-' + u); for (const lv of ['1', 'G']) { await S.act(`css:[data-pc="plan-tabs"] [data-level="${lv}"]`); await S.settle(); const miss = await labelsCover(); if (miss.length) un.push(`${u} ${lv}: ${miss}`); } }
