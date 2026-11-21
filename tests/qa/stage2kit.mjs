@@ -3,6 +3,8 @@
 import { CANVAS_SPY, touchDriver } from './lib.mjs';
 import { eq } from './session.mjs';
 import * as Q from './f2-t1-ref.mjs';
+// F4-T3 vegetation shortfall warning (PM round 11), by its text (same pattern as f4-t3-ref.mjs SHORT_RE)
+const SHORT_RE = /^Only .+ of planting fits around the building, parking and pool: /;
 
 export const M2 = 'm²', DOT = ' · ';
 export const LEVEL = { B: 'Basement', G: 'Ground floor', 1: 'First floor', 2: 'Second floor' };
@@ -101,7 +103,9 @@ export async function syncProblems(page) {
   if (ex.fp && !eq(P.levels, lv)) f.push(`level rows ${JSON.stringify(P.levels)} vs ${JSON.stringify(lv)}`);
   // rows: the current validation, never stale; status line and kind follow them
   const QOF = { 'floor-empty': '11', 'basement-empty': '11', 'buildable-small': '2', 'no-fit': '2', 'fp-veg-over': '3', 'level-over': '11', 'fp-clamped': '3', 'veg-reduced': '4', 'parking-omitted': '15', 'pool-omitted': '16' };
-  for (const r of P.rows) if (r.code !== 'field-invalid' && r.q !== QOF[r.code]) f.push(`${r.code} row points at Q${r.q}, expected Q${QOF[r.code]}`);
+  // F4-T2 seating (q 17); F4-T3 vegetation shortfall (PM round 11; recognised by its text, points at Q4 vegetation)
+  QOF['seating-omitted'] = '17';
+  for (const r of P.rows) { const want = SHORT_RE.test(r.text) ? '4' : QOF[r.code]; if (r.code !== 'field-invalid' && r.q !== want) f.push(`${r.code} row points at Q${r.q}, expected Q${want}`); }
   if (!eq(P.rows, P.validate)) f.push(`conflict rows ${JSON.stringify(P.rows)} differ from the current validation ${JSON.stringify(P.validate)}`);
   const nb = P.rows.filter((r) => r.kind === 'block').length, nw = P.rows.length - nb;
   const st = !nb && !nw ? 'All clear' : [nb ? `${nb} to fix` : '', nw ? `${nw} warning${nw === 1 ? '' : 's'}` : ''].filter(Boolean).join(DOT);

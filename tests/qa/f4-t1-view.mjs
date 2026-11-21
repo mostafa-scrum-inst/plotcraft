@@ -17,6 +17,10 @@ import * as Q from './f2-t1-ref.mjs';
 import * as H from './f4-t1-ref.mjs';
 
 const R = collector('F4-T1 view');
+// F4-T3 markers (plan 7, TL plan review Q6): with PC.scatter the sample has trees, so section A's shell and Q10 picture
+// signatures use QA's own fixture, the sample at vegetation 0 % (no FS code path for tests); with PC.three.applyLook the
+// Light controls are live (judged in f4-t3-view.mjs), so G's disabled set / disabled-look checks keep only the room
+// finder and the tour.
 // F4T1-1 (two frames on return) and F4T1-2 (a click did not focus the canvas): fixed by FS, KNOWN entries removed (qa-report Round 1).
 const noShots = process.argv.includes('--no-shots'), shots = join(ROOT, 'tests/qa/shots/f4-t1');
 if (!noShots) mkdirSync(shots, { recursive: true });
@@ -66,6 +70,7 @@ async function pixels(S, sel) {
 }
 const countNear = (px, rgb, tol = 40) => { let n = 0; for (let i = 0; i < px.d.length; i += 4) if (Math.abs(px.d[i] - rgb[0]) + Math.abs(px.d[i + 1] - rgb[1]) + Math.abs(px.d[i + 2] - rgb[2]) < tol) n++; return n; };
 const differ = (a, b) => { if (a.w !== b.w || a.h !== b.h) return true; let n = 0; for (let i = 0; i < a.d.length; i += 4) if (Math.abs(a.d[i] - b.d[i]) + Math.abs(a.d[i + 1] - b.d[i + 1]) + Math.abs(a.d[i + 2] - b.d[i + 2]) > 30) n++; return n > 4; };
+const SHELL0 = H.loadPC3().PC.scatter ? 's.ans.vegPct = 0;' : '';   // F4-T3 (TL Q6): shell-only fixture once the sample has trees
 const TIMES = [], ONLY = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7).split(',').filter(Boolean);   // --only=A,C: sections by letter (mutation runs)
 async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) return; const t = Date.now(); try { await fn(); } catch (e) { R.check(`${label}: ran to the end`, [String(e && e.stack || e).split('\n').slice(0, 3).join(' | ')]); } TIMES.push(`${label} ${((Date.now() - t) / 1000).toFixed(1)} s`); }
 
@@ -74,7 +79,7 @@ const browser = await launch();
 // ================= A + B: acceptance and Q14 with real r128 =================
 for (const vp of [VP.desk, VP.phone]) await guard(`A ${vp.tag}`, async () => {
   const S = await session(browser, vp, { three: 'real' }), T = `A ${vp.tag} real`;
-  R.check(`${T}: 3D view ready (Building... gone, frame drawn)`, await to5(S) ? [] : ['not ready after 8 s']);
+  R.check(`${T}: 3D view ready (Building... gone, frame drawn)`, await to5(S, SHELL0) ? [] : ['not ready after 8 s']);
   let i = await info(S), { s, X } = await expect(S);
   const v3 = await S.v3(), ui = await levelUi(S);
   R.check(`${T}: canvas and panel shown, no overlay`, v3.canvas && v3.panel && !v3.building && !v3.unavailable ? [] : [JSON.stringify(v3)]);
@@ -343,10 +348,12 @@ await guard('G controls', async () => {
   // disabled set
   // F4-T2 (marker: PC.three.buildRoof exists): the Roof switch is live by design, so it leaves the later-task set
   const ROOF_LIVE = await S.page.evaluate(() => typeof PC.three.buildRoof === 'function');
-  const LATER = ['v3-time', 'v3-preset-morning', 'v3-preset-noon', 'v3-preset-evening', 'v3-preset-night', 'v3-season', 'v3-room', 'v3-tour-start', 'v3-tour-pause', 'v3-tour-stop'].concat(ROOF_LIVE ? [] : ['v3-roof']);
+  // F4-T3 (marker: PC.three.applyLook): time, presets and season are live by design and leave the later-task set
+  const LOOK_LIVE = await S.page.evaluate(() => typeof PC.three.applyLook === 'function');
+  const LATER = (LOOK_LIVE ? [] : ['v3-time', 'v3-preset-morning', 'v3-preset-noon', 'v3-preset-evening', 'v3-preset-night', 'v3-season']).concat(['v3-room', 'v3-tour-start', 'v3-tour-pause', 'v3-tour-stop']).concat(ROOF_LIVE ? [] : ['v3-roof']);
   const dis = await S.page.evaluate((L) => ({ hooks: L.filter((h) => !document.querySelector(`[data-pc="${h}"]`).disabled), speed: [...document.querySelectorAll('[data-pc="v3-tour-speed"] input')].filter((i) => !i.disabled).map((i) => i.value),
     live: ['v3-reset', 'v3-panel-toggle', 'v3-tab-view', 'v3-tab-light', 'v3-tab-tour'].filter((h) => document.querySelector(`[data-pc="${h}"]`).disabled), roofOff: document.querySelector('[data-pc="v3-roof"]').disabled }), LATER);
-  R.check(`${T}: later controls disabled (time, 4 presets, season, room finder, tour start / pause / stop, speed radios${ROOF_LIVE ? '' : ', Roof'}); Reset, panel toggle and tabs live${ROOF_LIVE ? ', Roof switch enabled (F4-T2)' : ''}`, dis.hooks.length || dis.speed.length || dis.live.length || (ROOF_LIVE && dis.roofOff) ? [JSON.stringify(dis)] : []);
+  R.check(`${T}: later controls disabled (${LOOK_LIVE ? '' : 'time, 4 presets, season, '}room finder, tour start / pause / stop, speed radios${ROOF_LIVE ? '' : ', Roof'}); Reset, panel toggle and tabs live${ROOF_LIVE ? ', Roof switch enabled (F4-T2)' : ''}`, dis.hooks.length || dis.speed.length || dis.live.length || (ROOF_LIVE && dis.roofOff) ? [JSON.stringify(dis)] : []);
   // looks disabled: computed styles (TL condition 1) and pixels, disabled vs the same control enabled
   const css = async () => S.page.evaluate(() => { const v = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), q = (h) => document.querySelector(`[data-pc="${h}"]`), cs = (e) => getComputedStyle(e);
     const toRgb = (hex) => { const d = document.createElement('i'); d.style.color = hex; document.body.appendChild(d); const c = getComputedStyle(d).color; d.remove(); return c; };
@@ -354,21 +361,23 @@ await guard('G controls', async () => {
       sel: ['v3-season', 'v3-room'].map((h) => [cs(q(h)).backgroundColor, cs(q(h)).color, cs(q(h)).cursor]), icons: ['v3-preset-morning', 'v3-preset-noon', 'v3-preset-evening', 'v3-preset-night', 'v3-tour-pause', 'v3-tour-stop'].map((h) => cs(q(h).querySelector('.pc-i')).opacity) }; });
   await S.act('v3-tab-light');
   const c1 = await css(), f = [];
+  if (!LOOK_LIVE) {
   if (c1.range !== 'not-allowed') f.push(`slider cursor ${c1.range}`);
-  if (c1.out !== c1.ink3) f.push(`time readout ${c1.out} != --ink-3 ${c1.ink3}`);
-  c1.sel.forEach(([bg, co, cu], k) => { if (bg !== c1.sunk || co !== c1.ink3 || cu !== 'not-allowed') f.push(`${['season', 'room'][k]} select ${bg} / ${co} / ${cu}`); });
-  if (c1.icons.some((o) => Number(o) > 0.5 + 1e-6)) f.push(`icon opacities ${c1.icons}`);
+  if (c1.out !== c1.ink3) f.push(`time readout ${c1.out} != --ink-3 ${c1.ink3}`); }
+  c1.sel.forEach(([bg, co, cu], k) => { if (LOOK_LIVE && k === 0) return; if (bg !== c1.sunk || co !== c1.ink3 || cu !== 'not-allowed') f.push(`${['season', 'room'][k]} select ${bg} / ${co} / ${cu}`); });
+  if (c1.icons.slice(LOOK_LIVE ? 4 : 0).some((o) => Number(o) > 0.5 + 1e-6)) f.push(`icon opacities ${c1.icons}`);
+  if (!LOOK_LIVE) {
   // slider thumb pixels: no accent-blue thumb while disabled; enabled (temporarily) it has one
   const thumbDis = await pixels(S, '[data-pc="v3-time"]');
   await S.page.evaluate(() => { document.querySelector('[data-pc="v3-time"]').disabled = false; }); await S.settle({ motion: true });
   const thumbOn = await pixels(S, '[data-pc="v3-time"]');
   await S.page.evaluate(() => { document.querySelector('[data-pc="v3-time"]').disabled = true; }); await S.settle({ motion: true });
   const accent = [0x1b, 0x4f, 0x8f], nOn = countNear(thumbOn, accent), nDis = countNear(thumbDis, accent);
-  if (!(nOn > 50 && nDis < 5)) f.push(`accent pixels on the slider: enabled ${nOn}, disabled ${nDis}`);
-  R.check(`${T}: disabled Light controls look disabled: slider not-allowed with no accent thumb (pixels), readout --ink-3, selects --sunk / --ink-3 / not-allowed, preset icons <= 0.5 opacity`, f);
+  if (!(nOn > 50 && nDis < 5)) f.push(`accent pixels on the slider: enabled ${nOn}, disabled ${nDis}`); }
+  R.check(LOOK_LIVE ? `${T}: disabled controls look disabled: room select --sunk / --ink-3 / not-allowed, tour pause / stop icons <= 0.5 opacity (Light controls live, F4-T3)` : `${T}: disabled Light controls look disabled: slider not-allowed with no accent thumb (pixels), readout --ink-3, selects --sunk / --ink-3 / not-allowed, preset icons <= 0.5 opacity`, f);
   // every disabled control renders differently from the same control enabled
   const g = [];
-  for (const [tab, hooks] of [['light', ['v3-preset-morning', 'v3-preset-night', 'v3-season']], ['tour', ['v3-room', 'v3-tour-start', 'v3-tour-pause', 'css:[data-pc="v3-tour-speed"]']]].concat(ROOF_LIVE ? [] : [['view', ['css:.pc-switch:has([data-pc="v3-roof"])']]])) {
+  for (const [tab, hooks] of (LOOK_LIVE ? [] : [['light', ['v3-preset-morning', 'v3-preset-night', 'v3-season']]]).concat([['tour', ['v3-room', 'v3-tour-start', 'v3-tour-pause', 'css:[data-pc="v3-tour-speed"]']]]).concat(ROOF_LIVE ? [] : [['view', ['css:.pc-switch:has([data-pc="v3-roof"])']]])) {
     await S.act('v3-tab-' + tab);
     for (const h of hooks) {
       const sel = h.startsWith('css:') ? h.slice(4) : `[data-pc="${h}"]`, set = (on) => S.page.evaluate(([s, on]) => { const e = document.querySelector(s); (e.matches('input,select,button') ? [e] : [...e.querySelectorAll('input')]).forEach((x) => { x.disabled = !on; }); }, [sel, on]);
@@ -377,22 +386,23 @@ await guard('G controls', async () => {
     }
     if (tab === 'light' || tab === 'tour') await S.shot(`g-${tab}-disabled`);
   }
-  R.check(`${T}: each disabled control (presets, season, room finder, tour start / pause, speed radios${ROOF_LIVE ? '' : ', Roof'}) renders differently from itself enabled`, g);
+  R.check(`${T}: each disabled control (${LOOK_LIVE ? '' : 'presets, season, '}room finder, tour start / pause, speed radios${ROOF_LIVE ? '' : ', Roof'}) renders differently from itself enabled`, g);
   if (ROOF_LIVE) { // F4-T2: the Roof switch is live: a tap turns the roof on (state, roof group shown with All) and changes the render
     await S.act('v3-tab-view'); await S.act(pick('all')); await ready(S); const c0 = await pixels(S, '[data-pc="v3-canvas"]'), i0 = await info(S);
     await S.act('v3-roof'); await ready(S); const c1 = await pixels(S, '[data-pc="v3-canvas"]'), i1 = await info(S), v = await visOnly(S);
     const roofG = (v.groups.find((x) => x[0] === 'roof') || [])[1];
     R.check(`${T}: Roof switch (F4-T2): a tap turns the roof on (roof group visible with All) and the render changes`, !i0.roof && i1.roof && roofG === true && differ(c0, c1) ? [] : [JSON.stringify({ before: i0.roof, after: i1.roof, roofG, differ: differ(c0, c1) })]);
     await S.act('v3-roof'); await ready(S); }
-  // taps on disabled controls do nothing
+  // taps on disabled controls do nothing (before F4-T3; with PC.three.applyLook the Light controls are live: f4-t3-view.mjs)
   await S.act('v3-tab-light');
+  if (!LOOK_LIVE) {
   const before = await S.page.evaluate(() => [document.querySelector('[data-pc="v3-time"]').value, document.querySelector('[data-pc="v3-time-out"]').textContent]);
   const box = await S.page.evaluate(() => { const r = document.querySelector('[data-pc="v3-time"]').getBoundingClientRect(); return [r.left + r.width * 0.85, r.top + r.height / 2]; });
   await S.page.touchscreen.tap(...box); await S.settle();
   const night = await S.page.evaluate(() => { const r = document.querySelector('[data-pc="v3-preset-night"]').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; });
   await S.page.touchscreen.tap(...night); await S.settle();
   const after = await S.page.evaluate(() => [document.querySelector('[data-pc="v3-time"]').value, document.querySelector('[data-pc="v3-time-out"]').textContent]);
-  R.check(`${T}: tapping the disabled slider and the Night preset changes nothing (12 / 12:00)`, JSON.stringify(before) === JSON.stringify(after) && after[0] === '12' && after[1] === '12:00' ? [] : [JSON.stringify([before, after])]);
+  R.check(`${T}: tapping the disabled slider and the Night preset changes nothing (12 / 12:00)`, JSON.stringify(before) === JSON.stringify(after) && after[0] === '12' && after[1] === '12:00' ? [] : [JSON.stringify([before, after])]); }
   await S.layout(`${T} Light tab`); await S.act('v3-tab-tour'); await S.layout(`${T} Tour tab`);
   // stage-2 stepper icons disabled at a limit (generic .pc-btn--icon:disabled rule)
   const h = [];
