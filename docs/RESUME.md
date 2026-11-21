@@ -1,6 +1,6 @@
-# PlotCraft — resume note (paused 2026-11-21 ~12:30 Dubai, end of batch 7)
+# PlotCraft — resume note (2026-11-21, end of batch 8; client asked to continue straight into batch 9)
 
-Everything lives on disk under /home/claude/plotcraft. Read this, then the tail of docs/status.md. All role agents run on **Opus 5.5** (docs/TEAM-PROTOCOL.md, Models section). Client wants work in **batches, pausing after each**.
+Everything lives on disk under /home/claude/plotcraft (cloud sessions: /home/user/plotcraft, repo mostafa-scrum-inst/plotcraft). Read this, then the tail of docs/status.md. All role agents run on **Opus 5.5** (docs/TEAM-PROTOCOL.md, Models section). Client wants work in **batches, pausing after each**.
 
 ## Where things stand
 | Item | State |
@@ -22,11 +22,19 @@ Everything lives on disk under /home/claude/plotcraft. Read this, then the tail 
 - Republished ~12:22. Client testing guide (Claude Doc, 25 steps + report table): https://claude.ai/artifact/LsqkH2iM1PwLMZ4ag2jaeA
 - Client asked for a project zip and a project summary (chat cannot be moved into his "Plot plan" project): docs/PROJECT-SUMMARY.md + plotcraft-*.zip sent at the pause.
 
-## Next batch (batch 8): F3-T3 + F3 feature review
-1. **QA A-16 trim FIRST** (target full run ≤ 8 min) and drop nothing that guards behaviour.
-2. **F3-T3 (Designer):** 3D look tables (exteriors, interiors Q18 palettes, room tints, site colours), furniture block tables (Q19 density), sky/season tables, stage-4 hint visuals; riders in F3-plan.md (incl. two added by TL). FS one-line fix for QA obs 5 when core/plans.js is next opened.
-3. **F3 feature review (PM + CTO):** PM decisions (TL list in docs/03-tasks/F3-T2/outcome-review.md): low-fill warning; unmet-pair hint; no circulation rule; one-step "Undo last edit"?; 1.5 m in ft; client question "is 8 rooms per floor enough?". CTO: F1 real-device gate still OPEN (condition unmet), runtime, F4 hand-off (house model from approved plans + PC.layout.core; Q14 convention; THREE mock first).
-4. Then F4 (first real three.js 3D) — first time real WebGL runs; publish for a phone check.
+## Batch 8 result: QA trim + F3-T3 + F3 feature review DONE
+- QA A-16 trim: full run 511 -> 435 s, nothing lost (docs/03-tasks/F3-T3/qa-trim.md); TL accepted; --jobs stays 2.
+- F3-T3 (Designer): look3d.js / furniture.js / sky.js tables, stage-4 hint vignettes, Q10 3-stripe swatches, PM round-7 Q18 texts; TL plan + impl APPROVED; QA PASSED (bug 1 wardrobe anchor fixed); outcome approved. FS obs-5 moveRect fix done.
+- F3 feature review (docs/04-feature-reviews/F3.md): PM APPROVED (decisions 1,2,4,5,9 = "F3 follow-up bundle", recommended in F4-T2). CTO round 1 found a data-loss bug (stale plans after room delete/move -> draft rejected and silently deleted); FS fixed plansOk + added rejected-draft side key plotcraft.draft.rejected; TL APPROVED, QA PASSED (qa-draft-fix.md), CTO round 2 APPROVED.
+- Last full run: exit 0 in 459.6 s.
+- Republished: https://claude.ai/artifact/LDbG9XdU1UeAMcVwqmxAB9 (new URL). Testing guide (Claude Doc): https://claude.ai/artifact/DVTuhtQMn5MYhmbEUqMGpD
+- Client questions OPEN (cards sent 2026-11-21): (1) 8 rooms per floor enough? PM rec raise to 10; (2) hall access: PM rec non-blocking warning; (3) CTO: phone check right after F4-T1 (rec yes). Answers go into client-decisions.md / F1.md; work from (1)/(2) joins the F3 follow-up bundle.
+- CTO conditions for F4: H1-H6 in F3.md (mock first, vendored r128 from npm for tests, house model from approved plans + PC.layout.core, Q14 test, A-11/A-13 rules, phone look at F4-T1 publish before F4 review). F4-plan.md riders added by TL.
+
+## Next batch (batch 9): F4-T1 (first real three.js 3D)
+1. TL: place the F3 follow-up bundle (PM rec F4-T2) and the client answers when they arrive.
+2. F4-T1 per F4-plan.md + CTO H1-H6: plan -> TL plan review -> implement -> TL review -> QA -> outcome. Environment: cdnjs blocked here, npm registry reachable (tests/vendor/three-r128.min.js).
+3. Republish for the phone check; testing-steps doc.
 
 ## Known limits owned by Designer F5-T3
 Overridden-edge label pile-up; legend wraps at 1280x800 with "* set by you"; area label wider than narrow footprints; no Parking/Pool legend entries; pool-size note wrap at 360 px.
