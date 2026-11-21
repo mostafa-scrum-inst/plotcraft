@@ -1107,6 +1107,15 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   .pc-caption { left: calc((100% - var(--panel-w-short)) / 2); max-width: calc(100% - var(--panel-w-short) - 2 * var(--s2)); }
 }
 
+/* Day / night track on the time slider (Designer F4-T3 plan 3): 6 px, stops at h / 24 in each PC.data.sky key's
+   background (data-tables.test checks them against the table), framed by a 1 px --border line. The disabled rules
+   (30-components) keep precedence by specificity. */
+.pc-range--sky::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; box-shadow: 0 0 0 1px var(--border);
+  background: linear-gradient(to right, #0B1626 0%, #0B1626 18.75%, #E8B08A 25%, #A9CBE6 31.25%, #8EC3EA 50%, #9CC5E4 66.6667%, #D8B994 70.8333%, #E59A6E 75%, #2C3556 81.25%, #0B1626 87.5%, #0B1626 100%); }
+.pc-range--sky::-moz-range-track { height: 6px; border-radius: 3px; box-shadow: 0 0 0 1px var(--border);
+  background: linear-gradient(to right, #0B1626 0%, #0B1626 18.75%, #E8B08A 25%, #A9CBE6 31.25%, #8EC3EA 50%, #9CC5E4 66.6667%, #D8B994 70.8333%, #E59A6E 75%, #2C3556 81.25%, #0B1626 87.5%, #0B1626 100%); }
+.pc-range--sky::-webkit-slider-thumb { margin-top: -11px; }
+
 </style>
 </head>
 <body>
@@ -1615,7 +1624,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
             <div class="pc-v3pane" id="pc-v3-light" data-pc="v3-pane-light">
               <h3>Light</h3>
               <div class="pc-v3row">
-                <input class="pc-range" type="range" min="0" max="24" step="0.25" value="12" aria-label="Time of day" data-pc="v3-time">
+                <input class="pc-range pc-range--sky" type="range" min="0" max="24" step="0.25" value="12" aria-label="Time of day" data-pc="v3-time">
                 <output data-pc="v3-time-out">12:00</output>
               </div>
               <div class="pc-v3row">
@@ -1779,6 +1788,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     PARKING: { w: 2.5, d: 5.0, area: 12.5 },
     POOL: { S: { w: 3, d: 6, area: 18 }, M: { w: 4, d: 8, area: 32 }, L: { w: 5, d: 10, area: 50 } },
     POOL_CLEAR: 1,
+    VEG_SHORT: 0.8,                    // F4-T3, PM round 11: warn when placed planting < 80 % of veg.area
     GRID: { m: { square: 1, snap: 0.5 }, ft: { square: 1.524, snap: 0.3048 } },   // ft mode: 5 ft squares, snap 1 ft
     PLAN_SNAP: { m: 0.5, ft: 0.3048 },
     PLAN_EDGE_SNAP: 0.3,                          // 4.4: a dragged edge snaps to a neighbouring edge within 0.3 m first (A-15)
@@ -2463,7 +2473,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     var ptsL = state.plot.pts.map(function (p) { var l = frame.w2l(p); return [r9(l[0]), r9(l[1])]; }), n = ptsL.length;
     var site = { edge: edge, frame: frame, ptsL: ptsL, plotArea: Math.abs(G.area(ptsL)), perimeter: G.perimeter(ptsL, true),
       edgeClass: [], edgeAuto: [], setbackOf: [], buildable: null, footprint: null, noFit: false, parking: null, pool: null,
-      veg: null, seating: null, northMarker: null, omitted: [] };
+      veg: null, seating: null, northMarker: null, omitted: [], trees: [], shrubs: [], vegPlaced: 0 };
     // Edge classes: front = street edge; back = outward normal within 40 degrees of straight away from the street
     // (automatic). In effect: the architect's override where there is one (F2-S4), else the automatic class.
     var ov = a.edgeOv || {};
@@ -2489,6 +2499,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     var used = (site.footprint ? site.footprint.area : 0) + (site.parking ? site.parking.w * site.parking.d : 0) + (site.pool ? site.pool.w * site.pool.d : 0);
     var want = a.vegPct / 100 * site.plotArea, room = Math.max(0, site.plotArea - used), va = Math.min(want, room);
     site.veg = { area: va, pct: va / site.plotArea * 100, reduced: want > room + T.fit };
+    // Trees and shrubs (F4-T3, PC.scatter): placed here so stage 2 can warn about a shortfall (PM round 11).
+    var vg = PC.scatter.vegetation(site, a.extras);
+    site.trees = vg.trees; site.shrubs = vg.shrubs; site.vegPlaced = vg.placed;
     return site;
   }
 
@@ -2760,10 +2773,11 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   // What a yard item must stay clear of: footprint + 1 m, parking, pool + clearance, the path strip.
   function blocked(site, extras) {
     var out = [grow(site.footprint, 1), PC.site.pathStrip(site, extras)];
-    if (site.parking) out.push(site.parking);
+    if (site.parking) out.push(grow(site.parking, 0));
     if (site.pool) out.push(grow(site.pool, PC.C.POOL_CLEAR));
     return out;
   }
+  PC.site.blocked = blocked;   // new rectangles on every call (F4-T3 scatter); the memoised site is never shared
 
   // Seating: a 3 x 3 m pad, back yard first, then the wider side yard, the other side yard, the front yard; in each
   // yard the 0.5 m position nearest the yard's middle. Inside the plot with C.SITE.edgeClear to the edge (the wall
@@ -3475,7 +3489,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     'veg-reduced':     { kind: 'warn', q: 4, text: 'Vegetation was reduced to what fits: {a} ({p} %).' },
     'parking-omitted': { kind: 'warn', q: 15, text: 'Parking does not fit between the building and the street: it is left out of the 3D scene. Try fewer cars, a lower footprint % or a larger front setback (it moves the building back from the street).' },
     'pool-omitted':    { kind: 'warn', q: 16, text: 'The pool with its {c} clearance does not fit behind or beside the building: it is left out of the 3D scene. Try a smaller pool, a lower footprint % or a larger back setback (it moves the building toward the street).' },
-    'seating-omitted': { kind: 'warn', q: 17, text: 'Garden seating does not fit in the yard: it is left out of the 3D scene. Try a lower footprint %, fewer cars or a smaller pool.' }
+    'seating-omitted': { kind: 'warn', q: 17, text: 'Garden seating does not fit in the yard: it is left out of the 3D scene. Try a lower footprint %, fewer cars or a smaller pool.' },
+    // PM round 11 (TL F4-T3 plan review Q2): placed planting below 80 % of the effective vegetation area (or of what the
+    // A-9 item caps allow, 120 trees + 200 shrubs: a cap is not the building, parking or pool taking the room)
+    'veg-short':       { kind: 'warn', q: 4, text: 'Only {a} ({p} % of the plot) of planting fits around the building, parking and pool: the 3D garden is smaller than the {q} % asked. Try a lower footprint %, fewer cars or a smaller pool.' }
   };
   // What helps when a level needs more than the footprint offers: raising the footprint % only helps while the
   // plot is not already the limit.
@@ -3529,6 +3546,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     if (site.omitted.indexOf('parking') >= 0) add('parking-omitted');
     if (site.omitted.indexOf('pool') >= 0) add('pool-omitted', { c: U.fmtLen(PC.C.POOL_CLEAR, unit) });
     if (site.omitted.indexOf('seating') >= 0) add('seating-omitted');
+    if (fp && a.vegPct > 0 && site.veg.area > 0 && site.vegPlaced < PC.C.VEG_SHORT * Math.min(site.veg.area, PC.scatter.capArea()) - 1e-9)
+      add('veg-short', { a: U.fmtArea(site.vegPlaced, unit), p: pct(site.vegPlaced / site.plotArea * 100), q: pct(site.veg.pct) });
     out.summary = { plotArea: site.plotArea, buildableArea: site.buildable.area, footprintArea: fp ? fp.area : 0,
       footprintPct: fp ? fp.pct : 0, vegArea: site.veg.area, vegPct: site.veg.pct, levels: levels };
     return out;
@@ -4068,7 +4087,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
           entrance: { u: fp.u + fp.w / 2, v: fp.v, w: H.door },
           parking: copy(site.parking), pool: copy(site.pool),
           wall: !!a.extras.wall, gate: gu === null ? null : { u: gu, w: PC.C.SITE.gateW }, seating: copy(site.seating),
-          trees: [], shrubs: [], vegPct: site.veg ? site.veg.pct : 0,
+          trees: site.trees.map(function (t) { return t.slice(); }), shrubs: site.shrubs.map(function (t) { return t.slice(); }),
+          vegPct: site.veg ? site.veg.pct : 0, vegPlaced: site.vegPlaced,
           northMarker: copy(site.northMarker)
         }
       };
@@ -4150,6 +4170,200 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     },
     copy: copy
   };
+})(globalThis.PC = globalThis.PC || {});
+
+</script>
+<script>/* js/core/sky.js */
+/* PC.sky: the time-of-day and season model (A-13, F4-T3). Pure: hex strings and numbers only (core layer).
+   - mix(a, b, k): the one colour mix of the app (A-10): per-channel lerp of the 0-255 sRGB values, Math.round per
+     channel, upper-case '#RRGGBB'. PC.three.mixHex is an alias.
+   - compute(hour, season, northDeg, tables): sun path a = (hour - 6) / 12 x PI, s = e cos a + (y sin E - n cos E) sin a
+     with n = (sin N, 0, -cos N) in frame T and e = n turned 90 degrees clockwise seen from above; at night (s.y < 0)
+     the moon (-s.x, |s.y|, -s.z); the direction's Y kept at 0.15 or more (the horizontal part rescaled, still unit).
+     Colours: the key-frame lerp with mix (rounded per channel), then the day-weighted season blend with mix again
+     (rounded again; TL F4-T3 plan review item 2, the Designer's golden table): day = min(1, K.sunI / noon sunI);
+     sunColor / hemiSky / background toward season.tint by tintAmount x day; hemiGround toward season.ground by
+     groundBounce x day. Intensities are the key values. Vegetation and ground colours are the season's as they are. */
+(function (PC) {
+  'use strict';
+  var D = Math.PI / 180, MIN_Y = 0.15;
+  var COLS = ['background', 'sunColor', 'hemiSky', 'hemiGround'];
+
+  function hex2(n) { var s = n.toString(16).toUpperCase(); return s.length < 2 ? '0' + s : s; }
+  function mix(a, b, k) {
+    var out = '#';
+    for (var i = 1; i < 7; i += 2) {
+      var x = parseInt(a.slice(i, i + 2), 16), y = parseInt(b.slice(i, i + 2), 16);
+      out += hex2(Math.round(x + (y - x) * k));
+    }
+    return out;
+  }
+
+  // Key-frame interpolation at hour h (0..24).
+  function keyAt(keys, h) {
+    var i = 0;
+    while (i < keys.length - 2 && keys[i + 1].h < h) i++;
+    var a = keys[i], b = keys[i + 1], t = (h - a.h) / (b.h - a.h), k = {};
+    COLS.forEach(function (n) { k[n] = mix(a[n], b[n], t); });
+    k.sunI = a.sunI + (b.sunI - a.sunI) * t;
+    k.hemiI = a.hemiI + (b.hemiI - a.hemiI) * t;
+    return k;
+  }
+
+  // Unit light direction in T (from the scene towards the light) and whether it is the moon.
+  function sunDir(hour, elevDeg, northDeg) {
+    var a = (hour - 6) / 12 * Math.PI, E = elevDeg * D, N = northDeg * D;
+    var n = [Math.sin(N), 0, -Math.cos(N)], e = [Math.cos(N), 0, Math.sin(N)];
+    var ca = Math.cos(a), sa = Math.sin(a), s = [0, 0, 0];
+    for (var i = 0; i < 3; i++) s[i] = e[i] * ca + ((i === 1 ? Math.sin(E) : 0) - n[i] * Math.cos(E)) * sa;
+    var moon = s[1] < 0;
+    if (moon) s = [-s[0], -s[1], -s[2]];
+    if (s[1] < MIN_Y) {
+      var hl = Math.hypot(s[0], s[2]), k = Math.sqrt(1 - MIN_Y * MIN_Y) / hl;
+      s = [s[0] * k, MIN_Y, s[2] * k];
+    }
+    return { dir: s, moon: moon };
+  }
+
+  function compute(hour, season, northDeg, tables) {
+    var T = tables || PC.data.sky, h = Math.min(24, Math.max(0, +hour || 0)), se = T.seasons[season] || T.seasons.summer;
+    var noon = T.keys.filter(function (x) { return x.h === 12; })[0];
+    var K = keyAt(T.keys, h), day = Math.min(1, K.sunI / noon.sunI), w = se.tintAmount * day, sd = sunDir(h, se.elevMax, northDeg || 0);
+    return {
+      hour: h, season: T.seasons[season] ? season : 'summer',
+      sunDir: sd.dir, moon: sd.moon,
+      sunColor: mix(K.sunColor, se.tint, w), sunIntensity: K.sunI,
+      hemiSky: mix(K.hemiSky, se.tint, w), hemiGround: mix(K.hemiGround, se.ground, T.groundBounce * day), hemiIntensity: K.hemiI,
+      background: mix(K.background, se.tint, w),
+      canopyColor: se.canopy, canopyVisible: se.canopyVisible, shrubColor: se.shrub, groundColor: se.ground
+    };
+  }
+
+  PC.sky = { mix: mix, compute: compute, sunDir: sunDir, keyAt: keyAt, MIN_Y: MIN_Y };
+  // Session defaults and presets (A-13; F4-S3).
+  PC.sky.DEFAULT = { hour: 12, season: 'summer' };
+  PC.sky.PRESETS = { morning: 8, noon: 12, evening: 17.5, night: 22 };
+})(globalThis.PC = globalThis.PC || {});
+
+</script>
+<script>/* js/core/scatter.js */
+/* PC.scatter.vegetation(site, extras): seeded tree and shrub positions in frame L (A-9; F4-T3 plan section 2 and the
+   TL plan review: item 1 clearances from PC.data.vegetation, item 5 seed, rulings Q1 / Q3).
+   - Seed: FNV-1a 32 of the plot points (rounded 1e-6) and the street edge -> mulberry32. Not the vegetation %, so a
+     Q4 change keeps the candidate order and the garden grows or shrinks by additions and removals.
+   - Candidates: a 1 m grid over the plot bbox (centres at half metres), each jittered +-0.35 m, with a scale in
+     data.vegetation.scale; 3 PRNG draws per grid node whether kept or not (the order depends on the plot only). Kept:
+     inside the plot and >= 0.7 m from every edge. Then a Fisher-Yates shuffle.
+   - Exclusions on the item centre. Both kinds: the path strip, the seating pad + 0.3 m, the needle circle L / 2 + 0.3.
+     Trees (clr = canopyR x scale[1]): footprint + 1 m + clr, parking + clr, pool + POOL_CLEAR + clr, and clr + 0.2 m
+     from every plot edge. Shrubs: footprint + 1 m, parking, pool + POOL_CLEAR (PC.site.blocked).
+   - Spacing between centres: tree-tree 2.4 m, tree-shrub 1.4 m, shrub-shrub 1.0 m (hash grid).
+   - Selection: trees (6 m2 each) while placed + 3 <= 0.6 x veg.area, at most 120; then shrubs (1.5 m2) while
+     placed + 0.75 <= veg.area, at most 200 (rounds to the nearest item).
+   Returns { trees: [[u, v, s]], shrubs: [[u, v, s]], placed } (placed in m2, the counting areas). */
+(function (PC) {
+  'use strict';
+  var G = PC.geom;
+  var C = { grid: 1, jitter: 0.35, edge: 0.7, wallGap: 0.2, treeA: 6, shrubA: 1.5, treeShare: 0.6, maxTrees: 120,
+    maxShrubs: 200, seatGap: 0.3, needleGap: 0.3, tt: 2.4, ts: 1.4, ss: 1.0, cell: 2.5 };
+
+  function fnv(str) {
+    var h = 0x811c9dc5;
+    for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return h >>> 0;
+  }
+  function mulberry32(a) {
+    return function () {
+      a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  // The seed text: the plot points rounded to 1e-6 and the street edge. The candidates depend on nothing else.
+  function seedText(site) {
+    return JSON.stringify([site.ptsL.map(function (p) { return [Math.round(p[0] * 1e6), Math.round(p[1] * 1e6)]; }), site.edge]);
+  }
+  function seedOf(site) { return fnv(seedText(site)); }
+  function grow(r, k) { return { u: r.u - k, v: r.v - k, w: r.w + 2 * k, d: r.d + 2 * k }; }
+  function inRect(p, r) { return p[0] > r.u && p[0] < r.u + r.w && p[1] > r.v && p[1] < r.v + r.d; }
+  function edgeDist(p, pts) {
+    var m = Infinity;
+    for (var i = 0; i < pts.length; i++) m = Math.min(m, G.distPointSeg(p, pts[i], pts[(i + 1) % pts.length]));
+    return m;
+  }
+
+  // Candidate points of a plot: [u, v, scale, edgeDistance], shuffled. Depends on the plot only, so the last result is
+  // kept, keyed on the full seed text (not its 32-bit hash, so a collision cannot reuse another plot's points; TL F4-T3
+  // implementation review finding 7). Frozen: the selection only reads it.
+  var memo = { key: null, out: null, hits: 0 };
+  function candidates(site) {
+    var key = seedText(site);
+    if (memo.key === key) { memo.hits++; return memo.out; }
+    var out = Object.freeze(build(site, key).map(Object.freeze));
+    memo.key = key; memo.out = out;
+    return out;
+  }
+  function build(site, key) {
+    var rnd = mulberry32(fnv(key)), V = PC.data.vegetation, bb = G.bbox(site.ptsL), out = [], g = C.grid;
+    for (var y = Math.floor(bb.y0) + g / 2; y < bb.y1; y += g) {
+      for (var x = Math.floor(bb.x0) + g / 2; x < bb.x1; x += g) {
+        var p = [x + (rnd() * 2 - 1) * C.jitter, y + (rnd() * 2 - 1) * C.jitter], s = V.scale[0] + rnd() * (V.scale[1] - V.scale[0]);
+        if (!G.pointInPoly(p, site.ptsL)) continue;
+        var e = edgeDist(p, site.ptsL);
+        if (e >= C.edge) out.push([p[0], p[1], s, e]);
+      }
+    }
+    for (var i = out.length - 1; i > 0; i--) { var j = Math.floor(rnd() * (i + 1)), t = out[i]; out[i] = out[j]; out[j] = t; }
+    return out;
+  }
+
+  function vegetation(site, extras) {
+    var res = { trees: [], shrubs: [], placed: 0 };
+    if (!site || !site.footprint || !site.veg || !(site.veg.area > 0)) return res;
+    var V = PC.data.vegetation, clr = V.tree.canopyR * V.scale[1], A = site.veg.area;
+    var both = [PC.site.pathStrip(site, extras)];
+    if (site.seating) both.push(grow(site.seating, C.seatGap));
+    var shrubNo = PC.site.blocked(site, extras).concat(both);
+    var treeNo = [grow(site.footprint, 1 + clr)].concat(both);
+    if (site.parking) treeNo.push(grow(site.parking, clr));
+    if (site.pool) treeNo.push(grow(site.pool, PC.C.POOL_CLEAR + clr));
+    var nm = site.northMarker, nr = nm ? nm.L / 2 + C.needleGap : 0;
+    function free(p, no) {
+      if (nm && Math.hypot(p[0] - nm.u, p[1] - nm.v) < nr) return false;
+      for (var i = 0; i < no.length; i++) if (inRect(p, no[i])) return false;
+      return true;
+    }
+    var grid = {};
+    function key(i, j) { return i + ',' + j; }
+    function spaced(p, tree) {
+      var ci = Math.floor(p[0] / C.cell), cj = Math.floor(p[1] / C.cell);
+      for (var i = ci - 1; i <= ci + 1; i++) for (var j = cj - 1; j <= cj + 1; j++) {
+        var b = grid[key(i, j)];
+        if (b) for (var k = 0; k < b.length; k++) {
+          var q = b[k], need = tree ? (q[2] ? C.tt : C.ts) : (q[2] ? C.ts : C.ss);
+          if (Math.hypot(p[0] - q[0], p[1] - q[1]) < need) return false;
+        }
+      }
+      return true;
+    }
+    function put(p, tree) { var k = key(Math.floor(p[0] / C.cell), Math.floor(p[1] / C.cell)); (grid[k] = grid[k] || []).push([p[0], p[1], tree]); }
+    var cand = candidates(site), used = [], i, p;
+    for (i = 0; i < cand.length && res.trees.length < C.maxTrees && res.placed + C.treeA / 2 <= C.treeShare * A; i++) {
+      p = cand[i];
+      if (p[3] < clr + C.wallGap || !free(p, treeNo) || !spaced(p, true)) continue;
+      res.trees.push([p[0], p[1], p[2]]); put(p, true); used[i] = true; res.placed += C.treeA;
+    }
+    for (i = 0; i < cand.length && res.shrubs.length < C.maxShrubs && res.placed + C.shrubA / 2 <= A; i++) {
+      p = cand[i];
+      if (used[i] || !free(p, shrubNo) || !spaced(p, false)) continue;
+      res.shrubs.push([p[0], p[1], p[2]]); put(p, false); res.placed += C.shrubA;
+    }
+    return res;
+  }
+
+  function capArea() { return C.maxTrees * C.treeA + C.maxShrubs * C.shrubA; }
+  PC.scatter = { vegetation: vegetation, capArea: capArea, memo: function () { return { key: memo.key, hits: memo.hits }; }, seedText: seedText, candidates: candidates, seedOf: seedOf, mulberry32: mulberry32, C: C };
 })(globalThis.PC = globalThis.PC || {});
 
 </script>
@@ -4239,7 +4453,11 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
      chroma x 1.6 (the 2D pastels would wash out under the noon sun); hall by the same L* step (no extra chroma); stair / lift as in 2D.
    - siteColors: fixed site colours. ground is the build-time plot grass and equals sky.seasons.summer.ground;
      groundOuter (outside the plot) is never seasonal; gate is for a gate leaf (posts use exteriors.trim);
-     highlight is the F5 selection colour (the 2D selection orange). */
+     highlight is the F5 selection colour (the 2D selection orange).
+   - vegetation (F4-T3, Designer plan section 1): sizes in metres at instance scale 1 and segment counts. Tree = trunk
+     cylinder (trunkR, Y 0 to trunkH) + canopy cone (canopyR, canopyH, base at canopyY0); shrub = cone (r, h, base at
+     Y 0); per-instance uniform scale in [scale[0], scale[1]]. Colours are not here: trunk = siteColors.trunk, canopy and
+     shrub = sky.seasons[s]. The scatter's tree clearance is canopyR x scale[1] (TL F4-T3 plan review). */
 (function (PC) {
   'use strict';
   PC.data.exteriors = {
@@ -4262,6 +4480,11 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     ground: '#7FAE55', groundOuter: '#B3B0A6', paving: '#CFC8BA', poolWater: '#3FA7C9', poolRim: '#E6E1D6',
     boundaryWall: '#CDC4B2', gate: '#3B4652', carCanopy: '#A3ABB1', seating: '#9A7A55', trunk: '#5B4636',
     northMarker: '#16212B', highlight: '#C2410C'
+  };
+  PC.data.vegetation = {
+    tree: { trunkR: 0.12, trunkH: 2.6, canopyR: 1.35, canopyY0: 1.4, canopyH: 2.8, trunkSeg: 6, canopySeg: 8 },
+    shrub: { r: 0.7, h: 0.8, seg: 7 },
+    scale: [0.85, 1.15]
   };
 })(globalThis.PC = globalThis.PC || {});
 
@@ -4395,8 +4618,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 </script>
 <script>/* js/three/util.js */
 /* PC.three helpers (A-10, A-11). THREE is touched only inside functions, so this file loads without it.
-   - mixHex(a, b, k): the one colour mix of the app (A-10): per-channel lerp of the 0-255 sRGB values, Math.round per
-     channel, upper-case '#RRGGBB'. Pure (no THREE).
+   - mixHex(a, b, k): the one colour mix of the app (A-10) = PC.sky.mix (core): per-channel lerp of the 0-255 sRGB
+     values, Math.round per channel, upper-case '#RRGGBB'.
    - col(hex): sRGB hex -> linear THREE.Color. Every material, vertex and light colour goes through it; the scene
      background does not (A-10).
    - BoxBatch: hand-written merge of boxes and up-facing quads into ONE Mesh with per-vertex colours (A-11).
@@ -4411,15 +4634,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   'use strict';
   var three = PC.three = PC.three || {};
 
-  function hex2(n) { return ('0' + n.toString(16).toUpperCase()).slice(-2); }
-  three.mixHex = function (a, b, k) {
-    var out = '#';
-    for (var i = 1; i < 7; i += 2) {
-      var x = parseInt(a.slice(i, i + 2), 16), y = parseInt(b.slice(i, i + 2), 16);
-      out += hex2(Math.round(x + (y - x) * k));
-    }
-    return out;
-  };
+  three.mixHex = PC.sky.mix;   // one rule, in core (F4-T3, TL plan review item 2)
   three.col = function (hex) { return new THREE.Color(hex).convertSRGBToLinear(); };
 
   // Faces as [normal axis, sign, u axis, v axis] with u x v = normal, so (-u-v, +u-v, +u+v, -u+v) runs counter-clockwise
@@ -4742,7 +4957,12 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
      (paving), a 0.9 x 0.9 x 0.75 m table and two 1.6 x 0.45 x 0.45 m benches 0.9 m either side (seating), parallel
      to the nearest facade; entrance step 1.2 x 0.6 x 0.15 m in front of the door (trim); north needle: two flat
      triangles 0.04 m high (BoxBatch.addFlat), the N half in northMarker, the S half in poolRim, length L.
-   - "poolWater": a flush opaque PlaneGeometry over exactly the pool rectangle at Y 0.03 (rotated -PI/2 about X). */
+   - "poolWater": a flush opaque PlaneGeometry over exactly the pool rectangle at Y 0.03 (rotated -PI/2 about X).
+   - Vegetation (F4-T3; A-11; Designer F4-T3 plan 1): InstancedMesh "trunks", "canopies", "shrubs" from the model's
+     trees / shrubs, geometry from PC.data.vegetation (trunk cylinder, canopy cone with its base at canopyY0, shrub
+     cone), one instance matrix per item = translate (u, base x s, v) x uniform scale s. frustumCulled false (the
+     instances spread beyond the geometry's own bounds); cast, never receive. A kind with no items gets no mesh.
+     Materials mats.trunk / mats.canopy / mats.shrub are recoloured by applyLook (look.js). */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
@@ -4754,6 +4974,28 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     var r = house.northDeg * Math.PI / 180, nu = Math.sin(r), nv = Math.cos(r), L = nm.L, w = 0.175 * L, c = house.center;
     var T = function (du, dv) { return [nm.u + du - c[0], -(nm.v + dv - c[1])]; };
     return { tipN: T(nu * L / 2, nv * L / 2), tipS: T(-nu * L / 2, -nv * L / 2), east: T(nv * w, -nu * w), west: T(-nv * w, nu * w), L: L };
+  };
+
+  three.buildVegetation = function (house, g, mats) {
+    var V = PC.data.vegetation, T = V.tree, S = V.shrub, cu = house.center[0], cv = house.center[1], out = [];
+    function inst(name, geo, mat, items, y0) {
+      if (!items.length) return;
+      var mesh = new THREE.InstancedMesh(geo(), mat, items.length), m = new THREE.Matrix4(), q = new THREE.Quaternion();
+      items.forEach(function (it, i) {
+        var s = it[2];
+        m.compose(new THREE.Vector3(it[0] - cu, y0 * s, -(it[1] - cv)), q, new THREE.Vector3(s, s, s));
+        mesh.setMatrixAt(i, m);
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.name = name; mesh.frustumCulled = false; mesh.castShadow = true; mesh.receiveShadow = false;
+      g.add(mesh); out.push(mesh);
+    }
+    var trees = house.site.trees, shrubs = house.site.shrubs;
+    // geometries are centred on their own origin: the base sits half a height below it
+    inst('trunks', function () { return new THREE.CylinderGeometry(T.trunkR, T.trunkR, T.trunkH, T.trunkSeg); }, mats.trunk, trees, T.trunkH / 2);
+    inst('canopies', function () { return new THREE.ConeGeometry(T.canopyR, T.canopyH, T.canopySeg); }, mats.canopy, trees, T.canopyY0 + T.canopyH / 2);
+    inst('shrubs', function () { return new THREE.ConeGeometry(S.r, S.h, S.seg); }, mats.shrub, shrubs, S.h / 2);
+    return out;
   };
 
   three.buildSite = function (house, world, mats) {
@@ -4816,6 +5058,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       b.addFlat([nd.tipN, nd.east, nd.west], 0, 0.04, SC.northMarker);
       b.addFlat([nd.tipS, nd.west, nd.east], 0, 0.04, SC.poolRim);
     }
+    three.buildVegetation(house, g, mats).forEach(function (x) { made.push(x); });
     var m = b.build(mats.batch, 'siteBatch');
     if (m) { g.add(m); made.push(m); }
     if (q) {
@@ -4913,23 +5156,97 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 })(globalThis.PC = globalThis.PC || {});
 
 </script>
+<script>/* js/three/look.js */
+/* PC.three.applyLook(ctx, look) and PC.three.fitShadow(sun, house, dir) (A-13, A-11; F4-T3 plan section 5; TL plan
+   review Q4). ctx = { scene, sun, hemi, mats, world, house }; look = PC.sky.compute(...).
+   applyLook writes the light colours (PC.three.col) and intensities, the sun position (target + sunDir x sunDist x
+   radius; target = footprint centre at Y 0), scene.background (raw hex), the plot ground / canopy / shrub material
+   colours and the canopies' visibility, then refits the shadow camera. It creates and disposes no geometry,
+   material or mesh and never touches the camera: the caller only marks the frame dirty. groundOuter and trunk keep
+   their build colours (the season never touches them; neither do house, furniture or site items).
+   fitShadow: the content box (footprint up to the roof top, parking + canopy, pool + rim, seating, every tree and
+   shrub at its scale; the boundary wall is left out) as 8 corners in the light's view (the basis three's lookAt
+   gives the shadow camera: z = light direction, x = up x z, y = z x x), plus a 0.5 m margin; each side capped at
+   shadowR x house.radius. Writes left / right / top / bottom / near / far + updateProjectionMatrix only. */
+(function (PC) {
+  'use strict';
+  var three = PC.three = PC.three || {};
+  var MARGIN = 0.5;
+
+  function contentBox(house) {
+    var fp = house.footprint, R = PC.C.ROOF, roof = house.roof, Vg = PC.data.vegetation, S = house.site;
+    var b = { u0: fp.u, u1: fp.u + fp.w, v0: fp.v, v1: fp.v + fp.d, y1: 0 };
+    function add(u0, u1, v0, v1, y1) { b.u0 = Math.min(b.u0, u0); b.u1 = Math.max(b.u1, u1); b.v0 = Math.min(b.v0, v0); b.v1 = Math.max(b.v1, v1); b.y1 = Math.max(b.y1, y1); }
+    var rise = roof.type === 'pitched' ? Math.tan(R.pitchDeg * Math.PI / 180) * Math.min(fp.w, fp.d) / 2 : 0;
+    add(fp.u, fp.u + fp.w, fp.v, fp.v + fp.d, roof.baseY + R.slab + Math.max(R.stairHead, R.pergolaH, R.parapetHigh, rise));
+    if (S.parking) add(S.parking.u, S.parking.u + S.parking.w, S.parking.v, S.parking.v + S.parking.d, 2.4);
+    if (S.pool) add(S.pool.u - 0.3, S.pool.u + S.pool.w + 0.3, S.pool.v - 0.3, S.pool.v + S.pool.d + 0.3, 0.1);
+    if (S.seating) add(S.seating.u, S.seating.u + S.seating.w, S.seating.v, S.seating.v + S.seating.d, 0.8);
+    var tr = Vg.tree.canopyR, th = Vg.tree.canopyY0 + Vg.tree.canopyH;
+    S.trees.forEach(function (t) { var r = tr * t[2]; add(t[0] - r, t[0] + r, t[1] - r, t[1] + r, th * t[2]); });
+    S.shrubs.forEach(function (t) { var r = Vg.shrub.r * t[2]; add(t[0] - r, t[0] + r, t[1] - r, t[1] + r, Vg.shrub.h * t[2]); });
+    var cu = house.center[0], cv = house.center[1], out = [];
+    [b.u0, b.u1].forEach(function (u) { [b.v0, b.v1].forEach(function (v) { [0, b.y1].forEach(function (y) { out.push([u - cu, y, -(v - cv)]); }); }); });
+    return out;
+  }
+  function cross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+  function norm(a) { var l = Math.hypot(a[0], a[1], a[2]); return [a[0] / l, a[1] / l, a[2] / l]; }
+  function dot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+
+  // The light-view extents of the content box for a light at eye looking along -dir (plain numbers, also for tests).
+  three.shadowFit = function (house, eye, dir) {
+    var z = norm(dir), x = cross([0, 1, 0], z);
+    x = Math.hypot(x[0], x[1], x[2]) < 1e-6 ? [1, 0, 0] : norm(x);
+    var y = cross(z, x), f = { left: Infinity, right: -Infinity, bottom: Infinity, top: -Infinity, near: Infinity, far: -Infinity };
+    contentBox(house).forEach(function (p) {
+      var r = [p[0] - eye[0], p[1] - eye[1], p[2] - eye[2]], lx = dot(r, x), ly = dot(r, y), d = -dot(r, z);
+      f.left = Math.min(f.left, lx); f.right = Math.max(f.right, lx); f.bottom = Math.min(f.bottom, ly); f.top = Math.max(f.top, ly);
+      f.near = Math.min(f.near, d); f.far = Math.max(f.far, d);
+    });
+    var cap = PC.C.VIEW3D.shadowR * house.radius;
+    return { left: Math.max(f.left - MARGIN, -cap), right: Math.min(f.right + MARGIN, cap), bottom: Math.max(f.bottom - MARGIN, -cap),
+      top: Math.min(f.top + MARGIN, cap), near: Math.max(0.5, f.near - MARGIN), far: f.far + MARGIN, basis: { x: x, y: y, z: z }, corners: contentBox(house) };
+  };
+
+  three.applyLook = function (ctx, L) {
+    var col = three.col, house = ctx.house, fp = house.footprint, V = PC.C.VIEW3D;
+    ctx.hemi.color.copy(col(L.hemiSky)); ctx.hemi.groundColor.copy(col(L.hemiGround)); ctx.hemi.intensity = L.hemiIntensity;
+    ctx.sun.color.copy(col(L.sunColor)); ctx.sun.intensity = L.sunIntensity;
+    var tx = fp.u + fp.w / 2 - house.center[0], tz = -(fp.v + fp.d / 2 - house.center[1]), s = L.sunDir, dist = V.sunDist * house.radius;
+    var eye = [tx + s[0] * dist, s[1] * dist, tz + s[2] * dist];
+    ctx.sun.target.position.set(tx, 0, tz);
+    ctx.sun.position.set(eye[0], eye[1], eye[2]);
+    var f = three.shadowFit(house, eye, s), c = ctx.sun.shadow.camera;
+    c.left = f.left; c.right = f.right; c.top = f.top; c.bottom = f.bottom; c.near = f.near; c.far = f.far;
+    c.updateProjectionMatrix();
+    ctx.scene.background = new THREE.Color(L.background);
+    ctx.mats.ground.color.copy(col(L.groundColor));
+    ctx.mats.canopy.color.copy(col(L.canopyColor));
+    ctx.mats.shrub.color.copy(col(L.shrubColor));
+    var can = ctx.world.getObjectByName('canopies');
+    if (can) can.visible = !!L.canopyVisible;
+  };
+})(globalThis.PC = globalThis.PC || {});
+
+</script>
 <script>/* js/three/scene.js */
 /* PC.view3d: renderer, on-demand loop, resize, visibility, context loss, lights, open / close (A-10, F4-T1 plan §4).
    THREE only inside functions: the file loads without it, and PC.view3d.open() then reports 'unavailable'.
    Loop (TL ruling 2): invalidate() requests ONE frame, only while open, visible, not lost, not building and none
    pending; an idle view requests no frames. Building... yields one painted frame first: rAF -> setTimeout 0 -> build
    (TL required item 3), guarded by a token so PC.view3d.close() during the yield builds nothing.
-   Lights: one hemisphere + one sun (the only shadow caster), fixed at noon / summer from PC.data.sky as it is
-   (A-13 rule: hemiGround = mix(noon hemiGround, summer ground, groundBounce)); F4-T3 swaps in PC.sky.compute. */
+   Lights: one hemisphere + one sun (the only shadow caster). The look (F4-T3, A-13) is the session's { hour, season }
+   (12:00 summer on a page load): setLook stores it and applies PC.sky.compute through PC.three.applyLook (look.js),
+   which recolours and moves lights only; every build (rebuild, context restore) re-applies the stored look. */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
-  var D = Math.PI / 180;
   var S = {
     renderer: null, scene: null, camera: null, world: null, hemi: null, sun: null, mats: null, canvas: null,
     house: null, builtKey: null, pose: null, limits: null, size: [0, 0],
     active: false, lost: false, dirty: false, frame: 0, building: 0, token: 0, onState: null,
-    meshes: [], level: 'all', roof: false, renders: 0, builds: 0, restores: 0
+    meshes: [], level: 'all', roof: false, renders: 0, builds: 0, restores: 0, looks: 0,
+    look: { hour: 12, season: 'summer' }
   };
   function V() { return PC.C.VIEW3D; }
   function dpr() { var d = typeof devicePixelRatio === 'number' && devicePixelRatio > 0 ? devicePixelRatio : 1; return Math.min(d, V().maxDpr); }
@@ -4942,18 +5259,6 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     r.shadowMap.type = THREE.PCFSoftShadowMap;
     r.outputEncoding = THREE.sRGBEncoding;
     return r;
-  };
-
-  // The opening look (noon, summer) from the tables as they are.
-  three.noonLook = function () {
-    var sky = PC.data.sky, k = sky.keys.filter(function (x) { return x.h === 12; })[0], su = sky.seasons.summer;
-    return { sunColor: k.sunColor, sunI: k.sunI, hemiSky: k.hemiSky, hemiI: k.hemiI, background: k.background,
-      hemiGround: three.mixHex(k.hemiGround, su.ground, sky.groundBounce), elevMax: su.elevMax };
-  };
-  // A-13 at a = PI / 2 (noon): s = y sin E - n cos E, n = (sin N, 0, -cos N).
-  three.noonSunDir = function (northDeg, elevDeg) {
-    var N = northDeg * D, E = elevDeg * D;
-    return [-Math.sin(N) * Math.cos(E), Math.sin(E), Math.cos(N) * Math.cos(E)];
   };
 
   function cancelFrame() { if (S.frame) { cancelAnimationFrame(S.frame); S.frame = 0; } }
@@ -5033,16 +5338,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   }
 
   function lights(house) {
-    var L = three.noonLook(), fp = house.footprint, cu = house.center[0], cv = house.center[1];
-    S.hemi.color.copy(three.col(L.hemiSky)); S.hemi.groundColor.copy(three.col(L.hemiGround)); S.hemi.intensity = L.hemiI;
-    S.sun.color.copy(three.col(L.sunColor)); S.sun.intensity = L.sunI;
-    var tx = fp.u + fp.w / 2 - cu, tz = -(fp.v + fp.d / 2 - cv), s = three.noonSunDir(house.northDeg, L.elevMax), dist = V().sunDist * house.radius;
-    S.sun.target.position.set(tx, 0, tz);
-    S.sun.position.set(tx + s[0] * dist, s[1] * dist, tz + s[2] * dist);
-    var half = Math.min(V().shadowK * Math.hypot(fp.w, fp.d) / 2, V().shadowR * house.radius), c = S.sun.shadow.camera;
-    c.left = -half; c.right = half; c.top = half; c.bottom = -half; c.near = 0.5; c.far = dist + 2 * half;
-    c.updateProjectionMatrix();
-    S.scene.background = new THREE.Color(L.background);
+    var L = PC.sky.compute(S.look.hour, S.look.season, house.northDeg);
+    three.applyLook({ scene: S.scene, sun: S.sun, hemi: S.hemi, mats: S.mats, world: S.world, house: house }, L);
+    S.looks++;
   }
 
   function build(house) {
@@ -5052,7 +5350,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       batch: new THREE.MeshLambertMaterial({ vertexColors: true }),
       ground: new THREE.MeshLambertMaterial({ color: three.col(SC.ground) }),
       groundOuter: new THREE.MeshLambertMaterial({ color: three.col(SC.groundOuter) }),
-      poolWater: new THREE.MeshLambertMaterial({ color: three.col(SC.poolWater) })
+      poolWater: new THREE.MeshLambertMaterial({ color: three.col(SC.poolWater) }),
+      trunk: new THREE.MeshLambertMaterial({ color: three.col(SC.trunk) }),
+      canopy: new THREE.MeshLambertMaterial({ color: three.col(PC.data.sky.seasons.summer.canopy) }),
+      shrub: new THREE.MeshLambertMaterial({ color: three.col(PC.data.sky.seasons.summer.shrub) })
     };
     S.meshes = three.buildShell(house, S.world, S.mats).concat(three.buildInterior(house, S.world, S.mats),
       three.buildRoof(house, S.world, S.mats), three.buildSite(house, S.world, S.mats));
@@ -5108,6 +5409,13 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     invalidate: invalidate,
     setLevel: function (sel) { S.level = sel; applyVisibility(); invalidate(); },
     setRoof: function (on) { S.roof = !!on; applyVisibility(); invalidate(); },
+    // Session look (A-13, TL F4-T3 Q5): kept across stages, rebuilds and context restores; no rebuild, camera untouched.
+    setLook: function (l) {
+      if (l && typeof l.hour === 'number' && isFinite(l.hour)) S.look.hour = Math.min(24, Math.max(0, l.hour));
+      if (l && PC.data.sky.seasons[l.season]) S.look.season = l.season;
+      if (S.house && S.mats) { lights(S.house); invalidate(); }
+    },
+    look: function () { return { hour: S.look.hour, season: S.look.season }; },
     resetView: function () { if (!S.house) return; S.pose = PC.cam.reset(S.house, aspect()); invalidate(); },
     setOnInput: function (fn) { S.onInput = fn; },
     pose: function () { return S.pose ? PC.cam.copy(S.pose) : null; },
@@ -5115,7 +5423,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     info: function () {
       return { renderer: S.renderer, scene: S.scene, camera: S.camera, world: S.world, house: S.house, active: S.active, lost: S.lost,
         building: !!S.building, frame: !!S.frame, dirty: S.dirty, renders: S.renders, builds: S.builds, restores: S.restores,
-        meshCount: S.meshes.length, meshes: S.meshes.slice(), level: S.level, roof: S.roof, size: S.size.slice(), renderNow: function () { if (S.house && !S.lost) render(); } };
+        meshCount: S.meshes.length, meshes: S.meshes.slice(), level: S.level, roof: S.roof, look: { hour: S.look.hour, season: S.look.season }, looks: S.looks, size: S.size.slice(), renderNow: function () { if (S.house && !S.lost) render(); } };
     }
   };
 })(globalThis.PC = globalThis.PC || {});
@@ -7600,14 +7908,17 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
    to PC.view3d (three layer) and owns the stage-5 DOM: Building... / unavailable overlays, the level selector
    ("All" + the house's own levels, lowest first; PM round 9 labels), Reset view, the collapsible panel and its tabs.
    Session state only (A-4): level selection and roof toggle survive leaving and returning; the view opens on All
-   with the roof off. Controls of later tasks (time, presets, season, room finder, tour) are
-   disabled here (TL F4-T1 ruling 3); the Roof switch is enabled since F4-T2. This file never touches three.js (ui layer, A-2). */
+   with the roof off. Controls of later tasks (room finder, tour) are disabled here (TL F4-T1 ruling 3); the Roof
+   switch is enabled since F4-T2. Light tab (F4-T3, A-13; Designer F4-T3 plan 3): the time slider (0-24 h, 0.25), four
+   presets (8 / 12 / 17.5 / 22; aria-pressed only while the hour equals the preset) and the season select set the
+   session look through PC.view3d.setLook (no rebuild, camera untouched); the readout shows HH:MM. The look lives in
+   PC.view3d (session; 12:00 summer on a page load). This file never touches three.js (ui layer, A-2). */
 (function (PC) {
   'use strict';
   var ui = PC.ui = PC.ui || {};
   ui.stages = ui.stages || {};
-  var LATER = ['v3-time', 'v3-preset-morning', 'v3-preset-noon', 'v3-preset-evening', 'v3-preset-night', 'v3-season',
-    'v3-room', 'v3-tour-start', 'v3-tour-pause', 'v3-tour-stop'];
+  var LATER = ['v3-room', 'v3-tour-start', 'v3-tour-pause', 'v3-tour-stop'];
+  var PRESETS = ['morning', 'noon', 'evening', 'night'];
   var TABS = ['view', 'light', 'tour'];
   var open = false, house = null, level = 'all', levelsKey = '';
 
@@ -7645,6 +7956,18 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     PC.view3d.open(house, ui.$('v3-canvas'), onState);
     if (house) PC.view3d.setLevel(level);
   }
+  function hhmm(h) {
+    var m = Math.round(h * 60), hh = Math.floor(m / 60), mm = m % 60;
+    return (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm;
+  }
+  function renderLook() {
+    var l = PC.view3d.look();
+    ui.$('v3-time').value = String(l.hour);
+    ui.$('v3-time-out').textContent = hhmm(l.hour);
+    ui.$('v3-season').value = l.season;
+    PRESETS.forEach(function (p) { ui.$('v3-preset-' + p).setAttribute('aria-pressed', PC.sky.PRESETS[p] === l.hour ? 'true' : 'false'); });
+  }
+  function setLook(l) { PC.view3d.setLook(l); renderLook(); }
   function tab(name) {
     TABS.forEach(function (t) {
       var on = t === name;
@@ -7664,6 +7987,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       });
       ui.on(ui.$('v3-roof'), 'change', function (e) { PC.view3d.setRoof(e.target.checked); });
       ui.on(ui.$('v3-reset'), 'click', function () { PC.view3d.resetView(); });
+      ui.on(ui.$('v3-time'), 'input', function (e) { setLook({ hour: parseFloat(e.target.value) }); });
+      ui.on(ui.$('v3-season'), 'change', function (e) { setLook({ season: e.target.value }); });
+      PRESETS.forEach(function (p) { ui.on(ui.$('v3-preset-' + p), 'click', function () { setLook({ hour: PC.sky.PRESETS[p] }); }); });
+      renderLook();
       ui.on(ui.$('v3-panel-toggle'), 'click', function () {
         var p = ui.$('v3-panel'), collapsed = !p.classList.contains('is-collapsed');
         p.classList.toggle('is-collapsed', collapsed);
@@ -7676,7 +8003,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
         cam: function () { return PC.view3d.pose(); }
       });
       ui.shell.register(5, {
-        enter: function () { open = true; show(PC.store.get()); },
+        enter: function () { open = true; renderLook(); show(PC.store.get()); },
         leave: function () { open = false; PC.view3d.close(); },
         // a store change while the 3D view is open rebuilds only when the model really changed (house.key)
         render: function (s) {

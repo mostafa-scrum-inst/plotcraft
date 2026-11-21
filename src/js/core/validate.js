@@ -18,7 +18,10 @@
     'veg-reduced':     { kind: 'warn', q: 4, text: 'Vegetation was reduced to what fits: {a} ({p} %).' },
     'parking-omitted': { kind: 'warn', q: 15, text: 'Parking does not fit between the building and the street: it is left out of the 3D scene. Try fewer cars, a lower footprint % or a larger front setback (it moves the building back from the street).' },
     'pool-omitted':    { kind: 'warn', q: 16, text: 'The pool with its {c} clearance does not fit behind or beside the building: it is left out of the 3D scene. Try a smaller pool, a lower footprint % or a larger back setback (it moves the building toward the street).' },
-    'seating-omitted': { kind: 'warn', q: 17, text: 'Garden seating does not fit in the yard: it is left out of the 3D scene. Try a lower footprint %, fewer cars or a smaller pool.' }
+    'seating-omitted': { kind: 'warn', q: 17, text: 'Garden seating does not fit in the yard: it is left out of the 3D scene. Try a lower footprint %, fewer cars or a smaller pool.' },
+    // PM round 11 (TL F4-T3 plan review Q2): placed planting below 80 % of the effective vegetation area (or of what the
+    // A-9 item caps allow, 120 trees + 200 shrubs: a cap is not the building, parking or pool taking the room)
+    'veg-short':       { kind: 'warn', q: 4, text: 'Only {a} ({p} % of the plot) of planting fits around the building, parking and pool: the 3D garden is smaller than the {q} % asked. Try a lower footprint %, fewer cars or a smaller pool.' }
   };
   // What helps when a level needs more than the footprint offers: raising the footprint % only helps while the
   // plot is not already the limit.
@@ -72,6 +75,8 @@
     if (site.omitted.indexOf('parking') >= 0) add('parking-omitted');
     if (site.omitted.indexOf('pool') >= 0) add('pool-omitted', { c: U.fmtLen(PC.C.POOL_CLEAR, unit) });
     if (site.omitted.indexOf('seating') >= 0) add('seating-omitted');
+    if (fp && a.vegPct > 0 && site.veg.area > 0 && site.vegPlaced < PC.C.VEG_SHORT * Math.min(site.veg.area, PC.scatter.capArea()) - 1e-9)
+      add('veg-short', { a: U.fmtArea(site.vegPlaced, unit), p: pct(site.vegPlaced / site.plotArea * 100), q: pct(site.veg.pct) });
     out.summary = { plotArea: site.plotArea, buildableArea: site.buildable.area, footprintArea: fp ? fp.area : 0,
       footprintPct: fp ? fp.pct : 0, vegArea: site.veg.area, vegPct: site.veg.pct, levels: levels };
     return out;

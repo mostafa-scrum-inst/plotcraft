@@ -82,10 +82,11 @@
   // What a yard item must stay clear of: footprint + 1 m, parking, pool + clearance, the path strip.
   function blocked(site, extras) {
     var out = [grow(site.footprint, 1), PC.site.pathStrip(site, extras)];
-    if (site.parking) out.push(site.parking);
+    if (site.parking) out.push(grow(site.parking, 0));
     if (site.pool) out.push(grow(site.pool, PC.C.POOL_CLEAR));
     return out;
   }
+  PC.site.blocked = blocked;   // new rectangles on every call (F4-T3 scatter); the memoised site is never shared
 
   // Seating: a 3 x 3 m pad, back yard first, then the wider side yard, the other side yard, the front yard; in each
   // yard the 0.5 m position nearest the yard's middle. Inside the plot with C.SITE.edgeClear to the edge (the wall

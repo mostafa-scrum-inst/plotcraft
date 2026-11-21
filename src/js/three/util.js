@@ -1,6 +1,6 @@
 /* PC.three helpers (A-10, A-11). THREE is touched only inside functions, so this file loads without it.
-   - mixHex(a, b, k): the one colour mix of the app (A-10): per-channel lerp of the 0-255 sRGB values, Math.round per
-     channel, upper-case '#RRGGBB'. Pure (no THREE).
+   - mixHex(a, b, k): the one colour mix of the app (A-10) = PC.sky.mix (core): per-channel lerp of the 0-255 sRGB
+     values, Math.round per channel, upper-case '#RRGGBB'.
    - col(hex): sRGB hex -> linear THREE.Color. Every material, vertex and light colour goes through it; the scene
      background does not (A-10).
    - BoxBatch: hand-written merge of boxes and up-facing quads into ONE Mesh with per-vertex colours (A-11).
@@ -15,15 +15,7 @@
   'use strict';
   var three = PC.three = PC.three || {};
 
-  function hex2(n) { return ('0' + n.toString(16).toUpperCase()).slice(-2); }
-  three.mixHex = function (a, b, k) {
-    var out = '#';
-    for (var i = 1; i < 7; i += 2) {
-      var x = parseInt(a.slice(i, i + 2), 16), y = parseInt(b.slice(i, i + 2), 16);
-      out += hex2(Math.round(x + (y - x) * k));
-    }
-    return out;
-  };
+  three.mixHex = PC.sky.mix;   // one rule, in core (F4-T3, TL plan review item 2)
   three.col = function (hex) { return new THREE.Color(hex).convertSRGBToLinear(); };
 
   // Faces as [normal axis, sign, u axis, v axis] with u x v = normal, so (-u-v, +u-v, +u+v, -u+v) runs counter-clockwise

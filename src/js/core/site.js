@@ -105,7 +105,7 @@
     var ptsL = state.plot.pts.map(function (p) { var l = frame.w2l(p); return [r9(l[0]), r9(l[1])]; }), n = ptsL.length;
     var site = { edge: edge, frame: frame, ptsL: ptsL, plotArea: Math.abs(G.area(ptsL)), perimeter: G.perimeter(ptsL, true),
       edgeClass: [], edgeAuto: [], setbackOf: [], buildable: null, footprint: null, noFit: false, parking: null, pool: null,
-      veg: null, seating: null, northMarker: null, omitted: [] };
+      veg: null, seating: null, northMarker: null, omitted: [], trees: [], shrubs: [], vegPlaced: 0 };
     // Edge classes: front = street edge; back = outward normal within 40 degrees of straight away from the street
     // (automatic). In effect: the architect's override where there is one (F2-S4), else the automatic class.
     var ov = a.edgeOv || {};
@@ -131,6 +131,9 @@
     var used = (site.footprint ? site.footprint.area : 0) + (site.parking ? site.parking.w * site.parking.d : 0) + (site.pool ? site.pool.w * site.pool.d : 0);
     var want = a.vegPct / 100 * site.plotArea, room = Math.max(0, site.plotArea - used), va = Math.min(want, room);
     site.veg = { area: va, pct: va / site.plotArea * 100, reduced: want > room + T.fit };
+    // Trees and shrubs (F4-T3, PC.scatter): placed here so stage 2 can warn about a shortfall (PM round 11).
+    var vg = PC.scatter.vegetation(site, a.extras);
+    site.trees = vg.trees; site.shrubs = vg.shrubs; site.vegPlaced = vg.placed;
     return site;
   }
 

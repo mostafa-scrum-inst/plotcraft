@@ -3,17 +3,18 @@
    Loop (TL ruling 2): invalidate() requests ONE frame, only while open, visible, not lost, not building and none
    pending; an idle view requests no frames. Building... yields one painted frame first: rAF -> setTimeout 0 -> build
    (TL required item 3), guarded by a token so PC.view3d.close() during the yield builds nothing.
-   Lights: one hemisphere + one sun (the only shadow caster), fixed at noon / summer from PC.data.sky as it is
-   (A-13 rule: hemiGround = mix(noon hemiGround, summer ground, groundBounce)); F4-T3 swaps in PC.sky.compute. */
+   Lights: one hemisphere + one sun (the only shadow caster). The look (F4-T3, A-13) is the session's { hour, season }
+   (12:00 summer on a page load): setLook stores it and applies PC.sky.compute through PC.three.applyLook (look.js),
+   which recolours and moves lights only; every build (rebuild, context restore) re-applies the stored look. */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
-  var D = Math.PI / 180;
   var S = {
     renderer: null, scene: null, camera: null, world: null, hemi: null, sun: null, mats: null, canvas: null,
     house: null, builtKey: null, pose: null, limits: null, size: [0, 0],
     active: false, lost: false, dirty: false, frame: 0, building: 0, token: 0, onState: null,
-    meshes: [], level: 'all', roof: false, renders: 0, builds: 0, restores: 0
+    meshes: [], level: 'all', roof: false, renders: 0, builds: 0, restores: 0, looks: 0,
+    look: { hour: 12, season: 'summer' }
   };
   function V() { return PC.C.VIEW3D; }
   function dpr() { var d = typeof devicePixelRatio === 'number' && devicePixelRatio > 0 ? devicePixelRatio : 1; return Math.min(d, V().maxDpr); }
@@ -26,18 +27,6 @@
     r.shadowMap.type = THREE.PCFSoftShadowMap;
     r.outputEncoding = THREE.sRGBEncoding;
     return r;
-  };
-
-  // The opening look (noon, summer) from the tables as they are.
-  three.noonLook = function () {
-    var sky = PC.data.sky, k = sky.keys.filter(function (x) { return x.h === 12; })[0], su = sky.seasons.summer;
-    return { sunColor: k.sunColor, sunI: k.sunI, hemiSky: k.hemiSky, hemiI: k.hemiI, background: k.background,
-      hemiGround: three.mixHex(k.hemiGround, su.ground, sky.groundBounce), elevMax: su.elevMax };
-  };
-  // A-13 at a = PI / 2 (noon): s = y sin E - n cos E, n = (sin N, 0, -cos N).
-  three.noonSunDir = function (northDeg, elevDeg) {
-    var N = northDeg * D, E = elevDeg * D;
-    return [-Math.sin(N) * Math.cos(E), Math.sin(E), Math.cos(N) * Math.cos(E)];
   };
 
   function cancelFrame() { if (S.frame) { cancelAnimationFrame(S.frame); S.frame = 0; } }
@@ -117,16 +106,9 @@
   }
 
   function lights(house) {
-    var L = three.noonLook(), fp = house.footprint, cu = house.center[0], cv = house.center[1];
-    S.hemi.color.copy(three.col(L.hemiSky)); S.hemi.groundColor.copy(three.col(L.hemiGround)); S.hemi.intensity = L.hemiI;
-    S.sun.color.copy(three.col(L.sunColor)); S.sun.intensity = L.sunI;
-    var tx = fp.u + fp.w / 2 - cu, tz = -(fp.v + fp.d / 2 - cv), s = three.noonSunDir(house.northDeg, L.elevMax), dist = V().sunDist * house.radius;
-    S.sun.target.position.set(tx, 0, tz);
-    S.sun.position.set(tx + s[0] * dist, s[1] * dist, tz + s[2] * dist);
-    var half = Math.min(V().shadowK * Math.hypot(fp.w, fp.d) / 2, V().shadowR * house.radius), c = S.sun.shadow.camera;
-    c.left = -half; c.right = half; c.top = half; c.bottom = -half; c.near = 0.5; c.far = dist + 2 * half;
-    c.updateProjectionMatrix();
-    S.scene.background = new THREE.Color(L.background);
+    var L = PC.sky.compute(S.look.hour, S.look.season, house.northDeg);
+    three.applyLook({ scene: S.scene, sun: S.sun, hemi: S.hemi, mats: S.mats, world: S.world, house: house }, L);
+    S.looks++;
   }
 
   function build(house) {
@@ -136,7 +118,10 @@
       batch: new THREE.MeshLambertMaterial({ vertexColors: true }),
       ground: new THREE.MeshLambertMaterial({ color: three.col(SC.ground) }),
       groundOuter: new THREE.MeshLambertMaterial({ color: three.col(SC.groundOuter) }),
-      poolWater: new THREE.MeshLambertMaterial({ color: three.col(SC.poolWater) })
+      poolWater: new THREE.MeshLambertMaterial({ color: three.col(SC.poolWater) }),
+      trunk: new THREE.MeshLambertMaterial({ color: three.col(SC.trunk) }),
+      canopy: new THREE.MeshLambertMaterial({ color: three.col(PC.data.sky.seasons.summer.canopy) }),
+      shrub: new THREE.MeshLambertMaterial({ color: three.col(PC.data.sky.seasons.summer.shrub) })
     };
     S.meshes = three.buildShell(house, S.world, S.mats).concat(three.buildInterior(house, S.world, S.mats),
       three.buildRoof(house, S.world, S.mats), three.buildSite(house, S.world, S.mats));
@@ -192,6 +177,13 @@
     invalidate: invalidate,
     setLevel: function (sel) { S.level = sel; applyVisibility(); invalidate(); },
     setRoof: function (on) { S.roof = !!on; applyVisibility(); invalidate(); },
+    // Session look (A-13, TL F4-T3 Q5): kept across stages, rebuilds and context restores; no rebuild, camera untouched.
+    setLook: function (l) {
+      if (l && typeof l.hour === 'number' && isFinite(l.hour)) S.look.hour = Math.min(24, Math.max(0, l.hour));
+      if (l && PC.data.sky.seasons[l.season]) S.look.season = l.season;
+      if (S.house && S.mats) { lights(S.house); invalidate(); }
+    },
+    look: function () { return { hour: S.look.hour, season: S.look.season }; },
     resetView: function () { if (!S.house) return; S.pose = PC.cam.reset(S.house, aspect()); invalidate(); },
     setOnInput: function (fn) { S.onInput = fn; },
     pose: function () { return S.pose ? PC.cam.copy(S.pose) : null; },
@@ -199,7 +191,7 @@
     info: function () {
       return { renderer: S.renderer, scene: S.scene, camera: S.camera, world: S.world, house: S.house, active: S.active, lost: S.lost,
         building: !!S.building, frame: !!S.frame, dirty: S.dirty, renders: S.renders, builds: S.builds, restores: S.restores,
-        meshCount: S.meshes.length, meshes: S.meshes.slice(), level: S.level, roof: S.roof, size: S.size.slice(), renderNow: function () { if (S.house && !S.lost) render(); } };
+        meshCount: S.meshes.length, meshes: S.meshes.slice(), level: S.level, roof: S.roof, look: { hour: S.look.hour, season: S.look.season }, looks: S.looks, size: S.size.slice(), renderNow: function () { if (S.house && !S.lost) render(); } };
     }
   };
 })(globalThis.PC = globalThis.PC || {});

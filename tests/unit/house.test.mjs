@@ -36,7 +36,10 @@ test('sample: 2 levels x 7 rooms, rooms = plan rectangles + footprint origin, st
   assert.deepEqual(plain(h.site.entrance), { u: fp.u + fp.w / 2, v: fp.v, w: PC.C.HOUSE.door });
   assert.ok(h.site.parking && h.site.pool, 'sample has parking and pool rectangles');
   const site = PC.site.analyse(s), len = site.ptsL[(site.edge + 1) % site.ptsL.length][0];
-  assert.deepEqual([plain(h.site.trees), plain(h.site.shrubs), plain(h.site.gate)], [[], [], { u: len / 2, w: 3 }], 'F4-T2: gate Centre on the street edge');
+  assert.deepEqual(plain(h.site.gate), { u: len / 2, w: 3 }, 'F4-T2: gate Centre on the street edge');
+  const st = PC.site.analyse(s);
+  assert.deepEqual([plain(h.site.trees), plain(h.site.shrubs), h.site.vegPlaced], [plain(st.trees), plain(st.shrubs), st.vegPlaced], 'F4-T3: the scatter, copied');
+  assert.ok(h.site.trees.length > 0 && h.site.shrubs.length > 0, 'the sample shows trees (F4-S1)');
   assert.ok(h.site.seating && h.site.northMarker, 'F4-T2: the sample seating fits (PM round 10 Q8), north marker present');
   assert.equal(h.northDeg, PC.frames.northL(s));
   assert.ok(h.radius > 0 && h.plot.pts.length === 5);

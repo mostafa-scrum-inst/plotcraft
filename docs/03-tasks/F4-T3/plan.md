@@ -1,6 +1,6 @@
 # F4-T3 plan: vegetation, time of day, seasons (FS)
 
-Date: 2026-11-21. Owner: FS. Status: **draft for the TL plan review.**
+Date: 2026-11-21. Owner: FS. Status: **APPROVED with required edits** (`plan-review.md`); amended below (§0), no re-review.
 
 Sources:
 - F4-plan "F4-T3" (scope, files, QA list);
@@ -8,11 +8,70 @@ Sources:
 - architecture A-9 (scatter, exclusions), A-10 (scene, colour rule, whitelist), A-11 (instancing, budget, shadows) and
   A-13 (sky model, verbatim);
 - goals-and-stories round 11: F4-S1 vegetation and F4-S3 re-read with no text change; the default-camera decision;
-- `camera-decision.md` (PM + Designer: Reset stays on the street side, option (a); a possible one-line hint);
+- `camera-decision.md` (PM + Designer: Reset stays on the street side, option (a); PM ruling: no hint line);
 - `designer-plan.md` (Designer, F4-T3 colour and vegetation tables): **pending.** Where this plan needs a value from it
   (sizes, colours, the hint line), it uses the F4-T2 Designer plan §4 "Vegetation (for planning)" and the existing
   `PC.data.sky` until that lands;
 - the F4-T2 outcome §3 APIs.
+
+## 0. Amendments after the TL plan review (binding; they supersede the text below where it differs)
+
+1. **`PC.data.vegetation`** (Designer §1) is a new data key in `data/look3d.js`, with a schema test in
+   `data-tables.test.mjs`. All vegetation geometry is built from it:
+   - trunk `CylinderGeometry(trunkR, trunkR, trunkH, trunkSeg)`;
+   - canopy `ConeGeometry(canopyR, canopyH, canopySeg)` with its base at `canopyY0`;
+   - shrub `ConeGeometry(r, h, seg)`;
+   - instance scale in `scale`.
+
+   The tree clearance is `clr = canopyR × scale[1]` (1.5525) and the boundary distance for trees is `clr + 0.2`
+   (1.75). No 1.35 / 1.15 / 1.55 literal appears in core or three. The A-9 counting areas (6 m² per tree, 1.5 m² per
+   shrub) stay.
+2. **Sky values are exact, with the A-10 rounding.**
+   - Key lerp with the A-10 mix, rounded per channel; then the season blend with the same mix, rounded again (the
+     `data-tables.test.mjs` reference).
+   - `sky.test` carries the Designer §2 16-row golden table, which must match exactly; intensities to 1e-9.
+   - The mix moves to core as `PC.sky.mix`, and `three.mixHex` is an alias.
+3. **Light tab.**
+   - A preset has `aria-pressed="true"` only while the hour equals its value. Noon is pressed on open; dragging off a
+     preset clears it.
+   - `v3-time` gets the class `pc-range--sky` (the Designer's gradient track, with stops = `PC.data.sky.keys`).
+   - Season stays a `select`.
+   - The `view3d.spec` disabled set shrinks to the room finder and the tour.
+4. **Camera:** decision (a), no hint line (§1 and §6 amended).
+5. **Seed:** the plot points (1e-6) and the street edge only. A Q4 change keeps the candidate order, so the garden
+   changes by additions and removals.
+6. **Mock conformance.** These go into the A-16 conformance test against the vendored r128, in the same change as the
+   whitelist:
+   - `InstancedMesh` (`count`, `setMatrixAt`, `instanceMatrix.needsUpdate`, `castShadow`, `receiveShadow`);
+   - `CylinderGeometry`, `ConeGeometry`;
+   - `Matrix4.compose`;
+   - the shadow-camera fields the fit writes.
+
+   `setColorAt` is not whitelisted.
+
+**Rulings on §11 applied:**
+- **Q1:** trees at `clr + 0.2` m from every edge, shrubs at 0.7 m, with or without the wall.
+- **Q2:** no warning for now. `site.vegPlaced` goes into the model. Report how often a shortfall happens on the
+  sample, the F4-T2 test plots and the 16 × 18 m plot. If the PM answers yes: one `validate` entry plus the text.
+- **Q3:**
+  - Both kinds clear the seating pad + 0.3 m and the needle circle `L / 2 + 0.3`.
+  - Trees only: parking and pool + `POOL_CLEAR`, each grown by `clr`, and footprint + 1 m + `clr`.
+  - The path strip is the same for both kinds.
+- **Q4:** the wall is out of the shadow fit. The fit runs in light space on build and on every look. It writes only the
+  existing shadow-camera fields plus `updateProjectionMatrix`. Hidden winter canopies stay in the box.
+- **Q5:** the session look is kept across stages, rebuilds, context restores and store replaces, and is reset only on
+  a page load.
+- **Q6:** the sample is unchanged (25 % vegetation shows trees). QA gates its F4-T1 signatures on `PC.scatter`. The
+  FS `view3d-real` shots are updated.
+- **Q7:**
+  - One new `view3d-look.spec` (at most 2 viewports, one page load each).
+  - The real-r128 checks go into the existing `view3d-real` page loads and add ≤ 10 s.
+  - Full run measured. If it is over 420 s, fold the look checks into `view3d.spec`.
+- **Q8:** first goldens from the current helpers, then remove the helpers.
+- **Extra checks:**
+  - The G6 test also asserts that instance counts equal the model counts after every look.
+  - The real-r128 test asserts that shadows darken the ground at 17.5 h.
+  - Mutations added: tree boundary distance at 0.7 m, a hard-coded clearance, single rounding in the sky blend.
 
 ## 1. Scope
 
@@ -25,7 +84,7 @@ Sources:
 - Stage 5 Light tab enabled: time slider, four presets, season select, the "approximate" label.
 - The final G6 budget assertion, with looks applied.
 - Not in scope:
-  - the default camera (option (a), so no A-12 change; the hint line only if the Designer's shots ask for it, §7);
+  - the default camera (option (a): no A-12 / A-14 change, no hint line);
   - the room finder and tour (F5);
   - the lint length debt (`layout.js`, `stage-plans.js`; neither file is opened here).
 
@@ -35,7 +94,7 @@ Sources:
 frame L. `area` is the nominal covered area actually placed. `PC.house.build` calls it and copies the result into
 `house.site`.
 
-1. **Seed.** FNV-1a 32 of the plot points rounded to 1e-6, the street edge and the vegetation % gives a mulberry32
+1. **Seed.** FNV-1a 32 of the plot points rounded to 1e-6 and the street edge (not the vegetation %, §0 item 5) gives a mulberry32
    PRNG. The same state gives the same output: byte-identical JSON, unit-tested. The scatter reads only the site model
    (which is memoised; its key already covers the points, street edge, setbacks, footprint %, parking, pool,
    vegetation % and, since F4-T2, `extras`), so **the site memo key needs no new input.** The house key changes with the
@@ -170,10 +229,6 @@ frame L. `area` is the nominal covered area actually placed. `PC.house.build` ca
   Roof. A page load opens at 12:00 in summer. They are not in the draft (Q5).
 - Orbit, zoom and pan during a slider drag raise no errors. Neither changes the other: the look never moves the camera,
   and the camera never changes the look.
-- **Hint line** (`camera-decision.md`): only if the Designer's F4-T3 sample shots at Reset show the pool and seating
-  completely hidden. Then one line, "Drag to turn the model and see the garden.", is added to the View pane as a
-  static `pc-v3note`. No camera change.
-
 ## 7. QA markers (version-aware, as was done for `v3-roof`)
 
 - **`PC.three.applyLook` exists.** f4-t1-view drops the Light hooks from its LATER set and from the "light" tab

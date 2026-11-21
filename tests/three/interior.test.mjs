@@ -50,12 +50,12 @@ test('Q19 sparse has fewer boxes; Q18 keeps every box and changes colours; the l
   assert.equal(full.world.getObjectByName('level-G').visible, true);
 });
 
-test('G6 budget, maximum house with everything (CD-4: 4 x 10 rooms, full, lift, pool L, 4 covered cars, wall, gate, seating, usable terrace): 18 meshes, one shadow light, map 1024, audit clean, build < 250 ms', () => {
+test('G6 budget, maximum house with everything (CD-4: 4 x 10 rooms, full, lift, pool L, 4 covered cars, wall, gate, seating, usable terrace): 21 meshes (F4-T3: + 3 instanced), one shadow light, map 1024, audit clean, build < 250 ms', () => {
   const st2 = (PC) => { const s = maxHouse(PC); s.ans.usableRoof = true; s.ans.roofType = 'terrace'; PC.plans.sync(s); for (const id of PC.levels.ids(s)) s.plans[id].approved = true; return s; };
   const E = opened(st2), i = E.info(), h = E.house;
   assert.equal(h.levels.reduce((k, l) => k + l.rooms.length, 0), 40);
   assert.ok(h.roof.usable && h.roof.stairHead && h.roof.liftHead && h.site.seating && h.site.pool && h.site.parking && h.site.gate);
-  assert.ok(i.meshCount <= 40); assert.equal(i.meshCount, 18);
+  assert.ok(i.meshCount <= 40); assert.equal(i.meshCount, 21);
   let shadow = 0; i.scene.traverse((x) => { if ((x.name === 'sun' || x.name === 'hemi') && x.castShadow) shadow++; });
   assert.equal(shadow, 1);
   const sun = i.scene.getObjectByName('sun');
@@ -67,7 +67,7 @@ test('G6 budget, maximum house with everything (CD-4: 4 x 10 rooms, full, lift, 
     const h2 = JSON.parse(JSON.stringify(h)); h2.key = 'budget-' + k;
     E.PC.view3d.close(); E.PC.view3d.open(h2, E.canvas, () => {}); E.raf.flush();
     const t0 = performance.now(); E.timer.flush(); t.push(performance.now() - t0);
-    assert.deepEqual([E.info().meshCount, E.info().builds], [18, 2 + k], 'rebuilt inside the timed step');
+    assert.deepEqual([E.info().meshCount, E.info().builds], [21, 2 + k], 'rebuilt inside the timed step');
   }
   assert.ok(Math.min(...t) < 250, `build ${Math.min(...t).toFixed(1)} ms`);
 });
