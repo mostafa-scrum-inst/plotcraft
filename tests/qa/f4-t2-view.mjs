@@ -54,7 +54,7 @@ const pick = (v) => `css:[data-pc="v3-level"] label:has(input[value="${v}"])`;
 async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) return; const t = Date.now(); try { await fn(); } catch (e) { R.check(`${label}: ran to the end`, [String(e && e.stack || e).split('\n').slice(0, 3).join(' | ')]); } TIMES.push(`${label} ${((Date.now() - t) / 1000).toFixed(1)} s`); }
 // QA's node build of the same state (vm r128): the roof batch's item count
 function nodeRoofItems(state) { const s = Q.plain(state), h = PC.house.build(s); if (!h) return null; const world = new THREE.Group(); world.name = 'world';
-  const mats = { batch: new THREE.MeshLambertMaterial({ vertexColors: true }), ground: new THREE.MeshLambertMaterial(), groundOuter: new THREE.MeshLambertMaterial(), poolWater: new THREE.MeshLambertMaterial() };
+  const mats = { batch: new THREE.MeshLambertMaterial({ vertexColors: true }), ground: new THREE.MeshLambertMaterial(), groundOuter: new THREE.MeshLambertMaterial(), poolWater: new THREE.MeshLambertMaterial(), trunk: new THREE.MeshLambertMaterial(), canopy: new THREE.MeshLambertMaterial(), shrub: new THREE.MeshLambertMaterial() };   // F4-T3 vegetation materials (unused before)
   PC.three.buildShell(h, world, mats); const m = PC.three.buildRoof(h, world, mats)[0]; return m ? m.userData.items.length : 0; }
 
 const browser = await launch();
@@ -157,7 +157,7 @@ await guard('E budget', async () => {
   const ok = await to5(S, "s.plot.pts = [[0, 0], [60, 0], [60, 50], [0, 50]]; s.ans.streetEdge = 0; s.ans.footprintPct = 40; s.ans.floors = 3; s.ans.basement = true; s.ans.lift = true; s.ans.usableRoof = true; s.ans.roofType = 'terrace'; s.ans.pool = { on: true, size: 'L' }; s.ans.parking = { cars: 4, covered: true }; s.ans.extras = { wall: true, gate: 'right', seating: true }; s.ans.interior = { style: 'classic', density: 'full' }; s.ans.pairs = []; s.ans.rooms = []; let n = 1; for (const l of ['B', 'G', '1', '2']) for (const ty of ['bedroom', 'bathroom', 'kitchen', 'living', 'dining', 'majlis', 'office', 'maid', 'storage', 'laundry']) s.ans.rooms.push({ id: 'r' + n++, type: ty, level: l, size: 'S', area: null, master: false }); s.ans.nextRoomId = n;");
   let w = await W(S); const st = await S.state();
   if (!ok || st.ans.rooms.length !== 40) f.push(`setup: ready ${ok}, ${st.ans.rooms.length} rooms`);
-  if (w.meshes > 18) f.push(`${w.meshes} meshes > 18`);
+  const vx = ['trunks', 'canopies', 'shrubs'].filter((k) => w.names[k]).length; if (w.meshes > 18 + vx) f.push(`${w.meshes} meshes > 18${vx ? ` + ${vx} vegetation (F4-T3)` : ''}`);
   await S.act('v3-roof'); await ready(S);
   const idle = async (ms = 600) => { await S.page.evaluate(() => { window.__raf = 0; }); const r0 = (await info(S)).renders; await S.page.waitForTimeout(ms); const i = await info(S); return { raf: i.raf, renders: i.renders - r0 }; };   // the idle span is under test
   let z = await idle(); if (z.raf || z.renders) f.push(`idle after the build: ${JSON.stringify(z)}`);
@@ -172,7 +172,7 @@ await guard('E budget', async () => {
   if (i1.builds !== i0.builds + 1) f.push(`restore: builds ${i0.builds} -> ${i1.builds} (the scene rebuilds its batches on restore)`);
   if (Buffer.compare(img0, img1) !== 0) f.push('restore: the frame after the restore differs from the one before');
   z = await idle(); if (z.raf || z.renders) f.push(`idle after the restore: ${JSON.stringify(z)}`);
-  R.check(`${T} (40 rooms, terrace usable, pool L, 4 covered cars, wall, gate, seating; real r128): ${w.meshes} meshes <= 18, loop idle after the build, a context loss + restore rebuilds once, the same batches (${Object.keys(names0).length} names), the same frame, idle again`, f);
+  R.check(`${T} (40 rooms, terrace usable, pool L, 4 covered cars, wall, gate, seating; real r128): ${w.meshes} meshes <= 18 (+ vegetation from F4-T3), loop idle after the build, a context loss + restore rebuilds once, the same batches (${Object.keys(names0).length} names), the same frame, idle again`, f);
   await S.shot('E-max-roof'); await S.end(T);
 });
 

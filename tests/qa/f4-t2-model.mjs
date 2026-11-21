@@ -35,7 +35,7 @@ const SEAT_TEXT = 'Garden seating does not fit in the yard: it is left out of th
 function make(mut) { const s = Q.plain(PC.sample.state()); if (mut) mut(s); s.plans = {}; PC.plans.sync(s); for (const id in s.plans) if (!s.plans[id].error) s.plans[id].approved = true; return s; }
 function scene(house) {
   const world = new THREE.Group(); world.name = 'world';
-  const mats = { batch: new THREE.MeshLambertMaterial({ vertexColors: true }), ground: new THREE.MeshLambertMaterial(), groundOuter: new THREE.MeshLambertMaterial(), poolWater: new THREE.MeshLambertMaterial() };
+  const mats = { batch: new THREE.MeshLambertMaterial({ vertexColors: true }), ground: new THREE.MeshLambertMaterial(), groundOuter: new THREE.MeshLambertMaterial(), poolWater: new THREE.MeshLambertMaterial(), trunk: new THREE.MeshLambertMaterial(), canopy: new THREE.MeshLambertMaterial(), shrub: new THREE.MeshLambertMaterial() };   // F4-T3 vegetation materials (unused before)
   const made = PC.three.buildShell(house, world, mats).concat(PC.three.buildInterior(house, world, mats), PC.three.buildRoof(house, world, mats), PC.three.buildSite(house, world, mats));
   world.updateMatrixWorld(true); return { world, made };
 }
@@ -67,6 +67,8 @@ function windingProblems(items, tag) {
       if (nn[0] * m[0] + nn[1] * m[1] + nn[2] * m[2] < -1e-6) { f.push(`${tag} ${it.kind}: a face points inward`); break; } } }
   return f;
 }
+// F4-T3 (marker PC.scatter): one InstancedMesh per vegetation kind with items (trunks + canopies for trees, shrubs)
+const VEG = (h) => (h.site.trees && h.site.trees.length ? 2 : 0) + (h.site.shrubs && h.site.shrubs.length ? 1 : 0);
 const byName = (world, name) => meshes(world).filter((m) => m.name === name);
 
 // ================= F. furniture =================
@@ -346,11 +348,11 @@ if (want('B')) {
   const t1 = Date.now(), hm = PC.house.build(mx), tm = Date.now() - t1; let mm = null, tb3 = 0;
   if (!hm) f.push('maximum house: no model'); else { const t2 = Date.now(); const sc = scene(hm); tb3 = Date.now() - t2; mm = meshes(sc.world).length;
     if (mx.ans.rooms.length !== 40) f.push(`${mx.ans.rooms.length} rooms`);
-    if (mm > 18) f.push(`${mm} meshes > 18`);
+    const vx = VEG(hm); if (mm > 18 + vx) f.push(`${mm} meshes > 18${vx ? ` + ${vx} vegetation` : ''}`);
     if (!hm.site.pool || !hm.site.parking || !hm.site.gate || !hm.site.seating || !hm.roof.stairHead || !hm.roof.liftHead) f.push(`items missing: ${JSON.stringify({ pool: !!hm.site.pool, parking: !!hm.site.parking, gate: !!hm.site.gate, seating: !!hm.site.seating, heads: [!!hm.roof.stairHead, !!hm.roof.liftHead] })}`);
     if (hm.levels.some((l) => !l.rooms.every((r) => r.furniture.length))) f.push('a room without furniture'); }
-  if (ms !== 12) f.push(`sample: ${ms} meshes (FS reports 12)`);
-  R.check(`B maximum house (4 levels x 10 room types, full, lift, pool L, 4 covered cars, wall, gate, seating, usable terrace): ${mm} meshes <= 18, every item present, every room furnished; sample ${ms} meshes`, f);
+  if (ms !== 12 + VEG(hs)) f.push(`sample: ${ms} meshes (FS reports 12${VEG(hs) ? ` + ${VEG(hs)} vegetation (F4-T3)` : ''})`);
+  R.check(`B maximum house (4 levels x 10 room types, full, lift, pool L, 4 covered cars, wall, gate, seating, usable terrace): ${mm} meshes <= 18 (+ vegetation from F4-T3), every item present, every room furnished; sample ${ms} meshes`, f);
   R.note(`B maximum house: ${mm} meshes, sample ${ms}; model ${tm} ms, batches ${tb3} ms (node, r128 without renderer)`);
 }
 R.note(`node run ${((Date.now() - t0) / 1000).toFixed(1)} s`);

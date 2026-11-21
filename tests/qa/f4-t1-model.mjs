@@ -17,7 +17,7 @@ function make(mut) { const s = Q.plain(PC.sample.state()); if (mut) mut(s); s.pl
 const ok = (s) => Object.values(s.plans).every((p) => !p.error);
 function shell(house) {
   const world = new THREE.Group(); world.name = 'world';
-  const mats = { batch: new THREE.MeshLambertMaterial({ vertexColors: true }), ground: new THREE.MeshLambertMaterial(), groundOuter: new THREE.MeshLambertMaterial() };
+  const mats = { batch: new THREE.MeshLambertMaterial({ vertexColors: true }), ground: new THREE.MeshLambertMaterial(), groundOuter: new THREE.MeshLambertMaterial(), poolWater: new THREE.MeshLambertMaterial(), trunk: new THREE.MeshLambertMaterial(), canopy: new THREE.MeshLambertMaterial(), shrub: new THREE.MeshLambertMaterial() };   // later tasks' materials (unused by the F4-T1 builders)
   const made = PC.three.buildShell(house, world, mats);
   return { world, made, sum: H.summarize(world) };
 }

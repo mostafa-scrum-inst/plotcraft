@@ -2,6 +2,8 @@
 // own reference model (f2-t1-ref.mjs). Run: node tests/qa/f2-t1-site.mjs   (--no-shots is accepted and ignored)
 import { collector } from './lib.mjs';
 import * as Q from './f2-t1-ref.mjs';
+// F4-T3 (PM round 11): the vegetation shortfall warning may join any vegetated case; judged in f4-t3-model.mjs, left out here
+const SHORT = (x) => /^Only .+ of planting fits around the building, parking and pool: /.test(x.text);
 
 const R = collector('F2-T1 site');
 const PC = Q.loadPC();
@@ -263,9 +265,9 @@ R.note(`parking / pool / vegetation rules checked on ${outN} generated cases`);
 const metresInFt = new Set();
 const QOF = { 'floor-empty': 11, 'basement-empty': 11, 'buildable-small': 2, 'no-fit': 2, 'fp-veg-over': 3, 'level-over': 11, 'fp-clamped': 3, 'veg-reduced': 4, 'parking-omitted': 15, 'pool-omitted': 16 };
 function codeCase(name, build, expectBlock, expectWarn, textCheck, fix, opts = {}) {
-  for (const unit of ['m', 'ft']) { const s = build(); s.ans.unit = unit; PC.store.session.invalidFields = opts.invalid || {}; const v = PC.validate(s), b = v.blocking.map((x) => x.code), w = v.warnings.map((x) => x.code), pr = [];
+  for (const unit of ['m', 'ft']) { const s = build(); s.ans.unit = unit; PC.store.session.invalidFields = opts.invalid || {}; const v = PC.validate(s), b = v.blocking.map((x) => x.code), w = v.warnings.filter((x) => !SHORT(x)).map((x) => x.code), pr = [];
     if (!eq(b, expectBlock)) pr.push(`blocking ${JSON.stringify(b)}, expected ${JSON.stringify(expectBlock)}`); if (!eq(w, expectWarn)) pr.push(`warnings ${JSON.stringify(w)}, expected ${JSON.stringify(expectWarn)}`);
-    for (const it of [...v.blocking, ...v.warnings]) { if (it.code !== 'field-invalid' && it.q !== QOF[it.code]) pr.push(`${it.code} points at Q${it.q}, expected Q${QOF[it.code]}`); if (/undefined|NaN|\{|\}/.test(it.text)) pr.push('unfilled text: ' + it.text); if (unit === 'ft' && /\d m²|\d m\b/.test(it.text)) metresInFt.add(`${it.code}: "${it.text}"`); if (unit === 'm' && /sq ft| ft\b/.test(it.text)) pr.push('feet in m mode: ' + it.text); }
+    for (const it of [...v.blocking, ...v.warnings.filter((x) => !SHORT(x))]) { if (it.code !== 'field-invalid' && it.q !== QOF[it.code]) pr.push(`${it.code} points at Q${it.q}, expected Q${QOF[it.code]}`); if (/undefined|NaN|\{|\}/.test(it.text)) pr.push('unfilled text: ' + it.text); if (unit === 'ft' && /\d m²|\d m\b/.test(it.text)) metresInFt.add(`${it.code}: "${it.text}"`); if (unit === 'm' && /sq ft| ft\b/.test(it.text)) pr.push('feet in m mode: ' + it.text); }
     const site = PC.site.analyse(s); pr.push(...textCheck(v, unit, s, site));
     const st = PC.stages.status(s); if (st[2].valid !== (expectBlock.length === 0)) pr.push(`stage 2 valid = ${st[2].valid} with blocking ${JSON.stringify(expectBlock)}`); if (expectBlock.length && (st[3].reachable || st[3].reason !== 'Fix the highlighted answers first')) pr.push(`stage 3 reachable / reason "${st[3].reason}"`);
     if (fix) { const f = build(); f.ans.unit = unit; fix(f); PC.store.session.invalidFields = {}; const v2 = PC.validate(f); const left = [...v2.blocking, ...v2.warnings].map((x) => x.code).filter((c) => [...expectBlock, ...expectWarn].includes(c) && !(opts.keep || []).includes(c)); if (left.length) pr.push('still there after the fix: ' + left.join()); }
