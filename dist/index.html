@@ -4280,9 +4280,11 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
   }
-  function seedOf(site) {
-    return fnv(JSON.stringify([site.ptsL.map(function (p) { return [Math.round(p[0] * 1e6), Math.round(p[1] * 1e6)]; }), site.edge]));
+  // The seed text: the plot points rounded to 1e-6 and the street edge. The candidates depend on nothing else.
+  function seedText(site) {
+    return JSON.stringify([site.ptsL.map(function (p) { return [Math.round(p[0] * 1e6), Math.round(p[1] * 1e6)]; }), site.edge]);
   }
+  function seedOf(site) { return fnv(seedText(site)); }
   function grow(r, k) { return { u: r.u - k, v: r.v - k, w: r.w + 2 * k, d: r.d + 2 * k }; }
   function inRect(p, r) { return p[0] > r.u && p[0] < r.u + r.w && p[1] > r.v && p[1] < r.v + r.d; }
   function edgeDist(p, pts) {
@@ -4291,9 +4293,19 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     return m;
   }
 
-  // Candidate points of a plot: [u, v, scale, edgeDistance], shuffled. Depends on the plot only.
+  // Candidate points of a plot: [u, v, scale, edgeDistance], shuffled. Depends on the plot only, so the last result is
+  // kept, keyed on the full seed text (not its 32-bit hash, so a collision cannot reuse another plot's points; TL F4-T3
+  // implementation review finding 7). Frozen: the selection only reads it.
+  var memo = { key: null, out: null, hits: 0 };
   function candidates(site) {
-    var rnd = mulberry32(seedOf(site)), V = PC.data.vegetation, bb = G.bbox(site.ptsL), out = [], g = C.grid;
+    var key = seedText(site);
+    if (memo.key === key) { memo.hits++; return memo.out; }
+    var out = Object.freeze(build(site, key).map(Object.freeze));
+    memo.key = key; memo.out = out;
+    return out;
+  }
+  function build(site, key) {
+    var rnd = mulberry32(fnv(key)), V = PC.data.vegetation, bb = G.bbox(site.ptsL), out = [], g = C.grid;
     for (var y = Math.floor(bb.y0) + g / 2; y < bb.y1; y += g) {
       for (var x = Math.floor(bb.x0) + g / 2; x < bb.x1; x += g) {
         var p = [x + (rnd() * 2 - 1) * C.jitter, y + (rnd() * 2 - 1) * C.jitter], s = V.scale[0] + rnd() * (V.scale[1] - V.scale[0]);
@@ -4351,7 +4363,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   }
 
   function capArea() { return C.maxTrees * C.treeA + C.maxShrubs * C.shrubA; }
-  PC.scatter = { vegetation: vegetation, capArea: capArea, candidates: candidates, seedOf: seedOf, mulberry32: mulberry32, C: C };
+  PC.scatter = { vegetation: vegetation, capArea: capArea, memo: function () { return { key: memo.key, hits: memo.hits }; }, seedText: seedText, candidates: candidates, seedOf: seedOf, mulberry32: mulberry32, C: C };
 })(globalThis.PC = globalThis.PC || {});
 
 </script>

@@ -120,3 +120,23 @@ test('clearances come from PC.data.vegetation (TL item 1): a larger canopy in th
   }
   assert.ok(PC.site.analyse(sample()).trees.some(([u, v]) => edgeD([u, v], PC.site.analyse(sample()).ptsL) < clr + 0.2), 'the default table places trees closer');
 });
+
+test('candidate memo (TL F4-T3 implementation review 7): keyed on the seed text, reused across a footprint % change, frozen, output unchanged', () => {
+  const P = loadCore(), S = (f) => { const s = plain(P.sample.state()); if (f) f(s); return s; };
+  const a = P.site.analyse(S((d) => { d.ans.footprintPct = 25; })), h0 = P.scatter.memo().hits;
+  const c1 = P.scatter.candidates(a);
+  const b = P.site.analyse(S((d) => { d.ans.footprintPct = 30; }));
+  assert.notEqual(a, b, 'a new site (memo miss in PC.site)');
+  assert.equal(P.scatter.candidates(b), c1, 'same frozen candidate array reused');
+  assert.ok(P.scatter.memo().hits >= h0 + 2, 'the footprint change hit the candidate memo');
+  assert.equal(P.scatter.memo().key, P.scatter.seedText(b), 'keyed on the full seed text, not the 32-bit hash');
+  assert.ok(Object.isFrozen(c1) && Object.isFrozen(c1[0]));
+  // byte-identical to a fresh build (no memo) for both states
+  for (const st of [S((d) => { d.ans.footprintPct = 25; }), S((d) => { d.ans.footprintPct = 30; })]) {
+    const fresh = loadCore(), x = fresh.site.analyse(st), y = P.site.analyse(st);
+    assert.equal(JSON.stringify([y.trees, y.shrubs, y.vegPlaced]), JSON.stringify([x.trees, x.shrubs, x.vegPlaced]));
+  }
+  // another plot or street edge: a new key
+  const e = P.site.analyse(S((d) => { d.ans.streetEdge = 1; }));
+  assert.notEqual(P.scatter.candidates(e), c1); assert.equal(P.scatter.memo().key, P.scatter.seedText(e));
+});

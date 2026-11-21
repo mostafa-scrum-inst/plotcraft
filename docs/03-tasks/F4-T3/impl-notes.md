@@ -184,3 +184,23 @@ Commits:
 - **Run 2: exit 0, all steps passed in 407.1 s,** under the 420 s target.
 - An earlier attempt was stopped before the merge. While cleaning up after it, I killed stray headless-Chrome
   processes on this machine; if any of them belonged to another session's run, that run needs repeating.
+
+## 5. Addendum: TL implementation review, finding 7 (candidate memo)
+
+- **The memo.** `PC.scatter` keeps a one-entry memo of `candidates(site)`. Its key is the full seed text: the JSON of
+  the plot points rounded to 1e-6 plus the street edge (`PC.scatter.seedText`), not the 32-bit hash. It returns the
+  same frozen array, and the selection only reads it.
+- **Output.** Byte-identical: 160 states (5 plots × footprint 10 / 25 / 40 / 50 × vegetation 0 / 10 / 25 / 50 × street
+  edge 0 / 1) compared before and after with `cmp`; the existing determinism tests pass.
+- **New test** (`scatter.test`): a footprint % change hits the memo and returns the same frozen array; the key equals
+  the seed text; output equals a fresh, memo-free load; a new street edge gives a new key.
+- **Stage-2 sweep** (footprint 10–80 % in 1 % steps, analyse + validate, best of 3, desktop node):
+
+  | Plot | Before | After | Without scatter (TL) |
+  |---|---|---|---|
+  | sample | 335 ms, worst tick 7.7 ms | **201 ms**, worst tick 6.1 ms | 143 ms |
+  | 100 × 100 m (vegetation 20 %) | 2 755 ms, worst tick 48.5 ms | **614 ms**, worst tick 13.6 ms | 507 ms |
+
+- **Threshold.** The PM and TL ruled option (a): keep `0.8 × min(veg.area, 1 020 m²)`.
+- **Runs.** Focused only (`--unit --three --e2e --only view3d,questions,outdoor,plans-step0`): all passed in 46.1 s;
+  unit + three 470/0. The full run is QA's.
