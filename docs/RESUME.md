@@ -37,10 +37,16 @@ Everything lives on disk under /home/claude/plotcraft (cloud sessions: /home/use
 - Republished (same URL): https://claude.ai/artifact/LDbG9XdU1UeAMcVwqmxAB9 ; phone check doc https://claude.ai/artifact/ScLvtVirdhoeCwEwoB1CLv. F4 feature review waits for the client's phone answers (ask again after F4-T3 if missing).
 - Client instruction 2026-11-21 18:09: continue through all batches until the full app is done; summary + republish + testing steps at each batch end, no pause.
 
-## Next batch (batch 10): F4-T2
-1. Step 0: --jobs 3 switch (if 2nd run green), F3 follow-up bundle (PM round 8 items 1,2,4,5,9) + CD-4 (10 rooms, TL re-proves generator) + CD-5 (hall-access warning) + CTO debt 6 + applyEdit guard + TL item 2 (stages 1-2 refusal test).
-2. F4-T2 proper: roof, furniture (PC.furnish per A-11 with 1e-9 slack), outdoor items, vegetation.
-3. Then batch 11: F4-T3 (time of day, seasons) + F4 feature review; then F5.
+## Batch 10 result: F4-T2 DONE
+- Step 0 (CD-4 10 rooms/floor with layout key fix + exact speed-ups, CD-5 hall-access warning via core/access.js, low-fill hint, one-step Undo, ft min snap, strip on stages 1/3, lift overlap, applyEdit guard, --jobs 3 default) and proper (furniture A-11, roof types, wall/gate/pool/parking/seating/step, north needle). QA PASSED 409.0 s / 414.5 s, no bugs. TL plan/impl/outcome APPROVED.
+- Republished same URL (v3): https://claude.ai/artifact/LDbG9XdU1UeAMcVwqmxAB9 ; testing doc https://claude.ai/artifact/8bhboWAnZq2JL9aA977MJj
+- Vegetation moved to F4-T3 by plan.
+
+## Next batch (batch 11): F4-T3 + F4 feature review
+1. F4-T3 per TL routing in docs/03-tasks/F4-T2/outcome-review.md: vegetation (seeded scatter, existing exclusions + seating pad, 0.7 m from boundary, instanced, mesh budget <= 40), time of day + seasons (A-13 exactly, applyLook recolour only, Light tab enabled), shadows cover building + yard, G6 budget with look applied.
+2. Default camera: PM/Designer call before plan review; TL recommends keep street-side Reset (option a).
+3. F4 feature review (PM + CTO) with the 7-item hand-off list in outcome-review.md; waits on client CD-6 phone answers (ask again after F4-T3 if missing).
+4. Then F5.
 
 ## Known limits owned by Designer F5-T3
 Overridden-edge label pile-up; legend wraps at 1280x800 with "* set by you"; area label wider than narrow footprints; no Parking/Pool legend entries; pool-size note wrap at 360 px.
