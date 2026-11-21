@@ -1,0 +1,138 @@
+/* App shell: header + stepper, sample strip, banner slot, stage container, action bar */
+.pc-app {
+  position: relative; overflow: hidden;
+  display: grid; height: 100vh; height: 100dvh;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  grid-template-areas: "header" "strip" "banner" "stage" "bar";
+}
+
+/* Header */
+.pc-header {
+  grid-area: header; background: var(--surface); border-bottom: 1px solid var(--ink);
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: var(--header-h) var(--stepper-h);
+  grid-template-areas: "word unit" "stepper stepper";
+}
+.pc-wordmark {
+  grid-area: word; align-self: center; padding: 0 var(--s3);
+  font-size: var(--fs-md); font-weight: 600; letter-spacing: 0.02em;
+  display: flex; align-items: center; gap: var(--s2);
+}
+.pc-wordmark__mark { color: var(--accent); }
+.pc-wordmark small { font: 400 var(--fs-cap) var(--font-num); color: var(--ink-2); }
+.pc-header__unit { grid-area: unit; display: flex; align-items: center; padding-right: var(--s2); }
+
+/* Stepper */
+.pc-stepper {
+  grid-area: stepper; display: flex; min-width: 0;
+  background: var(--sunk); border-top: 1px solid var(--rule);
+}
+.pc-step {
+  flex: 1 1 0; min-width: 60px; height: var(--stepper-h); padding: 0 var(--s2);
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  background: none; border: 0; border-right: 1px solid var(--rule); border-bottom: 3px solid transparent;
+  color: var(--ink); font-size: var(--fs-sm); font-weight: 600; white-space: nowrap;
+}
+.pc-step:last-child { border-right: 0; }
+.pc-step:focus-visible { outline-offset: -3px; }
+.pc-step__no {
+  font: 600 13px var(--font-num); padding: 2px 4px; line-height: 1.2;
+  border: 1px solid currentColor; border-radius: var(--r1);
+}
+.pc-step__label, .pc-step__full { display: none; }
+.pc-step .pc-i { display: none; }
+.pc-step.is-done .pc-step__i-done { display: block; color: var(--ok); }
+.pc-step.is-locked { color: var(--ink-2); font-weight: 400; cursor: help; }
+.pc-step.is-locked .pc-step__i-lock { display: block; }
+.pc-step.is-current { flex: 2 1 auto; background: var(--surface); border-bottom-color: var(--accent); color: var(--accent); }
+.pc-step.is-current .pc-step__no { background: var(--accent); border-color: var(--accent); color: #fff; }
+.pc-step.is-current .pc-step__label { display: inline; }
+.pc-step.is-current .pc-i { display: none; }
+
+/* Sample strip (holds the only "Skip to 3D") */
+.pc-strip {
+  grid-area: strip; min-height: 48px; padding: 2px var(--s2) 2px var(--s3);
+  display: flex; align-items: center; gap: var(--s2);
+  background: var(--accent-tint); color: var(--accent); border-bottom: 1px solid var(--accent);
+  font-size: var(--fs-sm); font-weight: 600;
+}
+.pc-strip__text { flex: 1; min-width: 0; }
+
+.pc-banner-slot { grid-area: banner; min-width: 0; }
+
+/* Stages */
+.pc-stages { grid-area: stage; position: relative; min-height: 0; min-width: 0; overflow: hidden; }
+.pc-stage { height: 100%; min-height: 0; min-width: 0; }
+.pc-stage__title { font-size: var(--fs-lg); font-weight: 600; }
+.pc-stage--canvas {
+  display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto;
+}
+.pc-canvas-wrap { position: relative; min-height: 0; min-width: 0; overflow: hidden; background: var(--canvas); }
+.pc-canvas-wrap > canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+.pc-canvas-wrap > canvas:focus-visible { outline-offset: -3px; }
+/* Fit view: floating icon button at the top right of a zoomable canvas, styled like the scale chip */
+.pc-fit { position: absolute; top: var(--s2); right: var(--s2); z-index: 1; border-color: var(--border); box-shadow: var(--e1); }
+.pc-panel { position: relative; min-width: 0; background: var(--surface); border-top: 1px solid var(--ink); }
+
+/* Action bar */
+.pc-bar {
+  grid-area: bar; display: flex; justify-content: space-between; align-items: center; gap: var(--s3);
+  min-height: var(--bar-h); padding: 6px var(--s3) calc(6px + env(safe-area-inset-bottom, 0px));
+  background: var(--surface); border-top: 1px solid var(--ink);
+}
+.pc-bar__next { min-width: 150px; margin-left: auto; }
+
+/* 720+: every step shows its short label */
+@media (min-width: 720px) {
+  .pc-step__label { display: inline; }
+  .pc-step.is-current { flex: 1 1 0; }
+}
+
+/* Tablet */
+@media (min-width: 600px) {
+  .pc-wordmark { padding: 0 var(--s4); }
+  .pc-bar { padding-left: var(--s4); padding-right: var(--s4); }
+}
+
+/* Desktop: wordmark, stepper and unit toggle on one row; canvas stages in two columns */
+@media (min-width: 900px) {
+  .pc-header {
+    grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: 52px;
+    grid-template-areas: "word stepper unit";
+  }
+  .pc-wordmark { font-size: var(--fs-lg); padding: 0 var(--s5) 0 var(--s4); }
+  .pc-stepper { background: none; border-top: 0; border-left: 1px solid var(--rule); border-right: 1px solid var(--rule); }
+  .pc-step { height: 52px; flex: 0 1 auto; padding: 0 var(--s3); justify-content: flex-start; }
+  .pc-step.is-current { flex: 0 1 auto; background: var(--accent-tint); }
+  .pc-step:last-child { border-right: 1px solid var(--rule); }
+  .pc-header__unit { padding: 0 var(--s4); }
+  .pc-stage__title { font-size: var(--fs-xl); }
+  .pc-stage--canvas { grid-template-columns: minmax(0, 1fr) var(--panel-w); grid-template-rows: minmax(0, 1fr); }
+  .pc-panel { border-top: 0; border-left: 1px solid var(--ink); overflow-y: auto; overscroll-behavior: contain; }
+}
+
+/* Wide desktop: full step labels */
+@media (min-width: 1100px) {
+  .pc-step__short { display: none; }
+  .pc-step__full { display: inline; }
+}
+
+/* Short landscape (phone on its side): one 48 px top row, 48 px bar, two-column canvas stages */
+@media (max-height: 480px) and (orientation: landscape) and (max-width: 899px) {
+  .pc-header {
+    grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: 48px;
+    grid-template-areas: "stepper unit";
+  }
+  .pc-wordmark { display: none; }
+  .pc-stepper { border-top: 0; }
+  .pc-header__unit { background: var(--sunk); padding: 0 var(--s1); }
+  .pc-bar { min-height: 48px; padding-top: 2px; padding-bottom: calc(2px + env(safe-area-inset-bottom, 0px)); }
+  .pc-strip {
+    grid-area: bar; justify-self: center; align-self: center; z-index: 2;
+    min-height: 0; padding: 0; background: none; border: 0;
+  }
+  .pc-strip__text, .pc-strip > .pc-i { display: none; }
+  .pc-stage--canvas { grid-template-columns: minmax(0, 1fr) var(--panel-w-short); grid-template-rows: minmax(0, 1fr); }
+  .pc-panel { border-top: 0; border-left: 1px solid var(--ink); overflow-y: auto; overscroll-behavior: contain; }
+}

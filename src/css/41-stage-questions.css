@@ -1,0 +1,220 @@
+/* Stage 2: Questions */
+.pc-qs {
+  display: grid; grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-areas: "nav" "preview" "scroll" "summary";
+}
+.pc-qs__col, .pc-qs__side { display: contents; }
+.pc-qs__nav { grid-area: nav; min-width: 0; background: var(--surface); }
+.pc-qs__progress { display: flex; align-items: center; gap: var(--s3); padding: 2px var(--s3); font-size: var(--fs-cap); color: var(--ink-2); border-bottom: 1px solid var(--rule); }
+.pc-qs__progress > span { white-space: nowrap; }
+.pc-qs__progress > progress {
+  -webkit-appearance: none; appearance: none; flex: 1 1 auto; min-width: 40px; height: 4px; border: 0;
+  background: var(--rule); color: var(--accent);
+}
+.pc-qs__progress > progress::-webkit-progress-bar { background: var(--rule); }
+.pc-qs__progress > progress::-webkit-progress-value { background: var(--accent); }
+.pc-qs__progress > progress::-moz-progress-bar { background: var(--accent); }
+.pc-qs__scroll { grid-area: scroll; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 var(--s3); }
+
+/* Site preview */
+.pc-preview { grid-area: preview; position: relative; min-width: 0; border-bottom: 1px solid var(--ink); background: var(--canvas); }
+.pc-preview > .pc-canvas-wrap { height: 200px; }
+.pc-preview__toggle { position: absolute; top: 0; right: 0; z-index: 2; background: var(--surface); border-width: 0 0 1px 1px; border-radius: 0 0 0 var(--r2); }
+.pc-preview__toggle > span { display: none; }
+.pc-preview.is-collapsed > .pc-canvas-wrap, .pc-preview.is-collapsed > .pc-legend { display: none; }
+.pc-preview.is-collapsed > .pc-preview__toggle { position: static; width: 100%; border: 0; border-radius: 0; justify-content: space-between; padding: 0 var(--s3); font-size: var(--fs-sm); }
+.pc-preview.is-collapsed > .pc-preview__toggle > span { display: inline; }
+.pc-preview.is-collapsed .pc-i { transform: rotate(180deg); }
+.pc-legend { position: absolute; left: var(--s2); right: var(--s2); bottom: var(--s2); z-index: 1; display: flex; flex-wrap: wrap; gap: var(--s1); pointer-events: none; }
+.pc-legend > li { display: flex; align-items: center; gap: 4px; padding: 1px 6px; background: var(--surface); border: 1px solid var(--rule); font-size: var(--fs-cap); font-weight: 600; }
+.pc-legend i { display: block; width: 16px; height: 0; border-top: 3px solid var(--accent); }
+.pc-legend .pc-legend__back { border-top: 3px solid var(--ink-2); }
+.pc-legend .pc-legend__side { border-top: 2px dashed var(--border); }
+.pc-legend .pc-legend__setback { border-top: 2px dashed var(--danger); }
+.pc-legend .pc-legend__fp { height: 10px; border: 2px solid var(--accent); background: var(--accent-tint); }
+
+/* Edge tap mode (F2-T3 pre-step D): floating top left of the canvas; hint at the legend's place, hiding it */
+.pc-tapmode { position: absolute; top: var(--s2); left: var(--s2); z-index: 2; border-radius: var(--r2); box-shadow: var(--e1); }
+.pc-tapmode > .pc-opt { flex: none; }
+.pc-tapmode .pc-seg__txt { padding: 0 7px; }
+.pc-taphint {
+  position: absolute; left: var(--s2); right: var(--s2); bottom: var(--s2); z-index: 1; padding: 2px 6px;
+  background: var(--surface); border: 1px solid var(--rule); font-size: var(--fs-cap); font-weight: 600; pointer-events: none;
+}
+.pc-taphint:not([hidden]) ~ .pc-legend { visibility: hidden; }
+.pc-preview.is-collapsed > .pc-tapmode, .pc-preview.is-collapsed > .pc-taphint { display: none; }
+.pc-legend__mark > b { width: 16px; text-align: center; font: 700 14px/1 var(--font-num); }
+
+/* Q6 edge list (rows from tpl-edge-row) */
+.pc-disclose { justify-content: space-between; width: 100%; padding: 0; font-size: var(--fs-sm); }
+.pc-disclose[aria-expanded="true"] .pc-i { transform: rotate(180deg); }
+.pc-edges { border-top: 1px solid var(--rule); }
+.pc-edges.is-collapsed { display: none; }
+.pc-edge { display: flex; align-items: center; gap: var(--s2); min-height: var(--tap); padding: 2px 0 2px var(--s2); border-bottom: 1px solid var(--rule); }
+.pc-edge__txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.pc-edge__name { font: 600 var(--fs-sm) var(--font-num); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-edge__class { font-size: var(--fs-cap); font-weight: 600; color: var(--ink-2); }
+.pc-edge__switch { flex: none; min-width: 112px; padding: 0 var(--s3); font-size: var(--fs-sm); }
+/* The focused row matches the edge highlighted in the drawing (palette2d.edge.focus = --focus) */
+.pc-edge:focus-within { background: var(--accent-tint); box-shadow: inset 3px 0 0 var(--focus); }
+
+/* Question blocks */
+.pc-qgroup { max-width: 640px; margin: 0 auto; padding-bottom: var(--s4); }
+/* Group title: visually hidden below 900 px (the selected tab already names the group) */
+.pc-qgroup__title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.pc-q { padding: var(--s3) 0; border-bottom: 1px solid var(--rule); display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
+.pc-q__head { display: flex; align-items: baseline; gap: var(--s2); }
+.pc-q__label { font-size: var(--fs-md); font-weight: 600; }
+.pc-q__sub { font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); padding-top: var(--s1); }
+.pc-field--row { flex-direction: row; align-items: center; flex-wrap: wrap; gap: var(--s1) var(--s3); }
+.pc-field--row > .pc-field__label { flex: 0 0 56px; }
+.pc-field--row > .pc-num { flex: 1 1 160px; max-width: 260px; }
+.pc-field--row > .pc-err { flex: 1 1 100%; }
+.pc-ctlrow { display: flex; align-items: center; gap: var(--s2); min-width: 0; flex-wrap: wrap; }
+.pc-ctlrow > .pc-readout { flex: 1 1 120px; min-width: 0; font: 600 var(--fs-sm) var(--font-num); }
+.pc-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2) var(--s3); }
+.pc-grid2 > .pc-span2 { grid-column: 1 / -1; }
+.pc-qgroup__next { margin-top: var(--s4); }
+
+/* Exterior swatches (placeholders until F3-T3) */
+.pc-sw-sand > i:nth-child(1) { background: #D9C7A3; } .pc-sw-sand > i:nth-child(2) { background: #B89F78; }
+.pc-sw-white > i:nth-child(1) { background: #F2F0EA; } .pc-sw-white > i:nth-child(2) { background: #C9CCC8; }
+.pc-sw-terracotta > i:nth-child(1) { background: #C4704F; } .pc-sw-terracotta > i:nth-child(2) { background: #8F4A32; }
+.pc-sw-grey > i:nth-child(1) { background: #9BA1A6; } .pc-sw-grey > i:nth-child(2) { background: #5F676E; }
+
+/* Rooms */
+.pc-rgroup { padding-top: var(--s2); }
+.pc-rgroup__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); padding: var(--s1) 0; border-bottom: 1px solid var(--ink); }
+.pc-rgroup__head h4 { font-size: var(--fs-sm); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.pc-room { padding: var(--s1) 0 var(--s2); border-bottom: 1px solid var(--rule); display: flex; flex-direction: column; gap: 2px; }
+/* Name over its area, beside Master and delete: the two text lines fit in the 44 px the buttons need, so the full name
+   shows at 360 px in ft without making the row taller (QA F2-T3 bug 1). A name too long for its column wraps, never cut. */
+.pc-room__head {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "name master del" "area master del";
+  align-items: center; column-gap: var(--s2); min-width: 0;
+}
+.pc-room__head > strong { grid-area: name; align-self: end; min-width: 0; overflow-wrap: anywhere; line-height: 1.25; }
+.pc-room__head > .pc-num-text { grid-area: area; align-self: start; font-size: var(--fs-sm); color: var(--ink-2); white-space: nowrap; line-height: 1.25; }
+.pc-room__head > .pc-opt { grid-area: master; }
+.pc-room__head > .pc-btn { grid-area: del; }
+.pc-room__ctl { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.08fr) minmax(0, 0.82fr); gap: var(--s2); }
+.pc-room__ctl > .pc-select { padding-left: 6px; padding-right: 24px; background-position: calc(100% - 13px) 50%, calc(100% - 7px) 50%; }
+.pc-room__ctl > .pc-inputunit { grid-column: 1 / -1; max-width: 200px; }
+.pc-pick { display: flex; align-items: center; justify-content: center; gap: 4px; min-height: var(--tap); min-width: var(--tap); padding: 0 var(--s2); border: 1px solid transparent; border-radius: var(--r2); font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); }
+.pc-opt > input:checked + .pc-pick { color: var(--accent); background: var(--accent-tint); border-color: var(--accent); }
+.pc-opt > input:checked + .pc-pick .pc-i { fill: currentColor; }
+.pc-pairadd { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s2); }
+.pc-pairadd > .pc-btn { grid-column: 1 / -1; }
+.pc-pairadd > .pc-select { padding-left: 6px; padding-right: 24px; background-position: calc(100% - 13px) 50%, calc(100% - 7px) 50%; }
+.pc-pair { display: flex; align-items: center; gap: var(--s2); border-bottom: 1px solid var(--rule); font-size: var(--fs-sm); }
+.pc-pair > span { flex: 1 1 auto; min-width: 0; }
+
+/* Stair position: footprint diagram with five spots; street side at the bottom */
+.pc-stairpos { max-width: 300px; }
+.pc-stairpos__plan { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(3, 48px); border: 2px solid var(--ink); background: var(--canvas); }
+.pc-stairpos__cap { display: flex; justify-content: center; font-size: var(--fs-cap); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); padding: 2px 0; }
+.pc-stairpos .pc-pick { height: 100%; font-size: var(--fs-cap); border-radius: 0; border: 1px dashed var(--border); margin: 2px; min-height: 44px; }
+.pc-stairpos .pc-opt > input:checked + .pc-pick { border-style: solid; }
+.pc-stairpos .pc-pick .pc-i { display: none; }
+.pc-stairpos .pc-opt > input:checked + .pc-pick .pc-i { display: block; fill: none; }
+.pc-stairpos .pc-pick { white-space: nowrap; padding: 0 2px; }
+.pc-sp-bl { grid-area: 1 / 1; } .pc-sp-br { grid-area: 1 / 3; } .pc-sp-c { grid-area: 2 / 2; }
+.pc-sp-fl { grid-area: 3 / 1; } .pc-sp-fr { grid-area: 3 / 3; }
+
+/* Summary sheet */
+.pc-summary { grid-area: summary; }
+/* Open on phone/tablet: overlays the stage from the bottom, never taller than the stage minus the group tabs; body scrolls */
+.pc-qs { position: relative; }
+.pc-summary:not(.is-collapsed) {
+  position: absolute; grid-area: 1 / 1 / -1 / -1; left: 0; right: 0; bottom: 0; z-index: 3; max-height: calc(100% - 48px);
+  display: flex; flex-direction: column; box-shadow: var(--e2);
+}
+.pc-summary:not(.is-collapsed) > .pc-sheet__toggle { flex: none; }
+.pc-summary:not(.is-collapsed) > .pc-sheet__body { flex: 1 1 auto; min-height: 0; max-height: none; }
+.pc-summary .pc-tb dd { font-size: var(--fs-sm); }
+/* A figure that does not fit beside its label drops to its own line, right-aligned, instead of an ellipsis
+   (272 px side column at 640x360 in ft; QA F2-T2 bug 2). Rows that fit are unchanged. */
+.pc-summary .pc-tb--rows .pc-tb__cell { flex-wrap: wrap; row-gap: 0; }
+.pc-summary .pc-tb--rows dd { margin-left: auto; text-align: right; }
+.pc-summary[data-kind="block"] .pc-sheet__toggle { color: var(--danger-text); }
+.pc-summary[data-kind="warn"] .pc-sheet__toggle { color: var(--warn-text); }
+.pc-summary[data-kind="ok"] .pc-sheet__toggle { color: var(--ok-text); }
+.pc-conflicts > li { display: flex; align-items: center; gap: var(--s2); padding: var(--s1) var(--s2) var(--s1) var(--s3); min-height: 48px; font-size: var(--fs-sm); font-weight: 600; border-bottom: 1px solid var(--rule); }
+.pc-conflicts > li > span { flex: 1 1 auto; min-width: 0; }
+.pc-conflicts > li .pc-i { display: none; }
+.pc-conflicts > li[data-kind="block"] { background: var(--danger-bg); color: var(--danger-text); }
+.pc-conflicts > li[data-kind="warn"] { background: var(--warn-bg); color: var(--warn-text); }
+.pc-conflicts > li[data-kind="block"] .pc-conflict__i-block, .pc-conflicts > li[data-kind="warn"] .pc-conflict__i-warn { display: block; }
+.pc-conflicts .pc-btn { flex: none; color: var(--ink); }
+
+/* Phone / tablet portrait: the preview shows only while the Site group is open (progressive: needs :has) */
+@media (max-width: 899px) and (min-height: 481px), (max-width: 899px) and (orientation: portrait) {
+  .pc-qs:has([data-pc="q-group-site"][hidden]) .pc-preview { display: none; }
+}
+
+/* Phone portrait: the legend is a one-line strip under a shorter canvas, not an overlay, so the drawing gets the
+   whole canvas; total preview height stays 200 px + rule (F2-T2 TL review, logged against F1-T1).
+   Side paddings 6 px / 3 px (TL spec: 8 / 4) keep about 8 px slack at 360 px for wider system fonts on real phones. */
+@media (max-width: 599px) and (min-height: 481px) {
+  .pc-preview > .pc-canvas-wrap { height: 176px; }
+  .pc-legend { position: static; flex-wrap: nowrap; overflow: hidden; gap: 4px; padding: 2px 6px 3px; }
+  .pc-legend > li { flex: none; padding: 0 3px; }
+  .pc-legend { height: 24px; align-items: center; padding-top: 0; padding-bottom: 0; }
+  .pc-legend > .pc-legend__mark { display: none; }
+  .pc-taphint { left: 0; right: 0; bottom: 0; height: 24px; display: flex; align-items: center; border-width: 0; background: var(--canvas); white-space: nowrap; overflow: hidden; }
+}
+
+@media (min-width: 600px) {
+  .pc-qs__scroll { padding: 0 var(--s4); }
+  .pc-preview > .pc-canvas-wrap { height: 240px; }
+}
+
+/* Setbacks side by side when the question column is wide enough (not in short landscape) */
+@media (min-width: 600px) and (min-height: 481px) {
+  .pc-setbacks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s3); }
+  .pc-setbacks > .pc-field--row { flex-direction: column; align-items: stretch; }
+  .pc-setbacks > .pc-field--row > .pc-field__label, .pc-setbacks > .pc-field--row > .pc-num { flex: none; max-width: none; }
+  .pc-pairadd { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+  .pc-pairadd > .pc-btn { grid-column: auto; }
+}
+
+@media (min-width: 900px) {
+  .pc-qs { grid-template-columns: minmax(0, 1fr) 400px; grid-template-rows: minmax(0, 1fr); grid-template-areas: "col side"; }
+  .pc-qs__col { grid-area: col; display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; min-width: 0; }
+  .pc-qs__side { grid-area: side; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; overscroll-behavior: contain; border-left: 1px solid var(--ink); background: var(--surface); }
+  .pc-qs__nav, .pc-qs__scroll, .pc-preview, .pc-summary { grid-area: auto; }
+  .pc-qs__nav > .pc-tabs .pc-tab { flex: 0 1 140px; border-right: 1px solid var(--rule); }
+  .pc-preview { flex: none; }
+  .pc-preview > .pc-canvas-wrap, .pc-preview.is-collapsed > .pc-canvas-wrap { display: block; height: 300px; }
+  .pc-preview.is-collapsed > .pc-legend { display: flex; }
+  .pc-preview.is-collapsed > .pc-tapmode { display: flex; }
+  .pc-preview.is-collapsed > .pc-taphint { display: block; }
+  .pc-preview__toggle { display: none; }
+  .pc-summary, .pc-summary:not(.is-collapsed) { position: static; display: block; max-height: none; border-top: 0; box-shadow: none; }
+  .pc-summary .pc-sheet__chev { display: none; }
+  .pc-summary .pc-sheet__toggle { cursor: default; }
+  .pc-summary > .pc-sheet__body, .pc-summary.is-collapsed > .pc-sheet__body { display: block; max-height: none; overflow: visible; }
+  .pc-qgroup { margin: 0; padding-left: var(--s2); }
+  .pc-qgroup__title { position: static; width: auto; height: auto; overflow: visible; clip: auto; font-size: var(--fs-lg); font-weight: 600; padding-top: var(--s4); }
+}
+
+@media (max-height: 480px) and (orientation: landscape) and (max-width: 899px) {
+  .pc-qs { grid-template-columns: minmax(0, 1fr) var(--panel-w-short); grid-template-rows: minmax(0, 1fr); grid-template-areas: "col side"; }
+  .pc-qs__col { grid-area: col; display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; min-width: 0; }
+  .pc-qs__side { grid-area: side; position: relative; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--ink); background: var(--surface); }
+  .pc-qs__nav, .pc-qs__scroll, .pc-preview, .pc-summary { grid-area: auto; }
+  .pc-qs__progress { display: none; }
+  .pc-preview { flex: none; border-bottom: 0; }
+  .pc-preview > .pc-canvas-wrap, .pc-preview.is-collapsed > .pc-canvas-wrap { display: block; height: 200px; }
+  .pc-preview__toggle { display: none; }
+  .pc-legend, .pc-preview.is-collapsed > .pc-legend { display: none; }
+  .pc-preview.is-collapsed > .pc-tapmode { display: flex; }
+  /* No hint here (TL F2-T3 inc 1, ruling 4): the selected segment shows the mode, the Q6 list explains "set by you" */
+  .pc-taphint, .pc-preview.is-collapsed > .pc-taphint { display: none; }
+  .pc-summary:not(.is-collapsed) { inset: 0; max-height: none; border-top: 0; box-shadow: none; }
+  .pc-summary:not(.is-collapsed) > .pc-sheet__body { flex: 1 1 auto; max-height: none; }
+}
+
+/* Corner toggle sits against the preview's clipping edge: inset focus ring */
+.pc-preview__toggle:focus-visible { outline-offset: -3px; }

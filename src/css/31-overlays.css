@@ -1,0 +1,86 @@
+/* Feedback and floating layers: message line, banner, toast, dialog, collapsible sheet, busy state */
+
+/* Inline message line (compact banner) */
+.pc-msg {
+  display: flex; align-items: center; gap: var(--s2); min-height: 32px; padding: var(--s1) var(--s3);
+  font-size: var(--fs-sm); color: var(--ink-2);
+}
+.pc-msg[data-kind="warn"] { background: var(--warn-bg); color: var(--warn-text); font-weight: 600; }
+.pc-msg[data-kind="block"] { background: var(--danger-bg); color: var(--danger-text); font-weight: 600; }
+.pc-msg[data-kind="ok"] { background: var(--ok-bg); color: var(--ok-text); font-weight: 600; }
+
+/* Banner: info | warn | block | ok. Icon + text + optional action */
+.pc-banner {
+  display: flex; align-items: center; gap: var(--s2); min-width: 0; padding: var(--s1) var(--s2) var(--s1) var(--s3);
+  min-height: 48px; border-left: 4px solid var(--accent); border-bottom: 1px solid var(--rule);
+  background: var(--accent-tint); color: var(--accent); font-size: var(--fs-sm); font-weight: 600;
+}
+.pc-banner__text { flex: 1 1 auto; min-width: 0; }
+.pc-banner .pc-i { display: none; }
+.pc-banner[data-kind="info"] .pc-banner__i-info,
+.pc-banner[data-kind="warn"] .pc-banner__i-warn,
+.pc-banner[data-kind="block"] .pc-banner__i-block,
+.pc-banner[data-kind="ok"] .pc-banner__i-ok { display: block; }
+.pc-banner .pc-btn .pc-i { display: block; }
+.pc-banner[data-kind="warn"] { background: var(--warn-bg); color: var(--warn-text); border-left-color: var(--warn); }
+.pc-banner[data-kind="block"] { background: var(--danger-bg); color: var(--danger-text); border-left-color: var(--danger); }
+.pc-banner[data-kind="ok"] { background: var(--ok-bg); color: var(--ok-text); border-left-color: var(--ok); }
+.pc-banner .pc-btn { flex: none; background: var(--surface); color: var(--ink); }
+
+/* Toasts: float above the action bar */
+.pc-toasts {
+  position: fixed; z-index: 30; left: var(--s3); right: var(--s3);
+  bottom: calc(var(--bar-h) + var(--s3) + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; align-items: center; gap: var(--s2); pointer-events: none;
+}
+.pc-toast {
+  max-width: 440px; padding: 10px var(--s4); border-radius: var(--r2);
+  background: var(--ink); color: #fff; font-size: var(--fs-sm); font-weight: 600; box-shadow: var(--e2);
+  display: flex; align-items: center; gap: var(--s2);
+}
+
+/* Dialog layer: bottom-anchored on phone, centred from 600 px */
+.pc-dialog-layer {
+  position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center;
+  background: var(--scrim);
+}
+.pc-dialog {
+  width: 100%; max-width: 480px; max-height: 90%; overflow-y: auto; overscroll-behavior: contain;
+  padding: var(--s5) var(--s4) calc(var(--s4) + env(safe-area-inset-bottom, 0px));
+  background: var(--surface); border-top: 3px solid var(--ink); border-radius: var(--r3) var(--r3) 0 0; box-shadow: var(--e2);
+  display: flex; flex-direction: column; gap: var(--s3);
+}
+.pc-dialog__title { font-size: var(--fs-lg); font-weight: 600; }
+.pc-dialog__text { color: var(--ink-2); }
+.pc-dialog__extra:empty { display: none; }
+.pc-dialog__actions { display: flex; gap: var(--s3); justify-content: flex-end; margin-top: var(--s2); }
+.pc-dialog__actions > .pc-btn { flex: 1 1 0; }
+.pc-choice { display: flex; flex-direction: column; gap: var(--s2); }
+.pc-choice .pc-card { flex-direction: row; align-items: center; }
+
+/* Collapsible sheet: toggle row + body; FS toggles is-collapsed on the sheet and aria-expanded on the toggle */
+.pc-sheet { background: var(--surface); border-top: 1px solid var(--ink); min-width: 0; }
+.pc-sheet__toggle {
+  width: 100%; min-height: 48px; padding: 0 var(--s3); display: flex; align-items: center; gap: var(--s2);
+  border: 0; background: none; text-align: left; font-size: var(--fs-sm); font-weight: 600;
+}
+.pc-sheet__toggle:focus-visible { outline-offset: -3px; }
+.pc-sheet__toggle > .pc-sheet__grow { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-sheet__chev { transition: transform var(--t-med); }
+.pc-sheet.is-collapsed .pc-sheet__chev { transform: rotate(180deg); }
+.pc-sheet__body { max-height: 260px; overflow-y: auto; overscroll-behavior: contain; border-top: 1px solid var(--rule); }
+.pc-sheet.is-collapsed > .pc-sheet__body { display: none; }
+
+/* Busy state ("Building…"): three drafting ticks */
+.pc-busy { display: inline-flex; align-items: center; gap: var(--s3); font-weight: 600; }
+.pc-busy__ticks { display: inline-flex; gap: 4px; }
+.pc-busy__ticks > i { width: 3px; height: 16px; background: var(--accent); animation: pc-tick 900ms ease-in-out infinite; }
+.pc-busy__ticks > i:nth-child(2) { animation-delay: 150ms; }
+.pc-busy__ticks > i:nth-child(3) { animation-delay: 300ms; }
+@keyframes pc-tick { 0%, 100% { transform: scaleY(0.4); } 50% { transform: scaleY(1); } }
+
+@media (min-width: 600px) {
+  .pc-dialog-layer { align-items: center; padding: var(--s5); }
+  .pc-dialog { border-radius: var(--r2); padding: var(--s5); }
+  .pc-dialog__actions > .pc-btn { flex: 0 0 auto; min-width: 120px; }
+}

@@ -1,0 +1,121 @@
+/* Stage 3: Floor plans */
+.pc-plans { grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "top" "canvas" "panel"; }
+.pc-plans__top { grid-area: top; min-width: 0; background: var(--surface); }
+.pc-plans > .pc-canvas-wrap { grid-area: canvas; }
+.pc-plans > .pc-panel { grid-area: panel; }
+.pc-plans__counter {
+  display: flex; align-items: center; gap: var(--s2); padding: 2px var(--s3); min-height: 24px;
+  font-size: var(--fs-sm); color: var(--ink-2); border-bottom: 1px solid var(--rule);
+}
+.pc-plans__counter strong { font-family: var(--font-num); color: var(--ink); }
+.pc-plans__error { position: absolute; left: var(--s2); right: calc(var(--tap) + 2 * var(--s2)); top: var(--s2); z-index: 2; border: 1px solid var(--danger); box-shadow: var(--e1); }
+.pc-plans__readout { display: flex; align-items: stretch; min-width: 0; }
+.pc-plans__readout > .pc-tb { flex: 1 1 auto; min-width: 0; border-top: 0; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(0, 1.6fr); }
+.pc-plans__readout .pc-tb__cell { padding: var(--s1) 6px; }
+.pc-plans__readout .pc-tb dd { font-size: var(--fs-sm); }
+.pc-plans__readout .pc-tb__cell:first-child dd { font-family: var(--font-ui); }
+.pc-plans__msgrow { display: flex; align-items: stretch; min-width: 0; }
+.pc-plans__msgrow > .pc-msg { flex: 1 1 auto; min-width: 0; }
+.pc-plans__warnbtn { flex: none; align-self: center; margin: 0 6px; }
+.pc-plans__warn {
+  position: absolute; left: 0; right: 0; bottom: 100%; z-index: 3; max-height: 200px; overflow-y: auto;
+  background: var(--surface); border-top: 1px solid var(--ink); box-shadow: var(--e2);
+}
+.pc-plans__warn.is-collapsed { display: none; }
+.pc-plans__warn h3 { font-size: var(--fs-sm); padding: var(--s2) var(--s3) 0; }
+.pc-warnlist > li {
+  display: flex; align-items: flex-start; gap: var(--s2); padding: var(--s2) var(--s3);
+  font-size: var(--fs-sm); border-bottom: 1px solid var(--rule); color: var(--warn-text);
+}
+.pc-warnlist > li[data-kind="block"] { color: var(--danger-text); }
+.pc-warnlist > li .pc-i { margin-top: 1px; }
+.pc-plans__regen-full { display: none; }
+
+/* Phone portrait (F3-T2): compact counter line, tighter action row and a two-line readout without captions
+   ("name size" / "area"), so the sample draws at 14 px/m or more and "414 sq ft (asked 452 sq ft)" fits */
+@media (max-width: 599px) and (min-height: 481px) {
+  .pc-plans__counter { min-height: 0; height: 20px; box-sizing: border-box; padding: 0 var(--s3); font-size: var(--fs-cap); line-height: 19px; }
+  .pc-plans .pc-toolrow { padding-top: 4px; padding-bottom: 4px; }
+  /* message line: two caption lines reserved, so a longer message never resizes the canvas (F3-T2 fix) */
+  .pc-plans .pc-plans__msgrow { height: 32px; }
+  .pc-plans .pc-plans__msgrow > .pc-msg { min-height: 0; height: 100%; padding: 2px var(--s3); font-size: var(--fs-cap); line-height: 14px; overflow: hidden; }
+  .pc-plans__readout > .pc-tb { grid-template-columns: minmax(0, 1fr) auto; }
+  .pc-plans__readout .pc-tb__cell { display: flex; align-items: center; padding: 1px 6px; border-right: 0; }
+  .pc-plans__readout .pc-tb__cell:nth-child(2) { justify-content: flex-end; }
+  .pc-plans__readout .pc-tb__cell:nth-child(3) { grid-column: 1 / -1; }
+  .pc-plans__readout .pc-tb dd { line-height: 17px; }
+  .pc-plans__readout dt { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
+
+/* Panel under the canvas (phone and tablet portrait): the message line has a fixed height, and the warnings chip
+   floats over the canvas bottom left instead of sitting in that line (its showing or hiding never resizes the
+   canvas either). The open warnings sheet keeps a free band at its bottom for the chip. */
+@media (max-width: 899px) and (min-height: 481px) {
+  .pc-plans__msgrow { height: 44px; }
+  .pc-plans__msgrow > .pc-msg { min-height: 0; height: 100%; overflow: hidden; line-height: 18px; }
+  .pc-plans__warnbtn { position: absolute; left: var(--s2); bottom: calc(100% + var(--s2)); z-index: 4; margin: 0; box-shadow: var(--e1); }
+  .pc-plans__warn { padding-bottom: 60px; }
+}
+
+/* Level tabs: the state (icon, and its word where there is room) sits under the level name, and both wrap at
+   spaces, so four real tabs ("Second floor", "Cannot be laid out") fit at every width (F3-T1). Below 720 px and in
+   short landscape the state word is visually hidden: the icon shows the state and the word stays in the tab's name. */
+.pc-plans .pc-tab { flex-direction: column; gap: 1px; min-width: 0; padding: 3px 4px 0; white-space: normal; line-height: 1.15; text-align: center; }
+.pc-plans .pc-tab__state { max-width: 100%; }
+.pc-plans .pc-tab__state .pc-i { flex: none; }
+.pc-plans .pc-tab__state-txt {
+  display: inline; position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
+@media (max-width: 479px) {
+  .pc-plans .pc-tab { padding: 3px 2px 0; font-size: 13px; }
+}
+
+/* No-layout banner on phones and in short landscape (TL F3-T1 ruling 2, adjusted): the text takes the full first lines
+   at caption size, the block icon moves down beside "Go to room list" on its own 44 px line; at most half the canvas.
+   From 600 px (tablet) the one-row banner is unchanged. */
+@media (max-width: 599px), (max-height: 480px) and (orientation: landscape) and (max-width: 899px) {
+  .pc-plans__error { flex-wrap: wrap; row-gap: var(--s1); }
+  .pc-plans__error > .pc-banner__text { flex: 1 1 100%; order: 1; font-size: var(--fs-cap); line-height: 1.35; }
+  .pc-plans__error > .pc-i { order: 2; }
+  .pc-plans__error > [data-pc="btn-goto-rooms"] { order: 3; flex: 1 1 0; min-height: var(--tap); }
+}
+
+@media (min-width: 720px) {
+  .pc-plans .pc-tab__state-txt { position: static; width: auto; height: auto; margin: 0; overflow: visible; clip: auto; white-space: normal; }
+}
+
+@media (min-width: 900px) {
+  .pc-plans { grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "top top" "canvas panel"; }
+  .pc-plans__top { display: flex; align-items: stretch; border-bottom: 1px solid var(--ink); background: var(--sunk); }
+  .pc-plans__top > .pc-tabs { flex: 0 1 640px; border-bottom: 0; }
+  .pc-plans__top .pc-tab { border-right: 1px solid var(--rule); }
+  .pc-plans__counter { flex: 1 1 auto; justify-content: flex-end; border-bottom: 0; padding: 0 var(--s4); }
+  .pc-plans__readout { flex-direction: column; }
+  .pc-plans__readout > .pc-tb { grid-template-columns: minmax(0, 1fr); }
+  .pc-plans__readout .pc-tb__cell { border-right: 0; border-bottom: 1px solid var(--rule); padding: var(--s2) var(--s4); display: flex; justify-content: space-between; align-items: baseline; gap: var(--s3); }
+  .pc-plans__warnbtn { display: none; }
+  .pc-plans__warn, .pc-plans__warn.is-collapsed { display: block; position: static; max-height: none; box-shadow: none; border-top: 0; border-bottom: 1px solid var(--rule); }
+  .pc-plans__warn h3 { padding: var(--s3) var(--s4) 0; }
+  .pc-warnlist > li { padding: var(--s2) var(--s4); }
+  .pc-plans .pc-msg { padding: var(--s2) var(--s4); }
+  .pc-plans .pc-toolrow { flex-direction: column; align-items: stretch; }
+  .pc-plans .pc-toolrow__end { margin-left: 0; }
+  .pc-plans__regen-full { display: inline; }
+}
+
+@media (max-height: 480px) and (orientation: landscape) and (max-width: 899px) {
+  .pc-plans { grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "canvas top" "canvas panel"; }
+  .pc-plans__top { border-left: 1px solid var(--ink); min-width: 0; }
+  .pc-plans .pc-tab { padding: 3px 2px 0; font-size: 13px; }
+  .pc-plans .pc-tab__state-txt { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .pc-plans__readout { flex-wrap: wrap; }
+  /* three one-line rows without captions (F3-T2: room the asked-size text needs) */
+  .pc-plans__readout > .pc-tb { flex: 1 1 100%; grid-template-columns: minmax(0, 1fr); }
+  .pc-plans__readout .pc-tb__cell { padding: 2px 6px; border-right: 0; }
+  .pc-plans__readout .pc-tb dd { line-height: 18px; }
+  .pc-plans__readout dt { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .pc-plans__warn { position: static; max-height: none; box-shadow: none; }
+  .pc-plans .pc-toolrow > .pc-toolrow__end { flex: 1 1 auto; }
+  .pc-plans__regen-txt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .pc-plans .pc-msg { font-size: var(--fs-cap); }
+}

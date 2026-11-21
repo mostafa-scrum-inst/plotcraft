@@ -1,0 +1,59 @@
+/* Design tokens: light theme ("the drawing sheet"). Semantic names; contrast figures in docs/03-tasks/F1-T1. */
+:root {
+  --paper: #F4F3EE;
+  --surface: #FFFFFF;
+  --sunk: #E9E8E1;
+  --canvas: #FBFAF6;
+  --ink: #16212B;
+  --ink-2: #46535F;
+  --ink-3: #5D6A75;
+  --rule: #D3D5D0;
+  --border: #7C8791;
+  --accent: #1B4F8F;
+  --accent-strong: #143C6E;
+  --accent-tint: #E2EBF6;
+  --danger: #A8231C;
+  --danger-text: #8E1B15;
+  --danger-bg: #FBE6E3;
+  --warn: #9A6700;
+  --warn-text: #6B4700;
+  --warn-bg: #FDF0CC;
+  --ok: #1C6B46;
+  --ok-text: #17573A;
+  --ok-bg: #DFF1E6;
+  --focus: #C2410C;
+  --scrim: rgba(22, 33, 43, 0.5);
+
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-num: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  --fs-cap: 12px;
+  --fs-sm: 14px;
+  --fs-md: 16px;
+  --fs-lg: 18px;
+  --fs-xl: 22px;
+  --lh: 1.4;
+
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+
+  --r1: 2px;
+  --r2: 4px;
+  --r3: 10px;
+
+  --e1: 0 1px 2px rgba(22, 33, 43, 0.14);
+  --e2: 0 8px 28px rgba(22, 33, 43, 0.24);
+
+  --tap: 44px;
+  --header-h: 44px;
+  --stepper-h: 48px;
+  --bar-h: 56px;
+  --panel-w: 360px;
+  --panel-w-short: 272px;
+
+  --t-fast: 120ms;
+  --t-med: 180ms;
+}

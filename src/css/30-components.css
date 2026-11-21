@@ -1,0 +1,200 @@
+/* Controls: buttons, segmented, number stepper, slider, switch, select, fields, chips, tabs, cards, readouts */
+
+/* Buttons */
+.pc-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
+  min-height: var(--tap); min-width: var(--tap); padding: 0 var(--s4);
+  border: 1px solid var(--ink); border-radius: var(--r2); background: var(--surface); color: var(--ink);
+  font-size: var(--fs-md); font-weight: 600; line-height: 1.2; text-align: center; white-space: nowrap;
+  transition: background-color var(--t-fast);
+}
+.pc-btn:hover { background: var(--sunk); }
+.pc-btn--primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.pc-btn--primary:hover, .pc-btn--primary:active { background: var(--accent-strong); border-color: var(--accent-strong); }
+.pc-btn--quiet { border-color: transparent; background: none; padding: 0 var(--s2); }
+.pc-btn--danger { border-color: var(--danger); color: var(--danger-text); }
+.pc-btn--icon { padding: 0; width: var(--tap); }
+.pc-btn--block { width: 100%; }
+.pc-btn--sm { font-size: var(--fs-sm); padding: 0 var(--s3); }
+.pc-btn:disabled, .pc-btn[aria-disabled="true"] {
+  background: var(--sunk); border-color: var(--rule); color: var(--ink-3); cursor: not-allowed;
+}
+.pc-btn--quiet:disabled, .pc-btn--quiet[aria-disabled="true"] { background: none; border-color: transparent; }
+.pc-btn[aria-pressed="true"] { background: var(--accent-tint); border-color: var(--accent); color: var(--accent); }
+/* After aria-pressed so an approved toggle ("Approve floor", pressed) stays green; the focus ring stays --focus */
+.pc-btn.is-approved, .pc-btn.is-approved:hover { background: var(--ok); border-color: var(--ok); color: #fff; }
+
+/* Segmented control and other "covered input" choices: the native input fills its label (44 px box) */
+.pc-seg { display: flex; min-width: 0; }
+.pc-opt { position: relative; display: block; }
+.pc-opt > input, .pc-switch > input {
+  position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer;
+}
+.pc-seg > .pc-opt { flex: 1 1 0; min-width: var(--tap); margin-left: -1px; }
+.pc-seg > .pc-opt:first-child { margin-left: 0; }
+.pc-seg__txt {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: var(--tap); padding: 0 var(--s2);
+  border: 1px solid var(--border); background: var(--surface);
+  font-size: var(--fs-sm); font-weight: 600; white-space: nowrap;
+}
+.pc-seg > .pc-opt:first-child .pc-seg__txt { border-radius: var(--r2) 0 0 var(--r2); }
+.pc-seg > .pc-opt:last-child .pc-seg__txt { border-radius: 0 var(--r2) var(--r2) 0; }
+.pc-opt > input:checked + .pc-seg__txt {
+  position: relative; z-index: 1; background: var(--accent-tint); border-color: var(--accent); color: var(--accent);
+  box-shadow: inset 0 -3px 0 var(--accent);
+}
+/* The covered input itself is transparent: the ring is drawn on its visible sibling only */
+.pc-opt > input:focus-visible, .pc-switch > input:focus-visible { outline: none; }
+.pc-opt > input:focus-visible + * { outline: 3px solid var(--focus); outline-offset: 2px; position: relative; z-index: 2; }
+.pc-opt > input:disabled + * { background: var(--sunk); color: var(--ink-3); border-color: var(--rule); text-decoration: line-through; }
+.pc-opt > input:disabled { cursor: not-allowed; }
+.pc-seg--quiet .pc-seg__txt { border-color: transparent; background: none; min-width: var(--tap); }
+.pc-seg--quiet .pc-opt > input:checked + .pc-seg__txt { background: none; border-color: transparent; }
+
+/* Fields */
+.pc-field { display: flex; flex-direction: column; gap: var(--s1); min-width: 0; }
+.pc-field__label { font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); }
+.pc-input, .pc-select {
+  width: 100%; min-width: var(--tap); min-height: var(--tap); padding: 0 var(--s3);
+  border: 1px solid var(--border); border-radius: var(--r1); background: var(--surface);
+  font-size: var(--fs-md);
+}
+.pc-input { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.pc-input[aria-invalid="true"] { border-color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger); }
+.pc-select {
+  -webkit-appearance: none; appearance: none; padding-right: 34px; text-overflow: ellipsis;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink) 50%), linear-gradient(135deg, var(--ink) 50%, transparent 50%);
+  background-position: calc(100% - 17px) 50%, calc(100% - 11px) 50%;
+  background-size: 6px 6px; background-repeat: no-repeat;
+}
+.pc-err { font-size: var(--fs-sm); color: var(--danger-text); font-weight: 600; }
+.pc-note { font-size: var(--fs-sm); color: var(--ink-2); }
+
+/* Number stepper: [-] input unit [+] */
+.pc-num { display: flex; align-items: stretch; min-width: 0; }
+.pc-num > .pc-btn { border-color: var(--border); flex: none; }
+.pc-num > .pc-btn:first-child { border-radius: var(--r2) 0 0 var(--r2); }
+.pc-num > .pc-btn:last-child { border-radius: 0 var(--r2) var(--r2) 0; }
+.pc-num__box {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: center;
+  border: 1px solid var(--border); border-left: 0; border-right: 0; background: var(--surface);
+}
+.pc-num__box > .pc-input { border: 0; text-align: right; padding: 0 var(--s1) 0 var(--s2); min-width: var(--tap); }
+.pc-unit { font: 400 var(--fs-sm) var(--font-num); color: var(--ink-2); padding-right: var(--s2); white-space: nowrap; }
+.pc-inputunit { display: flex; align-items: center; border: 1px solid var(--border); border-radius: var(--r1); background: var(--surface); }
+.pc-inputunit > .pc-input { border: 0; text-align: right; }
+
+/* Slider with value */
+.pc-slider { display: flex; align-items: center; gap: var(--s3); min-width: 0; }
+.pc-slider > output { flex: none; min-width: 5ch; text-align: right; font-weight: 600; }
+.pc-range {
+  -webkit-appearance: none; appearance: none; flex: 1 1 auto; min-width: var(--tap); width: 100%;
+  height: var(--tap); background: transparent; cursor: pointer;
+}
+.pc-range::-webkit-slider-runnable-track { height: 4px; background: var(--border); border-radius: 2px; }
+.pc-range::-moz-range-track { height: 4px; background: var(--border); border-radius: 2px; }
+.pc-range::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 16px; height: 28px; margin-top: -12px;
+  background: var(--accent); border: 2px solid var(--surface); border-radius: var(--r1); box-shadow: 0 0 0 1px var(--accent);
+}
+.pc-range::-moz-range-thumb {
+  width: 14px; height: 26px; background: var(--accent); border: 2px solid var(--surface);
+  border-radius: var(--r1); box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* Switch */
+.pc-switch {
+  position: relative; display: flex; align-items: center; gap: var(--s3);
+  min-height: var(--tap); min-width: var(--tap); font-size: var(--fs-md);
+}
+.pc-switch__track {
+  flex: none; width: 44px; height: 24px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--sunk); position: relative; transition: background-color var(--t-fast);
+}
+.pc-switch__track::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--ink-2); transition: transform var(--t-fast);
+}
+.pc-switch > input:checked + .pc-switch__track { background: var(--accent); border-color: var(--accent); }
+.pc-switch > input:checked + .pc-switch__track::after { transform: translateX(20px); background: #fff; }
+.pc-switch > input:focus-visible + .pc-switch__track { outline: 3px solid var(--focus); outline-offset: 2px; }
+.pc-switch > input:disabled ~ * { opacity: 0.6; }
+
+/* Chips and tags */
+.pc-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 2px var(--s2); min-height: 24px;
+  border: 1px solid var(--border); border-radius: var(--r1); background: var(--surface);
+  font-size: var(--fs-sm); font-weight: 600; white-space: nowrap;
+}
+.pc-chip--float { position: absolute; z-index: 1; box-shadow: var(--e1); font-family: var(--font-num); }
+.pc-chip[data-kind="warn"] { background: var(--warn-bg); border-color: var(--warn); color: var(--warn-text); }
+.pc-chip[data-kind="block"] { background: var(--danger-bg); border-color: var(--danger); color: var(--danger-text); }
+.pc-chip[data-kind="ok"] { background: var(--ok-bg); border-color: var(--ok); color: var(--ok-text); }
+button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(--s3); }
+.pc-tag {
+  display: inline-block; font: 600 var(--fs-cap) var(--font-num); line-height: 1.3; padding: 1px 5px;
+  border: 1px solid var(--ink); border-radius: var(--r1); white-space: nowrap;
+}
+
+/* Tabs (group tabs, level tabs with approval badge, 3D panel tabs) */
+.pc-tabs { display: flex; min-width: 0; border-bottom: 1px solid var(--ink); background: var(--sunk); }
+.pc-tab {
+  flex: 1 1 0; min-width: var(--tap); min-height: var(--tap); padding: 0 var(--s2);
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  border: 0; border-right: 1px solid var(--rule); border-bottom: 3px solid transparent; background: none;
+  font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); white-space: nowrap;
+}
+.pc-tab:last-child { border-right: 0; }
+.pc-tab:focus-visible { outline-offset: -3px; }
+.pc-tab[aria-selected="true"] { background: var(--surface); color: var(--accent); border-bottom-color: var(--accent); }
+.pc-tab__state { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-cap); font-weight: 600; color: var(--ink-2); }
+.pc-tab__state-txt { display: none; }
+.pc-tab .pc-tab__i-approved, .pc-tab .pc-tab__i-invalid { display: none; }
+.pc-tab.is-approved .pc-tab__state { color: var(--ok-text); }
+.pc-tab.is-approved .pc-tab__i-approved { display: block; }
+.pc-tab.is-approved .pc-tab__i-draft { display: none; }
+.pc-tab.is-invalid .pc-tab__state { color: var(--danger-text); }
+.pc-tab.is-invalid .pc-tab__i-invalid { display: block; }
+.pc-tab.is-invalid .pc-tab__i-draft { display: none; }
+
+/* Radio cards (exterior swatches, interior style, density) */
+.pc-cards { display: grid; gap: var(--s2); grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); }
+.pc-card {
+  display: flex; flex-direction: column; gap: var(--s2); min-height: var(--tap); padding: var(--s3);
+  border: 1px solid var(--border); border-radius: var(--r2); background: var(--surface);
+}
+.pc-card__name { display: flex; align-items: center; gap: var(--s2); font-weight: 600; }
+.pc-card__name::before {
+  content: ""; flex: none; width: 16px; height: 16px; border-radius: 50%;
+  border: 1px solid var(--ink); background: var(--surface);
+}
+.pc-opt > input:checked + .pc-card { border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); background: var(--accent-tint); }
+.pc-opt > input:checked + .pc-card .pc-card__name::before { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 3px var(--surface); }
+.pc-card__desc { font-size: var(--fs-sm); color: var(--ink-2); }
+.pc-swatch { height: 28px; border: 1px solid var(--ink); border-radius: var(--r1); display: flex; overflow: hidden; }
+.pc-swatch > i { flex: 1; }
+
+/* Title-block readout */
+.pc-tb { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+.pc-tb__cell { padding: var(--s1) var(--s3); border-right: 1px solid var(--rule); min-width: 0; }
+.pc-tb__cell:last-child { border-right: 0; }
+.pc-tb dt { font-size: var(--fs-cap); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
+.pc-tb dd { font: 600 var(--fs-md) var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pc-tb--rows { grid-template-columns: minmax(0, 1fr); border-bottom: 0; }
+.pc-tb--rows .pc-tb__cell {
+  display: flex; justify-content: space-between; align-items: baseline; gap: var(--s3);
+  border-right: 0; border-bottom: 1px solid var(--rule); padding: 6px var(--s3);
+}
+
+/* List rows */
+.pc-row { display: flex; align-items: center; gap: var(--s2); min-width: 0; padding: var(--s1) 0; border-bottom: 1px solid var(--rule); }
+.pc-row__grow { flex: 1 1 auto; min-width: 0; }
+
+/* Progress */
+.pc-progress { height: 4px; background: var(--rule); }
+.pc-progress > i { display: block; height: 100%; background: var(--accent); }
+
+/* Inset focus ring where an outer ring would be cut by a clipping edge or a neighbouring control */
+.pc-input:focus-visible, .pc-select:focus-visible, .pc-num > .pc-btn:focus-visible,
+.pc-seg--quiet .pc-opt > input:focus-visible + .pc-seg__txt { outline-offset: -3px; }

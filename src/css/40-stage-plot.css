@@ -1,0 +1,71 @@
+/* Stage 1: Plot */
+.pc-plot { grid-template-areas: "canvas" "panel"; }
+.pc-plot > .pc-canvas-wrap { grid-area: canvas; }
+.pc-plot > .pc-panel { grid-area: panel; }
+.pc-plot__scale { top: var(--s2); left: var(--s2); }
+/* Phone: uneven columns so the longest values (107639 sq ft, 1312.3 ft) fit */
+.pc-plot .pc-tb { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.2fr) minmax(0, 0.7fr); }
+.pc-plot .pc-tb__cell { padding: var(--s1) var(--s2); }
+.pc-toolrow { display: flex; align-items: center; gap: var(--s2); padding: 6px var(--s2); }
+.pc-toolrow__end { margin-left: auto; }
+.pc-toolrow > .pc-btn { padding: 0 var(--s3); }
+
+/* Start panel: docked to the bottom of the canvas on phone so the grid above stays tappable */
+.pc-start {
+  grid-area: canvas; align-self: end; justify-self: center; z-index: 2;
+  width: calc(100% - 2 * var(--s2)); max-width: 380px; margin: var(--s2);
+  padding: var(--s3); display: flex; flex-direction: column; gap: var(--s2);
+  background: var(--surface); border: 1px solid var(--ink); border-radius: var(--r2); box-shadow: var(--e2);
+}
+.pc-start__hint { font-size: var(--fs-sm); }
+.pc-start__resume { display: flex; flex-direction: column; gap: var(--s2); padding-top: var(--s2); border-top: 1px solid var(--rule); font-size: var(--fs-sm); }
+.pc-start__row { display: flex; gap: var(--s2); }
+.pc-start__row > .pc-btn { flex: 1 1 0; padding: 0 var(--s2); }
+.pc-start__nosave { display: flex; align-items: center; gap: var(--s2); }
+.pc-plot__grid-cell { display: none; }
+
+/* Phone / tablet portrait, no draft waiting: no card and no hint, only a floating "Load sample project" button, so the grid
+   stays tappable. The container takes no pointer events. Without :has() support the full card above stays (fallback). */
+@media (max-width: 899px) and (min-height: 481px), (max-width: 899px) and (orientation: portrait) {
+  .pc-start:has([data-pc="resume-box"][hidden]) {
+    width: auto; max-width: calc(100% - 2 * var(--s2)); padding: 0; gap: 2px; align-items: center;
+    background: none; border: 0; box-shadow: none; pointer-events: none;
+  }
+  .pc-start:has([data-pc="resume-box"][hidden]) > .pc-start__hint { display: none; }
+  .pc-start:has([data-pc="resume-box"][hidden]) > .pc-btn { width: auto; pointer-events: auto; box-shadow: var(--e1); }
+  .pc-start:has([data-pc="resume-box"][hidden]) > .pc-start__nosave {
+    padding: 0 var(--s2); gap: var(--s1); background: var(--surface); border: 1px solid var(--rule);
+    font-size: var(--fs-cap); line-height: 16px; order: -1;
+  }
+}
+
+@media (min-width: 900px) {
+  .pc-plot { grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "canvas start" "canvas panel"; }
+  .pc-start {
+    grid-area: start; align-self: start; justify-self: stretch; width: auto; max-width: none; margin: 0;
+    padding: var(--s4); border: 0; border-left: 1px solid var(--ink); border-bottom: 1px solid var(--ink);
+    border-radius: 0; box-shadow: none;
+  }
+  .pc-start__hint { font-size: var(--fs-md); }
+  .pc-plot .pc-tb { grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 0; }
+  .pc-plot .pc-tb__cell { padding: var(--s3) var(--s4); border-bottom: 1px solid var(--rule); }
+  .pc-plot .pc-tb__cell:nth-child(2n) { border-right: 0; }
+  .pc-plot .pc-tb__cell:nth-last-child(-n+2) { border-bottom: 0; }
+  .pc-plot__grid-cell { display: block; }
+  .pc-plot .pc-msg { padding: var(--s3) var(--s4); min-height: 48px; }
+  .pc-toolrow { padding: var(--s3) var(--s4); flex-wrap: wrap; }
+}
+
+@media (max-height: 480px) and (orientation: landscape) and (max-width: 899px) {
+  .pc-plot { grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "canvas start" "canvas panel"; }
+  .pc-start {
+    grid-area: start; align-self: start; justify-self: stretch; width: auto; max-width: none; margin: 0;
+    padding: var(--s2); border: 0; border-left: 1px solid var(--ink); border-bottom: 1px solid var(--ink);
+    border-radius: 0; box-shadow: none; max-height: 140px; overflow-y: auto;
+  }
+  .pc-plot .pc-tb { grid-template-columns: minmax(0, 1fr); border-top: 0; }
+  .pc-plot .pc-tb__cell { display: flex; justify-content: space-between; align-items: baseline; border-right: 0; border-bottom: 1px solid var(--rule); }
+  .pc-plot .pc-tb__cell:last-child { border-bottom: 0; }
+  .pc-toolrow { flex-wrap: wrap; }
+  .pc-toolrow__end { margin-left: 0; flex: 1 1 100%; }
+}

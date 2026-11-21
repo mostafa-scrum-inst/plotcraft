@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PlotCraft</title>
+<link rel="icon" href="data:,">
+<!--@CSS-->
+</head>
+<body>
+
+<!-- ============================== ICON SPRITE ============================== -->
+<svg class="pc-sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><path d="M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3"/></symbol>
+  <symbol id="i-chev-left" viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></symbol>
+  <symbol id="i-chev-right" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></symbol>
+  <symbol id="i-chev-up" viewBox="0 0 24 24"><path d="M6 14.5l6-6 6 6"/></symbol>
+  <symbol id="i-chev-down" viewBox="0 0 24 24"><path d="M6 9.5l6 6 6-6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M8.5 6L4 10.5 8.5 15M4.5 10.5H14a5 5 0 0 1 0 10h-3"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M9.5 7V4.5h5V7M7 7l1 13h8l1-13M10.5 10.5v6M13.5 10.5v6"/></symbol>
+  <symbol id="i-polygon-close" viewBox="0 0 24 24"><path d="M5 8l8-4 6 6-3 9H7z"/><path d="M3.5 6.5h3v3h-3z" fill="currentColor"/></symbol>
+  <symbol id="i-ruler" viewBox="0 0 24 24"><path d="M3 16L16 3l5 5L8 21zM7.5 11.5l2 2M10.5 8.5l2 2M13.5 5.5l2 2"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><path d="M4 4h16v16H4zM4 9.5h16M4 14.5h16M9.5 4v16M14.5 4v16"/></symbol>
+  <symbol id="i-north" viewBox="0 0 24 24"><path d="M12 3l5 16-5-3.5L7 19z"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3.5L21.5 20h-19zM12 10v5M12 17.5v.5"/></symbol>
+  <symbol id="i-block" viewBox="0 0 24 24"><path d="M8 3h8l5 5v8l-5 5H8l-5-5V8zM8 12h8"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20l1-4.5L16.5 4 20 7.5 8.5 19zM14 6.5l3.5 3.5"/></symbol>
+  <symbol id="i-approved" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M7.5 12.5l3 3 6-6.5"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4v4.5H15"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3.5l9 4.5-9 4.5L3 8zM3.5 12.5l8.5 4.3 8.5-4.3M3.5 16.5l8.5 4.3 8.5-4.3"/></symbol>
+  <symbol id="i-roof" viewBox="0 0 24 24"><path d="M3 12l9-7.5 9 7.5M6 10v9.5h12V10"/></symbol>
+  <symbol id="i-frame" viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5M9.5 9.5h5v5h-5z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></symbol>
+  <symbol id="i-sunrise" viewBox="0 0 24 24"><path d="M3 19h18M7 19a5 5 0 0 1 10 0M12 4v7M9 7l3-3 3 3M4.5 12.5l2 1.5M19.5 12.5l-2 1.5"/></symbol>
+  <symbol id="i-sunset" viewBox="0 0 24 24"><path d="M3 19h18M7 19a5 5 0 0 1 10 0M12 4v7M9 8l3 3 3-3M4.5 12.5l2 1.5M19.5 12.5l-2 1.5"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/></symbol>
+  <symbol id="i-leaf" viewBox="0 0 24 24"><path d="M5 19C5 10 10 5 20 4.5 19.5 14 14.5 19 5 19zM5 19l8-8"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7.5 5l11 7-11 7z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><path d="M6.5 6.5h11v11h-11z"/></symbol>
+  <symbol id="i-drone" viewBox="0 0 24 24"><path d="M9.5 10h5v4h-5zM9.5 10.5L6 7M14.5 10.5L18 7M9.5 13.5L6 17M14.5 13.5L18 17M3.5 7h5M15.5 7h5M3.5 17h5M15.5 17h5"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/><path d="M12 2.5v5M12 16.5v5M2.5 12h5M16.5 12h5"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14l4-4M8.5 11L6 13.5a3.2 3.2 0 0 0 4.5 4.5l2.5-2.5M15.5 13l2.5-2.5A3.2 3.2 0 0 0 13.5 6L11 8.5"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.5l2.600 5.400 5.900.8-4.300 4.100 1 5.900-5.2-2.800-5.2 2.800 1-5.900-4.300-4.100 5.900-.8z"/></symbol>
+  <symbol id="i-stairs" viewBox="0 0 24 24"><path d="M4 19.5h4v-4h4v-4h4v-4h4"/></symbol>
+  <symbol id="i-lift" viewBox="0 0 24 24"><path d="M6 3.5h12v17H6zM12 3.5v17M7.800 11l1.400-2 1.400 2M13.400 9l1.400 2 1.400-2"/></symbol>
+  <symbol id="i-car" viewBox="0 0 24 24"><path d="M4 16.5v-4l2-5h12l2 5v4zM4 12.5h16M7 16.5v2M17 16.5v2"/></symbol>
+  <symbol id="i-pool" viewBox="0 0 24 24"><path d="M3 14c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 18.5c2-2 4-2 6 0s4 2 6 0 4-2 6 0M8 11V5.5a2 2 0 0 1 4 0M14 11V5.5a2 2 0 0 1 4 0"/></symbol>
+  <symbol id="i-cube" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9"/></symbol>
+  <symbol id="i-panel" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9M13 5v4h4V5zM7 15v4h4v-4z"/></symbol>
+  <symbol id="i-nosave" viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5zM8 4v5h7V4M3.5 3l17 18"/></symbol>
+  <symbol id="i-rot-ccw" viewBox="0 0 24 24"><path d="M5 12a7 7 0 1 1 2.5 5.400M5 7v5h5"/></symbol>
+  <symbol id="i-rot-cw" viewBox="0 0 24 24"><path d="M19 12a7 7 0 1 0-2.5 5.400M19 7v5h-5"/></symbol>
+</svg>
+
+<!-- ============================== APP SHELL ============================== -->
+<div class="pc-app" data-pc="app">
+
+  <header class="pc-header">
+    <h1 class="pc-wordmark"><svg class="pc-i pc-wordmark__mark" aria-hidden="true"><use href="#i-polygon-close"/></svg>PlotCraft</h1>
+    <div class="pc-header__unit">
+      <div class="pc-seg pc-seg--quiet" role="radiogroup" aria-label="Measurement unit" data-pc="unit-toggle">
+            <label class="pc-opt"><input type="radio" name="unit-toggle" value="m" data-pc="unit-m" checked><span class="pc-seg__txt">m</span></label>
+            <label class="pc-opt"><input type="radio" name="unit-toggle" value="ft" data-pc="unit-ft"><span class="pc-seg__txt">ft</span></label>
+          </div>
+    </div>
+    <nav class="pc-stepper" aria-label="Stages" data-pc="stepper">
+      <button class="pc-step is-current" type="button" data-pc="step-1" aria-current="step">
+        <span class="pc-step__no">01</span><svg class="pc-i pc-i--sm pc-step__i-done" aria-hidden="true"><use href="#i-check"/></svg><svg class="pc-i pc-i--sm pc-step__i-lock" aria-hidden="true"><use href="#i-lock"/></svg>
+        <span class="pc-step__label"><span class="pc-step__short">Plot</span><span class="pc-step__full">Plot</span></span>
+      </button>
+      <button class="pc-step is-locked" type="button" data-pc="step-2" aria-disabled="true">
+        <span class="pc-step__no">02</span><svg class="pc-i pc-i--sm pc-step__i-done" aria-hidden="true"><use href="#i-check"/></svg><svg class="pc-i pc-i--sm pc-step__i-lock" aria-hidden="true"><use href="#i-lock"/></svg>
+        <span class="pc-step__label"><span class="pc-step__short">Questions</span><span class="pc-step__full">Questions</span></span>
+      </button>
+      <button class="pc-step is-locked" type="button" data-pc="step-3" aria-disabled="true">
+        <span class="pc-step__no">03</span><svg class="pc-i pc-i--sm pc-step__i-done" aria-hidden="true"><use href="#i-check"/></svg><svg class="pc-i pc-i--sm pc-step__i-lock" aria-hidden="true"><use href="#i-lock"/></svg>
+        <span class="pc-step__label"><span class="pc-step__short">Plans</span><span class="pc-step__full">Floor plans</span></span>
+      </button>
+      <button class="pc-step is-locked" type="button" data-pc="step-4" aria-disabled="true">
+        <span class="pc-step__no">04</span><svg class="pc-i pc-i--sm pc-step__i-done" aria-hidden="true"><use href="#i-check"/></svg><svg class="pc-i pc-i--sm pc-step__i-lock" aria-hidden="true"><use href="#i-lock"/></svg>
+        <span class="pc-step__label"><span class="pc-step__short">Interior</span><span class="pc-step__full">Interior</span></span>
+      </button>
+      <button class="pc-step is-locked" type="button" data-pc="step-5" aria-disabled="true">
+        <span class="pc-step__no">05</span><svg class="pc-i pc-i--sm pc-step__i-done" aria-hidden="true"><use href="#i-check"/></svg><svg class="pc-i pc-i--sm pc-step__i-lock" aria-hidden="true"><use href="#i-lock"/></svg>
+        <span class="pc-step__label"><span class="pc-step__short">3D</span><span class="pc-step__full">3D view</span></span>
+      </button>
+    </nav>
+  </header>
+
+  <!-- Sample strip: the only "Skip to 3D". FS shows it while the sample is unmodified. -->
+  <div class="pc-strip" data-pc="sample-strip" role="status" hidden>
+    <svg class="pc-i" aria-hidden="true"><use href="#i-info"/></svg>
+    <span class="pc-strip__text" data-pc="sample-strip-text">Sample project loaded</span>
+    <button class="pc-btn pc-btn--primary pc-btn--sm" type="button" data-pc="btn-skip3d"><svg class="pc-i" aria-hidden="true"><use href="#i-cube"/></svg>Skip to 3D</button>
+  </div>
+
+  <div class="pc-banner-slot" data-pc="banner-slot"></div>
+
+  <main class="pc-stages" data-pc="stage-container">
+
+    <!-- ============================== STAGE 1: PLOT ============================== -->
+    <section class="pc-stage pc-stage--canvas pc-plot" data-stage="1" aria-labelledby="pc-st1-title" hidden>
+      <h2 class="pc-vh" id="pc-st1-title">Plot</h2>
+      <div class="pc-canvas-wrap">
+        <canvas data-pc="plot-canvas" aria-label="Plot drawing grid"></canvas>
+        <button class="pc-btn pc-btn--icon pc-fit" type="button" aria-label="Fit view" title="Fit view" data-pc="plot-fit"><svg class="pc-i" aria-hidden="true"><use href="#i-frame"/></svg></button>
+        <span class="pc-chip pc-chip--float pc-plot__scale"><svg class="pc-i pc-i--sm" aria-hidden="true"><use href="#i-grid"/></svg><span data-pc="plot-scale">1 square = 1 m</span></span>
+      </div>
+
+      <div class="pc-start" data-pc="start-panel">
+        <p class="pc-start__hint">Tap the grid to place the corners of your plot, or start from the sample.</p>
+        <button class="pc-btn pc-btn--block" type="button" data-pc="btn-sample"><svg class="pc-i" aria-hidden="true"><use href="#i-cube"/></svg>Load sample project</button>
+        <div class="pc-start__resume" data-pc="resume-box" hidden>
+          <p><strong>Draft found.</strong> <span data-pc="resume-meta">Saved earlier on this device.</span></p>
+          <div class="pc-start__row">
+            <button class="pc-btn pc-btn--primary" type="button" data-pc="btn-resume">Resume draft</button>
+            <button class="pc-btn" type="button" data-pc="btn-startnew">Start new</button>
+          </div>
+        </div>
+        <p class="pc-note pc-start__nosave" data-pc="note-nosave" hidden><svg class="pc-i pc-i--sm" aria-hidden="true"><use href="#i-nosave"/></svg>Drafts are not saved on this device.</p>
+      </div>
+
+      <div class="pc-panel">
+        <p class="pc-msg" role="status" data-kind="info" data-pc="plot-msg">Place at least 3 points, then close the shape.</p>
+        <dl class="pc-tb">
+          <div class="pc-tb__cell"><dt>Area</dt><dd data-pc="plot-area">&ndash;</dd></div>
+          <div class="pc-tb__cell"><dt>Perimeter</dt><dd data-pc="plot-perimeter">&ndash;</dd></div>
+          <div class="pc-tb__cell"><dt>Points</dt><dd data-pc="plot-points">0</dd></div>
+          <div class="pc-tb__cell pc-plot__grid-cell"><dt>Grid</dt><dd data-pc="plot-grid">1 m, snap 0.5 m</dd></div>
+        </dl>
+        <div class="pc-toolrow">
+          <button class="pc-btn pc-btn--quiet" type="button" data-pc="btn-undo" aria-label="Undo last point"><svg class="pc-i" aria-hidden="true"><use href="#i-undo"/></svg>Undo</button>
+          <button class="pc-btn pc-btn--quiet" type="button" data-pc="btn-clear"><svg class="pc-i" aria-hidden="true"><use href="#i-trash"/></svg>Clear</button>
+          <button class="pc-btn pc-toolrow__end" type="button" data-pc="btn-close-shape" disabled><svg class="pc-i" aria-hidden="true"><use href="#i-polygon-close"/></svg>Close shape</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== STAGE 2: QUESTIONS ============================== -->
+    <section class="pc-stage pc-qs" data-stage="2" aria-labelledby="pc-st2-title" hidden>
+      <h2 class="pc-vh" id="pc-st2-title">Questions</h2>
+
+      <div class="pc-qs__col">
+        <div class="pc-qs__nav">
+          <div class="pc-tabs" role="tablist" aria-label="Question groups" data-pc="q-tabs">
+            <button class="pc-tab" type="button" role="tab" id="pc-qt-site" aria-controls="pc-qg-site" aria-selected="true" data-pc="q-tab-site">Site</button>
+            <button class="pc-tab" type="button" role="tab" id="pc-qt-building" aria-controls="pc-qg-building" aria-selected="false" data-pc="q-tab-building">Building</button>
+            <button class="pc-tab" type="button" role="tab" id="pc-qt-rooms" aria-controls="pc-qg-rooms" aria-selected="false" data-pc="q-tab-rooms">Rooms</button>
+            <button class="pc-tab" type="button" role="tab" id="pc-qt-outdoor" aria-controls="pc-qg-outdoor" aria-selected="false" data-pc="q-tab-outdoor">Outdoor</button>
+          </div>
+          <div class="pc-qs__progress">
+            <span data-pc="q-progress-text">Group 1 of 4 &middot; 17 questions left</span>
+            <progress max="17" value="0" aria-label="Questions answered" data-pc="q-progress-bar"></progress>
+          </div>
+        </div>
+        <div class="pc-qs__scroll">
+
+          <!-- ---------- Group 1: Plot and site (Q1-Q6) ---------- -->
+          <div class="pc-qgroup" role="tabpanel" id="pc-qg-site" aria-labelledby="pc-qt-site" data-pc="q-group-site">
+            <h3 class="pc-qgroup__title">Plot and site</h3>
+      <div class="pc-q" data-q="1">
+        <div class="pc-q__head"><span class="pc-tag">Q1</span><h4 class="pc-q__label">Measurement unit</h4></div>
+        <div class="pc-seg" role="radiogroup" aria-label="Measurement unit" data-pc="q-unit">
+            <label class="pc-opt"><input type="radio" name="q-unit" value="m" checked><span class="pc-seg__txt">Metres (m)</span></label>
+            <label class="pc-opt"><input type="radio" name="q-unit" value="ft"><span class="pc-seg__txt">Feet (ft)</span></label>
+          </div>
+      </div>
+      <div class="pc-q" data-q="2">
+        <div class="pc-q__head"><span class="pc-tag">Q2</span><h4 class="pc-q__label">Setbacks from each boundary</h4></div>
+        <div class="pc-setbacks"><div class="pc-field pc-field--row">
+          <label class="pc-field__label" for="q-setback-front">Front</label>
+          <div class="pc-num">
+            <button class="pc-btn pc-btn--icon" type="button" data-pc="q-setback-front-dec" aria-label="Decrease front setback"><svg class="pc-i" aria-hidden="true"><use href="#i-minus"/></svg></button>
+            <div class="pc-num__box"><input class="pc-input" id="q-setback-front" type="text" inputmode="decimal" autocomplete="off" value="3.0" data-pc="q-setback-front" aria-describedby="q-setback-front-err"><span class="pc-unit" data-pc="q-setback-front-unit">m</span></div>
+            <button class="pc-btn pc-btn--icon" type="button" data-pc="q-setback-front-inc" aria-label="Increase front setback"><svg class="pc-i" aria-hidden="true"><use href="#i-plus"/></svg></button>
+          </div>
+          <p class="pc-err" id="q-setback-front-err" data-pc="q-setback-front-err" hidden></p>
+        </div>
+        <div class="pc-field pc-field--row">
+          <label class="pc-field__label" for="q-setback-back">Back</label>
+          <div class="pc-num">
+            <button class="pc-btn pc-btn--icon" type="button" data-pc="q-setback-back-dec" aria-label="Decrease back setback"><svg class="pc-i" aria-hidden="true"><use href="#i-minus"/></svg></button>
+            <div class="pc-num__box"><input class="pc-input" id="q-setback-back" type="text" inputmode="decimal" autocomplete="off" value="2.0" data-pc="q-setback-back" aria-describedby="q-setback-back-err"><span class="pc-unit" data-pc="q-setback-back-unit">m</span></div>
+            <button class="pc-btn pc-btn--icon" type="button" data-pc="q-setback-back-inc" aria-label="Increase back setback"><svg class="pc-i" aria-hidden="true"><use href="#i-plus"/></svg></button>
+          </div>
+          <p class="pc-err" id="q-setback-back-err" data-pc="q-setback-back-err" hidden></p>
+        </div>
+        <div class="pc-field pc-field--row">
+          <label class="pc-field__label" for="q-setback-side">Sides</label>
+          <div class="pc-num">
+            <button class="pc-btn pc-btn--icon" type="button" data-pc="q-setback-side-dec" aria-label="Decrease side setback"><svg class="pc-i" aria-hidden="true"><use href="#i-minus"/></svg></button>
+            <div class="pc-num__box"><input class="pc-input" id="q-setback-side" type="text" inputmode="decimal" autocomplete="off" value="2.0" data-pc="q-setback-side" aria-describedby="q-setback-side-err"><span class="pc-unit" data-pc="q-setback-side-unit">m</span></div>
+            <button class="pc-btn pc-btn--icon" type="button" data-pc="q-setback-side-inc" aria-label="Increase side setback"><svg class="pc-i" aria-hidden="true"><use href="#i-plus"/></svg></button>
+          </div>
+          <p class="pc-err" id="q-setback-side-err" data-pc="q-setback-side-err" hidden></p>
+        </div></div>
+      </div>
+      <div class="pc-q" data-q="3">
+        <div class="pc-q__head"><span class="pc-tag">Q3</span><h4 class="pc-q__label">Building footprint % of plot</h4></div>
+        <div class="pc-slider">
+          <input class="pc-range" type="range" min="10" max="80" step="1" value="30" aria-label="Building footprint percent" data-pc="q-footprint">
+          <output data-pc="q-footprint-out">30 %</output>
+        </div><p class="pc-err" data-pc="q-footprint-err" hidden></p>
+      </div>
+      <div class="pc-q" data-q="4">
+        <div class="pc-q__head"><span class="pc-tag">Q4</span><h4 class="pc-q__label">Vegetation % of plot</h4></div>
+        <div class="pc-slider">
+          <input class="pc-range" type="range" min="0" max="80" step="1" value="20" aria-label="Vegetation percent" data-pc="q-veg">
+          <output data-pc="q-veg-out">20 %</output>
+        </div><p class="pc-err" data-pc="q-veg-err" hidden></p>
+      </div>
+      <div class="pc-q" data-q="5">
+        <div class="pc-q__head"><span class="pc-tag">Q5</span><h4 class="pc-q__label">North direction (for sun and shadows)</h4></div>
+        <div class="pc-ctlrow">
+          <button class="pc-btn pc-btn--icon" type="button" data-pc="q-north-ccw" aria-label="Rotate north 15 degrees anticlockwise"><svg class="pc-i" aria-hidden="true"><use href="#i-rot-ccw"/></svg></button>
+          <button class="pc-btn pc-btn--icon" type="button" data-pc="q-north-cw" aria-label="Rotate north 15 degrees clockwise"><svg class="pc-i" aria-hidden="true"><use href="#i-rot-cw"/></svg></button>
+          <span class="pc-readout" data-pc="q-north-value">0&deg; &middot; toward the back</span>
+          <button class="pc-btn pc-btn--quiet pc-btn--sm" type="button" data-pc="q-north-reset">Reset</button>
+        </div>
+        <p class="pc-note">Drag the compass on the site preview, or use the buttons.</p>
+      </div>
+      <div class="pc-q" data-q="6">
+        <div class="pc-q__head"><span class="pc-tag">Q6</span><h4 class="pc-q__label">Street-facing side / main entrance edge</h4></div>
+        <div class="pc-ctlrow">
+          <button class="pc-btn pc-btn--icon" type="button" data-pc="q-street-prev" aria-label="Previous edge"><svg class="pc-i" aria-hidden="true"><use href="#i-chev-left"/></svg></button>
+          <button class="pc-btn pc-btn--icon" type="button" data-pc="q-street-next" aria-label="Next edge"><svg class="pc-i" aria-hidden="true"><use href="#i-chev-right"/></svg></button>
+          <span class="pc-readout" data-pc="q-street-value">Edge 1 &middot; 20.0 m</span>
+        </div>
+        <p class="pc-note">Tap an edge on the site preview, or step through the edges.</p>
+        <button class="pc-btn pc-btn--quiet pc-disclose" type="button" aria-expanded="false" aria-controls="pc-q-edges" data-pc="q-edges-toggle"><span>Back / side of each edge</span><svg class="pc-i" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+        <ul class="pc-edges is-collapsed" id="pc-q-edges" aria-label="Back / side of each edge" data-pc="q-edges"></ul>
+      </div>
+            <button class="pc-btn pc-btn--block pc-qgroup__next" type="button" data-pc="btn-q-continue-site">Continue to Building<svg class="pc-i" aria-hidden="true"><use href="#i-chev-right"/></svg></button>
+          </div>
+
+          <!-- ---------- Group 2: Building (Q7-Q10) ---------- -->
+          <div class="pc-qgroup" role="tabpanel" id="pc-qg-building" aria-labelledby="pc-qt-building" data-pc="q-group-building" hidden>
+            <h3 class="pc-qgroup__title">Building</h3>
+      <div class="pc-q" data-q="7">
+        <div class="pc-q__head"><span class="pc-tag">Q7</span><h4 class="pc-q__label">Number of floors (plus basement and usable roof)</h4></div>
+        <div class="pc-seg" role="radiogroup" aria-label="Number of floors" data-pc="q-floors">
+            <label class="pc-opt"><input type="radio" name="q-floors" value="1"><span class="pc-seg__txt">1 floor</span></label>
+            <label class="pc-opt"><input type="radio" name="q-floors" value="2" checked><span class="pc-seg__txt">2 floors</span></label>
+            <label class="pc-opt"><input type="radio" name="q-floors" value="3"><span class="pc-seg__txt">3 floors</span></label>
+          </div>
+        <div class="pc-grid2"><label class="pc-switch"><input type="checkbox" role="switch" data-pc="q-basement"><span class="pc-switch__track"></span><span>Basement</span></label><label class="pc-switch"><input type="checkbox" role="switch" data-pc="q-usable-roof"><span class="pc-switch__track"></span><span>Usable roof</span></label></div>
+      </div>
+      <div class="pc-q" data-q="8">
+        <div class="pc-q__head"><span class="pc-tag">Q8</span><h4 class="pc-q__label">Floor-to-ceiling height</h4></div>
+        <div class="pc-slider">
+          <input class="pc-range" type="range" min="2.4" max="4.5" step="0.1" value="3.0" aria-label="Floor-to-ceiling height" data-pc="q-ceiling">
+          <output data-pc="q-ceiling-out">3.0</output><span class="pc-unit"><span data-pc="q-ceiling-unit">m</span></span>
+        </div><p class="pc-err" data-pc="q-ceiling-err" hidden></p>
+      </div>
+      <div class="pc-q" data-q="9">
+        <div class="pc-q__head"><span class="pc-tag">Q9</span><h4 class="pc-q__label">Roof type</h4></div>
+        <div class="pc-seg" role="radiogroup" aria-label="Roof type" data-pc="q-roof">
+            <label class="pc-opt"><input type="radio" name="q-roof" value="flat" checked><span class="pc-seg__txt">Flat</span></label>
+            <label class="pc-opt"><input type="radio" name="q-roof" value="pitched"><span class="pc-seg__txt">Pitched</span></label>
+            <label class="pc-opt"><input type="radio" name="q-roof" value="terrace"><span class="pc-seg__txt">Terrace</span></label>
+          </div>
+        <p class="pc-note" data-pc="q-roof-note" hidden>Pitched is not available with a usable roof. Roof type changed to Flat.</p>
+      </div>
+      <div class="pc-q" data-q="10">
+        <div class="pc-q__head"><span class="pc-tag">Q10</span><h4 class="pc-q__label">Exterior style / colour palette</h4></div>
+        <div class="pc-cards" role="radiogroup" aria-label="Exterior style" data-pc="q-exterior"><label class="pc-opt"><input type="radio" name="q-exterior" value="sand" checked><span class="pc-card"><span class="pc-swatch pc-sw-sand"><i></i><i></i></span><span class="pc-card__name">Sand</span></span></label><label class="pc-opt"><input type="radio" name="q-exterior" value="white"><span class="pc-card"><span class="pc-swatch pc-sw-white"><i></i><i></i></span><span class="pc-card__name">White</span></span></label><label class="pc-opt"><input type="radio" name="q-exterior" value="terracotta"><span class="pc-card"><span class="pc-swatch pc-sw-terracotta"><i></i><i></i></span><span class="pc-card__name">Terracotta</span></span></label><label class="pc-opt"><input type="radio" name="q-exterior" value="grey"><span class="pc-card"><span class="pc-swatch pc-sw-grey"><i></i><i></i></span><span class="pc-card__name">Grey</span></span></label></div>
+      </div>
+            <button class="pc-btn pc-btn--block pc-qgroup__next" type="button" data-pc="btn-q-continue-building">Continue to Rooms<svg class="pc-i" aria-hidden="true"><use href="#i-chev-right"/></svg></button>
+          </div>
+
+          <!-- ---------- Group 3: Rooms (Q11-Q14) ---------- -->
+          <div class="pc-qgroup" role="tabpanel" id="pc-qg-rooms" aria-labelledby="pc-qt-rooms" data-pc="q-group-rooms" hidden>
+            <h3 class="pc-qgroup__title">Rooms (per floor)</h3>
+      <div class="pc-q" data-q="11">
+        <div class="pc-q__head"><span class="pc-tag">Q11</span><h4 class="pc-q__label">Room list: type, count, floor</h4></div>
+        <div class="pc-grid2">
+          <div class="pc-field"><span class="pc-field__label">Type</span><select class="pc-select" aria-label="Room type" data-pc="room-add-type"><option value="bedroom" selected>Bedroom</option><option value="bathroom">Bathroom</option><option value="kitchen">Kitchen</option><option value="living">Living</option><option value="dining">Dining</option><option value="majlis">Majlis</option><option value="office">Office</option><option value="maid">Maid's room</option><option value="storage">Storage</option><option value="laundry">Laundry</option></select></div>
+          <div class="pc-field"><span class="pc-field__label">Floor</span><select class="pc-select" aria-label="Floor" data-pc="room-add-level"><option value="B">Basement</option><option value="G" selected>Ground</option><option value="1">First</option><option value="2">Second</option></select></div>
+        </div>
+        <p class="pc-q__sub"><span class="pc-tag">Q12</span> Approximate size</p>
+        <div class="pc-seg" role="radiogroup" aria-label="Room size" data-pc="room-add-size">
+            <label class="pc-opt"><input type="radio" name="room-add-size" value="S"><span class="pc-seg__txt">S</span></label>
+            <label class="pc-opt"><input type="radio" name="room-add-size" value="M" checked><span class="pc-seg__txt">M</span></label>
+            <label class="pc-opt"><input type="radio" name="room-add-size" value="L"><span class="pc-seg__txt">L</span></label>
+            <label class="pc-opt"><input type="radio" name="room-add-size" value="exact"><span class="pc-seg__txt">Exact</span></label>
+          </div>
+        <p class="pc-note" data-pc="room-add-size-hint">M bedroom = 16 m&sup2;</p>
+        <div class="pc-grid2">
+          <div class="pc-field"><label class="pc-field__label" for="room-add-area">Exact area</label>
+            <div class="pc-inputunit"><input class="pc-input" id="room-add-area" type="text" inputmode="decimal" autocomplete="off" value="16" data-pc="room-add-area" disabled><span class="pc-unit" data-pc="room-add-area-unit">m&sup2;</span></div></div>
+          <div class="pc-field">
+          <label class="pc-field__label" for="room-add-count">Count</label>
+          <div class="pc-num">
+            <button class="pc-btn pc-btn--icon" type="button" data-pc="room-add-count-dec" aria-label="Decrease room count"><svg class="pc-i" aria-hidden="true"><use href="#i-minus"/></svg></button>
+            <div class="pc-num__box"><input class="pc-input" id="room-add-count" type="text" inputmode="decimal" autocomplete="off" value="1" data-pc="room-add-count"></div>
+            <button class="pc-btn pc-btn--icon" type="button" data-pc="room-add-count-inc" aria-label="Increase room count"><svg class="pc-i" aria-hidden="true"><use href="#i-plus"/></svg></button>
+          </div>
+        </div>
+        </div>
+        <button class="pc-btn pc-btn--primary pc-btn--block" type="button" data-pc="btn-room-add"><svg class="pc-i" aria-hidden="true"><use href="#i-plus"/></svg>Add room</button>
+        <p class="pc-err" role="alert" data-pc="room-msg" hidden></p>
+        <div data-pc="room-list"></div>
+      </div>
+      <div class="pc-q" data-q="13">
+        <div class="pc-q__head"><span class="pc-tag">Q13</span><h4 class="pc-q__label">Must-be-adjacent pairs</h4></div>
+        <div class="pc-pairadd">
+          <select class="pc-select" aria-label="First room" data-pc="pair-a"><option value="">Room A</option></select>
+          <select class="pc-select" aria-label="Second room" data-pc="pair-b"><option value="">Room B</option></select>
+          <button class="pc-btn" type="button" data-pc="btn-pair-add"><svg class="pc-i" aria-hidden="true"><use href="#i-link"/></svg>Add pair</button>
+        </div>
+        <p class="pc-err" role="alert" data-pc="pair-msg" hidden></p>
+        <ul data-pc="pair-list"></ul>
+      </div>
+      <div class="pc-q" data-q="14">
+        <div class="pc-q__head"><span class="pc-tag">Q14</span><h4 class="pc-q__label">Staircase position preference; lift</h4></div>
+        <div data-pc="q-stairs-box">
+          <div class="pc-stairpos">
+            <span class="pc-stairpos__cap">Back</span>
+            <div class="pc-stairpos__plan" role="radiogroup" aria-label="Staircase position" data-pc="q-stair-pos"><label class="pc-opt pc-sp-bl"><input type="radio" name="q-stair-pos" value="bl"><span class="pc-pick"><svg class="pc-i pc-i--sm" aria-hidden="true"><use href="#i-stairs"/></svg>Back-left</span></label><label class="pc-opt pc-sp-br"><input type="radio" name="q-stair-pos" value="br"><span class="pc-pick"><svg class="pc-i pc-i--sm" aria-hidden="true"><use href="#i-stairs"/></svg>Back-right</span></label><label class="pc-opt pc-sp-c"><input type="radio" name="q-stair-pos" value="centre" checked><span class="pc-pick"><svg class="pc-i pc-i--sm" aria-hidden="true"><use href="#i-stairs"/></svg>Centre</span></label><label class="pc-opt pc-sp-fl"><input type="radio" name="q-stair-pos" value="fl"><span class="pc-pick"><svg class="pc-i pc-i--sm" aria-hidden="true"><use href="#i-stairs"/></svg>Front-left</span></label><label class="pc-opt pc-sp-fr"><input type="radio" name="q-stair-pos" value="fr"><span class="pc-pick"><svg class="pc-i pc-i--sm" aria-hidden="true"><use href="#i-stairs"/></svg>Front-right</span></label></div>
+            <span class="pc-stairpos__cap">Street side (front)</span>
+          </div>
+          <label class="pc-switch"><input type="checkbox" role="switch" data-pc="q-lift"><span class="pc-switch__track"></span><span>Lift</span></label>
+        </div>
+        <p class="pc-note" data-pc="q-stairs-none" hidden>Single level: no staircase needed.</p>
+      </div>
+            <button class="pc-btn pc-btn--block pc-qgroup__next" type="button" data-pc="btn-q-continue-rooms">Continue to Outdoor<svg class="pc-i" aria-hidden="true"><use href="#i-chev-right"/></svg></button>
+          </div>
+
+          <!-- ---------- Group 4: Outdoor (Q15-Q17) ---------- -->
+          <div class="pc-qgroup" role="tabpanel" id="pc-qg-outdoor" aria-labelledby="pc-qt-outdoor" data-pc="q-group-outdoor" hidden>
+            <h3 class="pc-qgroup__title">Outdoor</h3>
+      <div class="pc-q" data-q="15">
+        <div class="pc-q__head"><span class="pc-tag">Q15</span><h4 class="pc-q__label">Parking: number of cars, covered or open</h4></div>
+        <div class="pc-field pc-field--row">
+          <label class="pc-field__label" for="q-parking-cars">Cars</label>
+          <div class="pc-num">
+            <button class="pc-btn pc-btn--icon" type="button" data-pc="q-parking-cars-dec" aria-label="Decrease number of cars"><svg class="pc-i" aria-hidden="true"><use href="#i-minus"/></svg></button>
+            <div class="pc-num__box"><input class="pc-input" id="q-parking-cars" type="text" inputmode="decimal" autocomplete="off" value="1" data-pc="q-parking-cars" aria-describedby="q-parking-cars-err"></div>
+            <button class="pc-btn pc-btn--icon" type="button" data-pc="q-parking-cars-inc" aria-label="Increase number of cars"><svg class="pc-i" aria-hidden="true"><use href="#i-plus"/></svg></button>
+          </div>
+          <p class="pc-err" id="q-parking-cars-err" data-pc="q-parking-cars-err" hidden></p>
+        </div><label class="pc-switch"><input type="checkbox" role="switch" data-pc="q-parking-covered"><span class="pc-switch__track"></span><span>Covered parking</span></label>
+      </div>
+      <div class="pc-q" data-q="16">
+        <div class="pc-q__head"><span class="pc-tag">Q16</span><h4 class="pc-q__label">Pool and size</h4></div>
+        <label class="pc-switch"><input type="checkbox" role="switch" data-pc="q-pool"><span class="pc-switch__track"></span><span>Pool</span></label><div class="pc-seg" role="radiogroup" aria-label="Pool size" data-pc="q-pool-size">
+            <label class="pc-opt"><input type="radio" name="q-pool-size" value="S" checked><span class="pc-seg__txt">S</span></label>
+            <label class="pc-opt"><input type="radio" name="q-pool-size" value="M"><span class="pc-seg__txt">M</span></label>
+            <label class="pc-opt"><input type="radio" name="q-pool-size" value="L"><span class="pc-seg__txt">L</span></label>
+          </div>
+          <p class="pc-note pc-num-text" data-pc="q-pool-size-note">S 3.0 &times; 6.0 m &middot; M 4.0 &times; 8.0 m &middot; L 5.0 &times; 10.0 m</p>
+      </div>
+      <div class="pc-q" data-q="17">
+        <div class="pc-q__head"><span class="pc-tag">Q17</span><h4 class="pc-q__label">Extras: garden seating, boundary wall, gate position</h4></div>
+        <label class="pc-switch"><input type="checkbox" role="switch" data-pc="q-wall" checked><span class="pc-switch__track"></span><span>Boundary wall</span></label>
+        <p class="pc-q__sub">Gate position along the street edge</p>
+        <div class="pc-seg" role="radiogroup" aria-label="Gate position" data-pc="q-gate">
+            <label class="pc-opt"><input type="radio" name="q-gate" value="left"><span class="pc-seg__txt">Left</span></label>
+            <label class="pc-opt"><input type="radio" name="q-gate" value="centre" checked><span class="pc-seg__txt">Centre</span></label>
+            <label class="pc-opt"><input type="radio" name="q-gate" value="right"><span class="pc-seg__txt">Right</span></label>
+          </div><label class="pc-switch"><input type="checkbox" role="switch" data-pc="q-seating"><span class="pc-switch__track"></span><span>Garden seating</span></label>
+      </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="pc-qs__side">
+        <!-- Site preview (Q5 compass, Q6 edge picking; live for Q2/Q3) -->
+        <div class="pc-preview" data-pc="site-preview">
+          <div class="pc-canvas-wrap"><canvas data-pc="site-canvas" aria-label="Site preview: plot, setbacks, buildable area and footprint"></canvas></div>
+          <div class="pc-seg pc-tapmode" role="radiogroup" aria-label="Tap an edge to" data-pc="site-tap-mode">
+            <label class="pc-opt"><input type="radio" name="site-tap-mode" value="street" checked><span class="pc-seg__txt">Street</span></label>
+            <label class="pc-opt"><input type="radio" name="site-tap-mode" value="class"><span class="pc-seg__txt">Back / side</span></label>
+          </div>
+          <button class="pc-btn pc-btn--icon pc-preview__toggle" type="button" aria-expanded="true" aria-label="Hide or show site preview" data-pc="site-preview-toggle"><span>Site preview</span><svg class="pc-i" aria-hidden="true"><use href="#i-chev-up"/></svg></button>
+          <p class="pc-taphint" data-pc="site-tap-hint" hidden>Tap a boundary to switch back / side &middot; *&nbsp;=&nbsp;set&nbsp;by&nbsp;you</p>
+          <ul class="pc-legend" aria-label="Legend" data-pc="site-legend">
+            <li><i></i>Front</li><li><i class="pc-legend__back"></i>Back</li><li><i class="pc-legend__side"></i>Side</li><li><i class="pc-legend__setback"></i>Setback</li><li><i class="pc-legend__fp"></i>Footprint</li><li class="pc-legend__mark" data-pc="site-legend-mark" hidden><b aria-hidden="true">*</b>set by you</li>
+          </ul>
+        </div>
+
+        <!-- Live summary and conflicts (collapsible sheet on phone) -->
+        <div class="pc-sheet pc-summary is-collapsed" data-kind="ok" data-pc="summary">
+          <button class="pc-sheet__toggle" type="button" aria-expanded="false" aria-controls="pc-summary-body" data-pc="summary-toggle">
+            <span class="pc-cap">Summary</span>
+            <span class="pc-sheet__grow" data-pc="sum-status">All clear</span>
+            <svg class="pc-i pc-sheet__chev" aria-hidden="true"><use href="#i-chev-down"/></svg>
+          </button>
+          <div class="pc-sheet__body" id="pc-summary-body">
+            <dl class="pc-tb pc-tb--rows">
+              <div class="pc-tb__cell"><dt>Plot area</dt><dd data-pc="sum-plot">&ndash;</dd></div>
+              <div class="pc-tb__cell"><dt>Buildable area</dt><dd data-pc="sum-buildable">&ndash;</dd></div>
+              <div class="pc-tb__cell"><dt>Footprint</dt><dd data-pc="sum-footprint">&ndash;</dd></div>
+              <div class="pc-tb__cell"><dt>Vegetation</dt><dd data-pc="sum-veg">&ndash;</dd></div>
+            </dl>
+            <dl class="pc-tb pc-tb--rows" aria-label="Needed and available area per level" data-pc="sum-levels"></dl>
+            <ul class="pc-conflicts" aria-label="Conflicts and warnings" data-pc="conflict-list"></ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== STAGE 3: FLOOR PLANS ============================== -->
+    <section class="pc-stage pc-stage--canvas pc-plans" data-stage="3" aria-labelledby="pc-st3-title" hidden>
+      <h2 class="pc-vh" id="pc-st3-title">Floor plans</h2>
+      <div class="pc-plans__top">
+        <div class="pc-tabs" role="tablist" aria-label="Plan levels" data-pc="plan-tabs"></div>
+        <p class="pc-plans__counter" role="status"><svg class="pc-i pc-i--sm" aria-hidden="true"><use href="#i-approved"/></svg><span data-pc="plan-counter"><strong>0 of 2</strong> floors approved</span></p>
+      </div>
+      <div class="pc-canvas-wrap">
+        <canvas data-pc="plan-canvas" aria-label="Floor plan editor"></canvas>
+        <button class="pc-btn pc-btn--icon pc-fit" type="button" aria-label="Fit view" title="Fit view" data-pc="plan-fit"><svg class="pc-i" aria-hidden="true"><use href="#i-frame"/></svg></button>
+        <div class="pc-banner pc-plans__error" role="alert" data-kind="block" data-pc="plan-error" hidden>
+          <svg class="pc-i pc-banner__i-block" aria-hidden="true"><use href="#i-block"/></svg>
+          <span class="pc-banner__text" data-pc="plan-error-text">This floor could not be laid out. Use fewer or smaller rooms on this level, another stair position, or a larger footprint.</span>
+          <button class="pc-btn pc-btn--sm" type="button" data-pc="btn-goto-rooms">Go to room list</button>
+        </div>
+      </div>
+      <div class="pc-panel">
+        <div class="pc-plans__warn is-collapsed" id="pc-plan-warn" data-pc="plan-warn-panel">
+          <h3>Warnings on this floor</h3>
+          <ul class="pc-warnlist" data-pc="plan-warn-list"></ul>
+        </div>
+        <div class="pc-plans__readout">
+          <dl class="pc-tb">
+            <div class="pc-tb__cell"><dt>Room</dt><dd data-pc="plan-room-name">None selected</dd></div>
+            <div class="pc-tb__cell"><dt>Size</dt><dd data-pc="plan-room-dims">&ndash;</dd></div>
+            <div class="pc-tb__cell"><dt>Area</dt><dd data-pc="plan-room-area">&ndash;</dd></div>
+          </dl>
+        </div>
+        <div class="pc-plans__msgrow">
+          <p class="pc-msg" role="status" data-kind="info" data-pc="plan-msg">Drag a room to move it; tap it, then drag a handle to resize.</p>
+          <button class="pc-chip pc-plans__warnbtn" type="button" data-kind="warn" aria-expanded="false" aria-controls="pc-plan-warn" aria-label="Show warnings" data-pc="plan-warn-toggle" hidden><svg class="pc-i pc-i--sm" aria-hidden="true"><use href="#i-warn"/></svg><span data-pc="plan-warn-count">0</span></button>
+        </div>
+        <div class="pc-toolrow">
+          <button class="pc-btn" type="button" data-pc="btn-regenerate"><svg class="pc-i" aria-hidden="true"><use href="#i-refresh"/></svg><span class="pc-plans__regen-txt">Regenerate<span class="pc-plans__regen-full">&nbsp;this floor</span></span></button>
+          <button class="pc-btn pc-btn--primary pc-toolrow__end" type="button" data-pc="btn-approve"><svg class="pc-i" aria-hidden="true"><use href="#i-check"/></svg><span data-pc="btn-approve-label">Approve floor</span></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== STAGE 4: INTERIOR ============================== -->
+    <section class="pc-stage pc-interior" data-stage="4" aria-labelledby="pc-st4-title" hidden>
+      <div class="pc-interior__col">
+        <div>
+          <h2 class="pc-stage__title" id="pc-st4-title">Interior</h2>
+          <p class="pc-interior__lead">All floors are approved. Choose the look, then build the 3D model.</p>
+        </div>
+      <div class="pc-q" data-q="18">
+        <div class="pc-q__head"><span class="pc-tag">Q18</span><h4 class="pc-q__label">Interior style preset</h4></div>
+        <div class="pc-cards" role="radiogroup" aria-label="Interior style" data-pc="q-interior-style"><label class="pc-opt"><input type="radio" name="q-interior-style" value="modern" checked><span class="pc-card"><svg class="pc-hint" viewBox="0 0 112 72" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><rect x="6" y="6" width="12" height="12" fill="#E8E6E0" stroke="#16212B" stroke-width="1"/><rect x="20" y="6" width="12" height="12" fill="#3B4652" stroke="#16212B" stroke-width="1"/><rect x="34" y="6" width="12" height="12" fill="#B5773C" stroke="#16212B" stroke-width="1"/><rect x="48" y="6" width="12" height="12" fill="#F5F4F0" stroke="#16212B" stroke-width="1"/><path d="M8 62V30h96v32z" fill="#F5F4F0" stroke="#16212B" stroke-width="1.5"/><rect x="14" y="36" width="34" height="20" fill="#3B4652"/><rect x="54" y="42" width="16" height="12" fill="#B5773C"/><rect x="78" y="34" width="20" height="8" fill="#E8E6E0" stroke="#16212B" stroke-width="1"/></svg><span class="pc-card__name">Modern</span><span class="pc-card__desc">Dark wood, graphite, warm accent</span></span></label><label class="pc-opt"><input type="radio" name="q-interior-style" value="classic"><span class="pc-card"><svg class="pc-hint" viewBox="0 0 112 72" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><rect x="6" y="6" width="12" height="12" fill="#EFE3CF" stroke="#16212B" stroke-width="1"/><rect x="20" y="6" width="12" height="12" fill="#6B3F2A" stroke="#16212B" stroke-width="1"/><rect x="34" y="6" width="12" height="12" fill="#9A7B3F" stroke="#16212B" stroke-width="1"/><rect x="48" y="6" width="12" height="12" fill="#F7F1E6" stroke="#16212B" stroke-width="1"/><path d="M8 62V30h96v32z" fill="#F7F1E6" stroke="#16212B" stroke-width="1.5"/><rect x="14" y="36" width="34" height="20" fill="#6B3F2A"/><rect x="54" y="42" width="16" height="12" fill="#9A7B3F"/><rect x="78" y="34" width="20" height="8" fill="#EFE3CF" stroke="#16212B" stroke-width="1"/></svg><span class="pc-card__name">Classic</span><span class="pc-card__desc">Cream walls, walnut, brass</span></span></label><label class="pc-opt"><input type="radio" name="q-interior-style" value="minimal"><span class="pc-card"><svg class="pc-hint" viewBox="0 0 112 72" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><rect x="6" y="6" width="12" height="12" fill="#F4F4F1" stroke="#16212B" stroke-width="1"/><rect x="20" y="6" width="12" height="12" fill="#B9BDBE" stroke="#16212B" stroke-width="1"/><rect x="34" y="6" width="12" height="12" fill="#D9D2C3" stroke="#16212B" stroke-width="1"/><rect x="48" y="6" width="12" height="12" fill="#FFFFFF" stroke="#16212B" stroke-width="1"/><path d="M8 62V30h96v32z" fill="#FFFFFF" stroke="#16212B" stroke-width="1.5"/><rect x="14" y="36" width="34" height="20" fill="#B9BDBE"/><rect x="54" y="42" width="16" height="12" fill="#D9D2C3"/><rect x="78" y="34" width="20" height="8" fill="#F4F4F1" stroke="#16212B" stroke-width="1"/></svg><span class="pc-card__name">Minimal</span><span class="pc-card__desc">White, pale grey, light oak</span></span></label></div>
+      </div>
+      <div class="pc-q" data-q="19">
+        <div class="pc-q__head"><span class="pc-tag">Q19</span><h4 class="pc-q__label">Furniture density</h4></div>
+        <div class="pc-cards" role="radiogroup" aria-label="Furniture density" data-pc="q-interior-density"><label class="pc-opt"><input type="radio" name="q-interior-density" value="sparse"><span class="pc-card"><svg class="pc-hint" viewBox="0 0 112 72" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><path d="M8 64V8h96v56z" fill="#FBFAF6" stroke="#16212B" stroke-width="1.5"/><rect x="14" y="20" width="34" height="20" fill="#C5CBD0" stroke="#16212B" stroke-width="1"/><rect x="78" y="16" width="20" height="8" fill="#C5CBD0" stroke="#16212B" stroke-width="1"/></svg><span class="pc-card__name">Sparse</span><span class="pc-card__desc">Key pieces only</span></span></label><label class="pc-opt"><input type="radio" name="q-interior-density" value="full" checked><span class="pc-card"><svg class="pc-hint" viewBox="0 0 112 72" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><path d="M8 64V8h96v56z" fill="#FBFAF6" stroke="#16212B" stroke-width="1.5"/><rect x="14" y="20" width="34" height="20" fill="#C5CBD0" stroke="#16212B" stroke-width="1"/><rect x="78" y="16" width="20" height="8" fill="#C5CBD0" stroke="#16212B" stroke-width="1"/><rect x="54" y="26" width="16" height="12" fill="#C5CBD0" stroke="#16212B" stroke-width="1"/><rect x="14" y="46" width="18" height="12" fill="#C5CBD0" stroke="#16212B" stroke-width="1"/><rect x="70" y="44" width="28" height="14" fill="#C5CBD0" stroke="#16212B" stroke-width="1"/></svg><span class="pc-card__name">Full</span><span class="pc-card__desc">Every piece for the room type</span></span></label></div>
+      </div>
+      </div>
+    </section>
+
+    <!-- ============================== STAGE 5: 3D VIEW ============================== -->
+    <section class="pc-stage pc-stage--3d" data-stage="5" aria-labelledby="pc-st5-title" hidden>
+      <h2 class="pc-vh" id="pc-st5-title">3D view</h2>
+      <div class="pc-canvas-wrap pc-v3">
+        <canvas tabindex="0" aria-label="3D model. Drag to orbit, arrow keys orbit, plus and minus zoom." data-pc="v3-canvas"></canvas>
+
+        <div class="pc-v3__center pc-v3__building" role="status" data-pc="v3-building" hidden>
+          <span class="pc-busy"><span class="pc-busy__ticks"><i></i><i></i><i></i></span>Building&hellip;</span>
+        </div>
+
+        <div class="pc-v3__center pc-v3__unavail" role="alert" data-pc="v3-unavailable" hidden>
+          <div class="pc-v3__card"><svg class="pc-i" aria-hidden="true"><use href="#i-warn"/></svg><div><h3>3D view unavailable</h3><p data-pc="v3-unavailable-text">The 3D view could not start on this device. Your plot, answers and floor plans are still available in the earlier stages.</p></div></div>
+        </div>
+
+        <div class="pc-caption" role="status" data-pc="v3-caption" hidden>
+          <svg class="pc-i pc-i--sm" aria-hidden="true"><use href="#i-target"/></svg><span class="pc-caption__text" data-pc="v3-caption-text">Living</span>
+          <button class="pc-btn pc-btn--icon pc-btn--quiet" type="button" aria-label="Pause tour" data-pc="v3-caption-pause" hidden><svg class="pc-i pc-i--solid" aria-hidden="true"><use href="#i-pause"/></svg></button>
+          <button class="pc-btn pc-btn--icon pc-btn--quiet" type="button" aria-label="Stop tour" data-pc="v3-caption-stop" hidden><svg class="pc-i pc-i--solid" aria-hidden="true"><use href="#i-stop"/></svg></button>
+        </div>
+
+        <!-- Overlay panel: tabs on phone, stacked groups on desktop -->
+        <div class="pc-v3panel" data-pc="v3-panel">
+          <div class="pc-v3panel__head">
+            <button class="pc-btn pc-btn--icon pc-v3panel__toggle" type="button" aria-expanded="true" aria-controls="pc-v3-body" aria-label="Collapse or expand view controls" data-pc="v3-panel-toggle"><svg class="pc-i" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+            <span class="pc-v3panel__title">View controls</span>
+            <div class="pc-tabs" role="tablist" aria-label="View controls">
+              <button class="pc-tab" type="button" role="tab" aria-selected="true" aria-controls="pc-v3-view" data-pc="v3-tab-view"><svg class="pc-i pc-i--sm" aria-hidden="true"><use href="#i-layers"/></svg>View</button>
+              <button class="pc-tab" type="button" role="tab" aria-selected="false" aria-controls="pc-v3-light" data-pc="v3-tab-light"><svg class="pc-i pc-i--sm" aria-hidden="true"><use href="#i-sun"/></svg>Light</button>
+              <button class="pc-tab" type="button" role="tab" aria-selected="false" aria-controls="pc-v3-tour" data-pc="v3-tab-tour"><svg class="pc-i pc-i--sm" aria-hidden="true"><use href="#i-drone"/></svg>Tour</button>
+            </div>
+          </div>
+          <div class="pc-v3panel__body" id="pc-v3-body">
+            <div class="pc-v3pane is-current" id="pc-v3-view" data-pc="v3-pane-view">
+              <h3>View</h3>
+              <div class="pc-v3row">
+                <div class="pc-seg" role="radiogroup" aria-label="Visible levels" data-pc="v3-level">
+                  <label class="pc-opt"><input type="radio" name="v3-level" value="all" checked><span class="pc-seg__txt">All</span></label>
+                </div>
+              </div>
+              <div class="pc-v3row">
+                <label class="pc-switch"><input type="checkbox" role="switch" data-pc="v3-roof"><span class="pc-switch__track"></span><span>Roof</span></label>
+                <button class="pc-btn pc-btn--sm pc-v3row__end" type="button" data-pc="v3-reset"><svg class="pc-i" aria-hidden="true"><use href="#i-frame"/></svg>Reset view</button>
+              </div>
+            </div>
+            <div class="pc-v3pane" id="pc-v3-light" data-pc="v3-pane-light">
+              <h3>Light</h3>
+              <div class="pc-v3row">
+                <input class="pc-range" type="range" min="0" max="24" step="0.25" value="12" aria-label="Time of day" data-pc="v3-time">
+                <output data-pc="v3-time-out">12:00</output>
+              </div>
+              <div class="pc-v3row">
+                <button class="pc-btn pc-btn--icon" type="button" value="8" aria-label="Morning" title="Morning" data-pc="v3-preset-morning"><svg class="pc-i" aria-hidden="true"><use href="#i-sunrise"/></svg></button><button class="pc-btn pc-btn--icon" type="button" value="12" aria-label="Noon" title="Noon" data-pc="v3-preset-noon"><svg class="pc-i" aria-hidden="true"><use href="#i-sun"/></svg></button><button class="pc-btn pc-btn--icon" type="button" value="17.5" aria-label="Evening" title="Evening" data-pc="v3-preset-evening"><svg class="pc-i" aria-hidden="true"><use href="#i-sunset"/></svg></button><button class="pc-btn pc-btn--icon" type="button" value="22" aria-label="Night" title="Night" data-pc="v3-preset-night"><svg class="pc-i" aria-hidden="true"><use href="#i-moon"/></svg></button>
+                <select class="pc-select" aria-label="Season" data-pc="v3-season"><option value="spring">Spring</option><option value="summer" selected>Summer</option><option value="autumn">Autumn</option><option value="winter">Winter</option></select>
+              </div>
+              <p class="pc-v3note">approximate &mdash; not real solar data</p>
+            </div>
+            <div class="pc-v3pane" id="pc-v3-tour" data-pc="v3-pane-tour">
+              <h3>Rooms and tour</h3>
+              <div class="pc-v3row">
+                <select class="pc-select" aria-label="Go to room" data-pc="v3-room"><option value="">Go to room&hellip;</option></select>
+              </div>
+              <div class="pc-v3row">
+                <button class="pc-btn pc-btn--primary pc-btn--sm" type="button" aria-label="Start tour" data-pc="v3-tour-start"><svg class="pc-i pc-i--solid" aria-hidden="true"><use href="#i-play"/></svg>Tour</button>
+                <button class="pc-btn pc-btn--icon" type="button" aria-label="Pause tour" aria-pressed="false" data-pc="v3-tour-pause" disabled><svg class="pc-i pc-i--solid" aria-hidden="true"><use href="#i-pause"/></svg></button>
+                <button class="pc-btn pc-btn--icon" type="button" aria-label="Stop tour" data-pc="v3-tour-stop" disabled><svg class="pc-i pc-i--solid" aria-hidden="true"><use href="#i-stop"/></svg></button>
+                <div class="pc-seg" role="radiogroup" aria-label="Tour speed" data-pc="v3-tour-speed">
+            <label class="pc-opt"><input type="radio" name="v3-tour-speed" value="slow"><span class="pc-seg__txt">Slow</span></label>
+            <label class="pc-opt"><input type="radio" name="v3-tour-speed" value="normal" checked><span class="pc-seg__txt">Normal</span></label>
+            <label class="pc-opt"><input type="radio" name="v3-tour-speed" value="fast"><span class="pc-seg__txt">Fast</span></label>
+          </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <div class="pc-toasts" role="status" aria-live="polite" data-pc="toast-region"></div>
+
+  <footer class="pc-bar">
+    <button class="pc-btn" type="button" data-pc="btn-back" disabled><svg class="pc-i" aria-hidden="true"><use href="#i-chev-left"/></svg>Back</button>
+    <button class="pc-btn pc-btn--primary pc-bar__next" type="button" data-pc="btn-next" disabled><span data-pc="btn-next-label">Next: Questions</span><svg class="pc-i" aria-hidden="true"><use href="#i-chev-right"/></svg></button>
+  </footer>
+</div>
+
+<!-- ============================== DIALOG LAYER ============================== -->
+<div class="pc-dialog-layer" data-pc="dialog-layer" hidden>
+  <div class="pc-dialog" role="dialog" aria-modal="true" aria-labelledby="pc-dialog-title" aria-describedby="pc-dialog-text" tabindex="-1" data-pc="dialog">
+    <h2 class="pc-dialog__title" id="pc-dialog-title" data-pc="dialog-title">Confirm</h2>
+    <p class="pc-dialog__text" id="pc-dialog-text" data-pc="dialog-text"></p>
+    <div class="pc-dialog__extra" data-pc="dialog-extra"></div>
+    <div class="pc-dialog__actions">
+      <button class="pc-btn" type="button" data-pc="dialog-cancel">Cancel</button>
+      <button class="pc-btn pc-btn--primary" type="button" data-pc="dialog-ok">Continue</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================== TEMPLATES: SHELL ============================== -->
+<template data-pc="tpl-toast"><div class="pc-toast"><span data-pc="toast-text"></span></div></template>
+
+<template data-pc="tpl-banner"><div class="pc-banner" role="status" data-kind="info">
+  <svg class="pc-i pc-banner__i-info" aria-hidden="true"><use href="#i-info"/></svg><svg class="pc-i pc-banner__i-warn" aria-hidden="true"><use href="#i-warn"/></svg><svg class="pc-i pc-banner__i-block" aria-hidden="true"><use href="#i-block"/></svg><svg class="pc-i pc-banner__i-ok" aria-hidden="true"><use href="#i-approved"/></svg>
+  <span class="pc-banner__text" data-pc="banner-text"></span>
+  <button class="pc-btn pc-btn--sm" type="button" data-pc="banner-action" hidden></button>
+</div></template>
+
+<!-- ============================== TEMPLATES: STAGE 2 ============================== -->
+<template data-pc="tpl-room-group"><section class="pc-rgroup">
+  <header class="pc-rgroup__head"><h4 data-pc="group-name"></h4><span class="pc-chip pc-num-text" data-pc="group-count"></span></header>
+  <ul data-pc="group-rows"></ul>
+</section></template>
+
+<template data-pc="tpl-room-row"><li class="pc-room">
+  <div class="pc-room__head">
+    <strong data-pc="room-name"></strong>
+    <span class="pc-num-text" data-pc="room-area-hint"></span>
+    <label class="pc-opt"><input type="checkbox" aria-label="Master bedroom" data-pc="room-master"><span class="pc-pick"><svg class="pc-i pc-i--sm" aria-hidden="true"><use href="#i-star"/></svg>Master</span></label>
+    <button class="pc-btn pc-btn--icon pc-btn--quiet" type="button" aria-label="Remove room" data-pc="room-delete"><svg class="pc-i" aria-hidden="true"><use href="#i-trash"/></svg></button>
+  </div>
+  <div class="pc-room__ctl">
+    <select class="pc-select" aria-label="Room type" data-pc="room-type"><option value="bedroom">Bedroom</option><option value="bathroom">Bathroom</option><option value="kitchen">Kitchen</option><option value="living">Living</option><option value="dining">Dining</option><option value="majlis">Majlis</option><option value="office">Office</option><option value="maid">Maid's room</option><option value="storage">Storage</option><option value="laundry">Laundry</option></select>
+    <select class="pc-select" aria-label="Floor" data-pc="room-level"><option value="B">Basement</option><option value="G">Ground</option><option value="1">First</option><option value="2">Second</option></select>
+    <select class="pc-select" aria-label="Size" data-pc="room-size"><option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="exact">Exact</option></select>
+    <div class="pc-inputunit" data-pc="room-area-box" hidden><input class="pc-input" type="text" inputmode="decimal" autocomplete="off" aria-label="Exact area" data-pc="room-area"><span class="pc-unit" data-pc="room-area-unit">m&sup2;</span></div>
+  </div>
+</li></template>
+
+<template data-pc="tpl-edge-row"><li class="pc-edge">
+  <span class="pc-edge__txt"><span class="pc-edge__name" data-pc="edge-name">Edge 1 &middot; 20.0 m</span><span class="pc-edge__class" data-pc="edge-class">back</span></span>
+  <button class="pc-btn pc-edge__switch" type="button" data-pc="edge-switch">Make side</button>
+</li></template>
+<template data-pc="tpl-pair-row"><li class="pc-pair">
+  <svg class="pc-i pc-i--sm" aria-hidden="true"><use href="#i-link"/></svg><span data-pc="pair-text"></span>
+  <button class="pc-btn pc-btn--icon pc-btn--quiet" type="button" aria-label="Remove pair" data-pc="pair-delete"><svg class="pc-i" aria-hidden="true"><use href="#i-trash"/></svg></button>
+</li></template>
+
+<template data-pc="tpl-sum-level"><div class="pc-tb__cell">
+  <dt data-pc="level-name"></dt>
+  <dd><span data-pc="level-needed"></span> / <span data-pc="level-available"></span></dd>
+</div></template>
+
+<template data-pc="tpl-conflict"><li data-kind="block">
+  <svg class="pc-i pc-conflict__i-block" aria-hidden="true"><use href="#i-block"/></svg><svg class="pc-i pc-conflict__i-warn" aria-hidden="true"><use href="#i-warn"/></svg>
+  <span data-pc="conflict-text"></span>
+  <button class="pc-btn pc-btn--sm" type="button" data-pc="conflict-goto">Fix</button>
+</li></template>
+
+<template data-pc="tpl-level-remove"><div class="pc-choice" role="radiogroup" aria-label="Rooms on the removed level">
+  <p data-pc="level-remove-text"></p>
+  <label class="pc-opt"><input type="radio" name="level-remove" value="move" checked data-pc="level-remove-move"><span class="pc-card"><span class="pc-card__name">Move the rooms to the nearest remaining level</span></span></label>
+  <label class="pc-opt"><input type="radio" name="level-remove" value="delete" data-pc="level-remove-delete"><span class="pc-card"><span class="pc-card__name">Delete the rooms</span></span></label>
+</div></template>
+
+<!-- ============================== TEMPLATES: STAGE 3 ============================== -->
+<template data-pc="tpl-plan-tab"><button class="pc-tab" type="button" role="tab" aria-selected="false">
+  <span data-pc="tab-name"></span>
+  <span class="pc-tab__state"><svg class="pc-i pc-i--sm pc-tab__i-draft" aria-hidden="true"><use href="#i-pencil"/></svg><svg class="pc-i pc-i--sm pc-tab__i-approved" aria-hidden="true"><use href="#i-approved"/></svg><svg class="pc-i pc-i--sm pc-tab__i-invalid" aria-hidden="true"><use href="#i-block"/></svg><span class="pc-tab__state-txt" data-pc="tab-state">Draft</span></span>
+</button></template>
+
+<template data-pc="tpl-plan-warn"><li data-kind="warn"><svg class="pc-i pc-i--sm" aria-hidden="true"><use href="#i-warn"/></svg><span data-pc="warn-text"></span></li></template>
+
+<!-- ============================== TEMPLATES: STAGE 5 ============================== -->
+<template data-pc="tpl-v3-level"><label class="pc-opt"><input type="radio" name="v3-level" value=""><span class="pc-seg__txt" data-pc="level-label"></span></label></template>
+
+<!-- three.js r128 (the only external reference), then the app scripts -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!--@JS-->
+</body>
+</html>
