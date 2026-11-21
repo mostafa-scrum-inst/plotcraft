@@ -304,7 +304,9 @@ try {
   }
 
   // ======================= G. Item 8: add form =======================
-  if (want('G')) for (const vp of [PHONE, LAND, DESK]) {
+  // A-16 trim (F4-T1 QA round): 640x360 removed here. Twin: tests/e2e/rooms.spec.mjs addAndEdit at 640x360 (touch; also
+  // 768x1024), the twin the F3-T3 trim named for this section. G keeps 360x640 touch and 1280x800 mouse.
+  if (want('G')) for (const vp of [PHONE, DESK]) {
     const V = vp.tag, S = await kit(browser, vp, { max5: true }); await S.openGroup('rooms'); await rooms(S, 'G sample');
     R.check(`${V} G sample rooms, pairs, stair = 6.2`, sampleProblems(await S.state()));
     // level options: existing levels only
@@ -427,7 +429,9 @@ try {
   }
 
   // ======================= K. Item 12: removing a level with rooms =======================
-  if (want('K')) for (const vp of [PHONE, LAND, DESK]) {
+  // A-16 trim (F4-T1 QA round): 640x360 removed here. Twin: tests/e2e/rooms.spec.mjs stairsAndLevels at 640x360 (touch;
+  // also 768x1024: the three-way level-removal dialog), as named by the F3-T3 trim. K keeps 360x640 and 1280x800.
+  if (want('K')) for (const vp of [PHONE, DESK]) {
     const V = vp.tag;
     // (1) move allowed: 3 floors, 2 rooms on the second floor, ground and first have 7 -> nearest is First (7 + 2 > 8: refused) ... build a case
     { const S = await kit(browser, vp, { max5: true, plot: rect(20, 30), ans: { floors: 3, rooms: [{ id: 'r1', type: 'living', level: 'G', size: 'M', area: null, master: false }, { id: 'r2', type: 'bedroom', level: '1', size: 'M', area: null, master: false }, { id: 'r3', type: 'bedroom', level: '2', size: 'S', area: null, master: false }, { id: 'r4', type: 'bathroom', level: '2', size: 'S', area: null, master: false }], pairs: [['r3', 'r4']], nextRoomId: 5 } });
@@ -493,14 +497,10 @@ try {
   if (want('M')) for (const vp of [PHONE, LAND, TAB, DESK]) {
     const V = vp.tag;
     { const S = await kit(browser, vp, { plot: rect(20, 30), ans: { rooms: [], pairs: [] } }); await S.openGroup('rooms'); await S.layout(`${V} M rooms empty`); await S.shot('M-rooms-empty'); await S.end(`${V} M empty`); }
-    // room row headers (name, area, Master, delete) must show the whole name in both units, incl. the longest case:
-    // the master bedroom at an exact 80 m² (861 sq ft)
-    { const S = await kit(browser, vp); await S.openGroup('rooms');
-      await S.page.evaluate(() => PC.store.commit((s) => { const m = s.ans.rooms.find((r) => r.master); m.size = null; m.area = 80; }));
-      for (const u of ['m', 'ft']) { if (u === 'ft') await S.act('unit-ft'); await S.settle();
-        R.check(`${V} M room names and areas not cut off (${u}, master bedroom at 80 m²)`, await S.page.evaluate(() => [...document.querySelectorAll('[data-pc="room-list"] [data-pc="room-name"], [data-pc="room-list"] [data-pc="room-area-hint"]')].filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => `"${e.textContent}" ${e.scrollWidth} > ${e.clientWidth} px`)));
-        if (u === 'ft' && vp.touch) { await S.page.evaluate(() => document.querySelector('[data-pc="room-list"] [data-level="1"]').scrollIntoView()); await S.shot('M-rooms-list-ft'); } }
-      await S.end(`${V} M names`); }
+    // A-16 trim (F4-T1 QA round): the room-row "names and areas not cut off (m, ft; master bedroom at 80 m²)" block is
+    // removed here. Twin: tests/e2e/rooms-fit.spec.mjs at 360x640, 640x360, 768x1024, 1280x800 (and 360x740) in m and ft
+    // with the same content (master bedroom at an exact 80 m² = 861 sq ft) and stricter checks (one line each, inside the
+    // row, head no taller than 44 px).
     { const S = await kit(browser, vp); await S.openGroup('rooms'); await S.layout(`${V} M rooms sample`); await S.shot('M-rooms-sample');
       await S.page.evaluate(() => PC.store.commit((s) => { const have = s.ans.rooms.filter((r) => r.level === 'G').length; for (let i = have; i < 8; i++) s.ans.rooms.push({ id: 'r' + (s.ans.nextRoomId + i - have), type: 'storage', level: 'G', size: 'S', area: null, master: false }); s.ans.nextRoomId += 8 - have; }));
       await S.settle(); await rooms(S, 'M full level'); await S.layout(`${V} M rooms full level`); await S.shot('M-rooms-full'); await S.end(`${V} M sample`); }

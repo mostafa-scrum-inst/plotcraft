@@ -113,3 +113,29 @@ FS full run 493.7 s, over the 450 s target set at the plan review. The overrun i
 8. **The f2-t2 / f2-t3 trim**, target full run ≤ 450 s (plan-review runtime ruling).
 
 VERDICT: APPROVED
+
+## Round 1 addendum — condition 1 and FS items 1 and 3 (TL, 2026-11-21)
+
+Reviewed: commit `e0fd473`, `designer-fix.md`, `fs-outerk.md`, the CSS and const diffs, `designer-shots/` and the re-taken `shots/`.
+
+**Condition 1 (Designer): met.**
+- `30-components.css` gives the disabled controls the same muted set as `.pc-btn:disabled`:
+  - `.pc-range:disabled`: track, thumb and the following `output`;
+  - `.pc-select:disabled`: sunk background, `--ink-3` text, muted arrow, `opacity: 1`;
+  - `.pc-btn--icon:disabled` icons at 0.5.
+- I read `designer-shots/360x640-light.png` and the new `shots/1280x800-sand-noon.png`. The slider, presets, Season, "Go to room" and the tour buttons all read as unavailable. View, Reset and the level radios stay live.
+- The icon rule is generic. It also mutes stage-2 setback / north stepper icons when they are disabled at a limit. That is consistent; QA notes it if any looks wrong.
+- Leaving the tour-speed radios as they are is accepted (they share the stage-2 `.pc-opt` disabled style).
+- The `view3d.spec` computed-style check is in, and 2 mutations are caught.
+
+**FS item 3 (`HOUSE.outerK` 8 → 36): met.** The ground edge at 18 R lies inside the far plane at 20 R. The new shots have no sky wedge: the top corners are lit neutral ground, the house reads as before, and there is still one mesh.
+
+**FS item 1 (double build): met.** `scene.test` checks that close + reopen inside the Building… yield gives exactly one build and one render. FS reports that removing the token check now fails it. Item 2 (the refusal's `reachable` half) stays for F4-T2.
+
+**Probes.**
+- `node build.mjs && node tests/run-all.mjs --unit --three --e2e --only view3d`: all green in 19.6 s (three 0 fail; view3d 46/0; view3d-real 38/0).
+- No full run (QA is testing in parallel). QA's sign-off run is the full run for this state.
+
+Nothing blocks the publish.
+
+VERDICT: APPROVED

@@ -358,7 +358,10 @@ try {
   }
 
   // ======================= F. Items 2 and 8: groups, progress, defaults, persistence, riders =======================
-  if (want('F')) for (const vp of [PHONE, TAB, DESK]) {
+  // A-16 trim (F4-T1 QA round): 768x1024 removed here. Twin: tests/e2e/questions.spec.mjs defaultsAndGroups at 768x1024
+  // (groups, progress, defaults, Continue, persistence) and gateAndRiders at 768x1024 (Skip / snap riders), as named by
+  // the F3-T3 trim. F keeps 360x640 and 1280x800.
+  if (want('F')) for (const vp of [PHONE, DESK]) {
     const V = vp.tag;
     let S = await kit(browser, vp, { plot: [[0, 0], [20, 0], [20, 20], [0, 20]] });
     R.check(`${V} F hand-made plot: no banner on stage 2`, (await S.banners()).length === 0);
@@ -392,7 +395,10 @@ try {
   // ======================= G. Item 9: layout of live states at every viewport, screenshots =======================
   if (want('G')) for (const vp of [PHONE, TAB, DESK, LAND]) {
     const V = vp.tag, S = await kit(browser, vp, { max5: true });
-    for (const g of ['site', 'building', 'rooms', 'outdoor']) { await S.openGroup(g); await S.layout(`${V} G group ${g}`); await S.shot(`G-${g}-m`); }
+    // A-16 trim (F4-T1 QA round): the Site and Rooms groups of the sample in m are no longer judged here. Twins: f2-t3-site-rooms.mjs
+    // M "sample street mode (m)" (Site group) and M "rooms sample" (Rooms group): the same sample, the same F1-T1 layout rules
+    // (S.layout), at the same four viewports and inputs.
+    for (const g of ['building', 'outdoor']) { await S.openGroup(g); await S.layout(`${V} G group ${g}`); await S.shot(`G-${g}-m`); }
     await S.act('unit-ft'); await S.openGroup('site'); await S.layout(`${V} G site in ft`); await S.shot('G-site-ft');
     await S.openGroup('building'); await S.act(lab('q-floors', '3')); await S.openGroup('site'); await S.slide('q-footprint', 10);
     const sheet = await S.page.evaluate(() => getComputedStyle(document.querySelector('[data-pc="summary-toggle"]')).cursor !== 'default' && document.querySelector('[data-pc="summary"]').classList.contains('is-collapsed'));

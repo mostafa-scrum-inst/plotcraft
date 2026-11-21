@@ -29,10 +29,13 @@ export async function openPage(browser, vp, opts = {}) {
     deviceScaleFactor: opts.dpr || 1, reducedMotion: opts.reducedMotion || 'no-preference',
   });
   const page = await ctx.newPage();
-  const log = { requests: [], errors: [], dialogs: [] };
+  const log = { requests: [], errors: [], dialogs: [], threeWarnings: [] };
   // opts.three === 'mock' (F4-T1 onwards): the exact three.js URL is answered with the FS's THREE mock (tests/three-mock.js,
   // A-16) when that file exists; everything else is aborted as before. Default: abort (three.js unavailable).
-  const MOCK = join(ROOT, 'tests/three-mock.js'), mock = opts.three === 'mock' && existsSync(MOCK) ? readFileSync(MOCK, 'utf8') : null;
+  // opts.three === 'real' (F4-T1 QA round): the vendored three@0.128.0 (tests/vendor/three-r128.min.js, byte-identical to the
+  // cdnjs r128 file) answers the same URL; the page stays offline. THREE.* console warnings are recorded in log.threeWarnings.
+  const MOCK = join(ROOT, 'tests/three-mock.js'), REAL = join(ROOT, 'tests/vendor/three-r128.min.js');
+  const mock = opts.three === 'mock' && existsSync(MOCK) ? readFileSync(MOCK, 'utf8') : opts.three === 'real' && existsSync(REAL) ? readFileSync(REAL, 'utf8') : null;
   await page.route('**/*', (route) => {
     const u = route.request().url();
     if (u.startsWith('file:')) return route.continue();
@@ -42,13 +45,14 @@ export async function openPage(browser, vp, opts = {}) {
   });
   page.on('pageerror', (e) => log.errors.push('pageerror: ' + e.message));
   page.on('console', (m) => {
-    if (m.type() !== 'error') return;
     const t = m.text();
+    if (m.type() === 'warning' && /^THREE\./.test(t)) log.threeWarnings.push(t);
+    if (m.type() !== 'error') return;
     if (/Failed to load resource/.test(t) && /ERR_FAILED/.test(t)) return; // the aborted three.js request
     log.errors.push('console.error: ' + t);
   });
   page.on('dialog', (d) => { log.dialogs.push(d.type() + ': ' + d.message()); d.dismiss().catch(() => {}); });
-  for (const fn of opts.init || []) await page.addInitScript(fn); // run before the page scripts on every load/reload
+  for (const fn of opts.init || []) await (Array.isArray(fn) ? page.addInitScript(fn[0], fn[1]) : page.addInitScript(fn)); // run before the page scripts on every load/reload; [fn, arg] passes an argument
   if (opts.noGoto) return { ctx, page, log };
   await page.goto(DIST_URL);
   return { ctx, page, log };
@@ -93,7 +97,7 @@ export function collector(name) {
 }
 
 // Problems that must be empty at the end of every scenario (G5): errors, native dialogs, requests other than three.js.
-export const cleanLog = (log) => [...log.errors, ...log.dialogs.map((d) => 'native dialog: ' + d), ...log.requests.filter((u) => u !== THREE_URL).map((u) => 'unexpected request: ' + u)];
+export const cleanLog = (log) => [...log.errors, ...(log.threeWarnings || []).map((w) => 'three.js warning: ' + w), ...log.dialogs.map((d) => 'native dialog: ' + d), ...log.requests.filter((u) => u !== THREE_URL).map((u) => 'unexpected request: ' + u)];
 
 // localStorage failure modes (init scripts). Written by QA, independent of tests/helpers/browser.mjs.
 export const STORAGE_MODES = {

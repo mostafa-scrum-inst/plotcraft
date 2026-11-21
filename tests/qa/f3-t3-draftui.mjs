@@ -11,7 +11,7 @@
 //    text under plotcraft.draft.rejected; the same plan with a stale signature is offered, resumes and is laid out
 //    again; corrupted draft -> side key; Start new and Load sample leave the side key alone; localStorage throwing.
 // Run: node tests/qa/f3-t3-draftui.mjs [--no-shots] [--only=360x640,...]
-import { VIEWPORTS, launch, collector, STORAGE_MODES } from './lib.mjs';
+import { VIEWPORTS, DIST_URL, launch, collector, STORAGE_MODES } from './lib.mjs';
 import { sessions, eq } from './session.mjs';
 import { stage2Kit, lab } from './stage2kit.mjs';
 
@@ -110,29 +110,38 @@ try {
 
   // ---- F. forged drafts, side key, storage throwing (360x640) ----
   if (!only.length || only.includes('360x640')) {
-    const vp = VP['360x640'], S = await kit(browser, vp, { keepPlans: true, stage2: false }); try {
-      const K = await S.page.evaluate(() => PC.draft.KEY), base = await S.state();
-      // A draft is stored before the app's scripts run on the next load (init script reads a sessionStorage hand-off), so
-      // the running page's own autosave can never overwrite it.
-      await S.page.addInitScript(`try { if (sessionStorage.qaNext) { localStorage.setItem(${JSON.stringify(K)}, sessionStorage.qaNext); sessionStorage.removeItem('qaNext'); } } catch (e) {}`);
-      const write = async (text) => { await S.page.evaluate((t) => { sessionStorage.qaNext = t; }, text); await S.reload(); };
-      const ser = (s) => S.page.evaluate((s) => PC.draft.serialize(s, Date.now()), s);
-      const side = () => S.rawKey(SIDE), gRoom = base.ans.rooms.find((r) => r.level === 'G').id;
-      const look = async () => ({ resume: await S.shown('resume-box'), start: await S.shown('start-panel'), draft: await S.rawKey(K), side: await side() });
-      for (const [what, mut] of [['a Ground room', (s) => { s.plans['1'].rooms[0].id = gRoom; }], ['an unknown room', (s) => { s.plans['1'].rooms[0].id = 'r99'; s.ans.nextRoomId = 100; }]]) {
-        const s = JSON.parse(JSON.stringify(base)); mut(s); const raw = await ser(s); await write(raw); const L = await look();
-        R.check(`360x640 F fresh-signature First plan listing ${what}: discarded silently (no Resume, start panel), draft key gone, raw text under ${SIDE}`, !L.resume && L.start && L.draft === null && L.side === raw ? [] : [JSON.stringify({ ...L, side: L.side && L.side.length })]); }
-      { const s = JSON.parse(JSON.stringify(base)); s.plans['1'].rooms[0].id = gRoom; s.plans['1'].sig = 'old'; s.plans['1'].approved = false; const before = await side(); await write(await ser(s)); const L = await look();
-        R.check('360x640 F the same plan with a stale signature: Resume offered; the side key is left as it was', L.resume && L.side === before ? [] : [JSON.stringify({ resume: L.resume })]);
+    const vp = VP['360x640'], S0 = await kit(browser, vp, { keepPlans: true, stage2: false });
+    // Every forged-draft case runs in a fresh context whose storage is seeded by an init script before the app's scripts
+    // run (draft key and side key), so no case depends on a key written by an earlier page. (A reload / navigation
+    // hand-off was flaky under full-run load: Chrome shares localStorage between renderer processes asynchronously, and
+    // the next page sometimes read an older side key.)
+    let K, base, ser; const BROKEN = '{"v":2,"savedAt":1,"state":{broken';
+    try { K = await S0.page.evaluate(() => PC.draft.KEY); base = await S0.state(); const sr = (x) => S0.page.evaluate((x) => PC.draft.serialize(x, Date.now()), x);
+      const gRoom = base.ans.rooms.find((r) => r.level === 'G').id, ground = JSON.parse(JSON.stringify(base)), unknown = JSON.parse(JSON.stringify(base)), stale = JSON.parse(JSON.stringify(base));
+      ground.plans['1'].rooms[0].id = gRoom; unknown.plans['1'].rooms[0].id = 'r99'; unknown.ans.nextRoomId = 100;
+      stale.plans['1'].rooms[0].id = gRoom; stale.plans['1'].sig = 'old'; stale.plans['1'].approved = false;
+      ser = { ground: await sr(ground), unknown: await sr(unknown), stale: await sr(stale), base: await sr(base) };
+    } catch (e) { R.check('360x640 F setup', [String(e).slice(0, 300)]); } finally { await S0.end('360x640 F setup'); }
+    const okDialog = async (S) => { if (await S.until(() => S.dialogOpen(), 1200)) { await S.act('dialog-ok'); await S.until(async () => !(await S.dialogOpen()), 3000); await S.settle(); } };
+    const seeded = async (draft, sideV, fn) => {
+      const S = await session(browser, vp, { init: [[(a) => { try { localStorage.clear(); localStorage.setItem(a.K, a.draft); if (a.side !== null) localStorage.setItem(a.SIDE, a.side); } catch (e) {} }, { K, draft, side: sideV, SIDE }]] });
+      try { await S.settle(); await fn(S, { resume: await S.shown('resume-box'), start: await S.shown('start-panel'), draft: await S.rawKey(K), side: await S.rawKey(SIDE) }); }
+      catch (e) { R.check('360x640 F crashed', [String(e && e.stack || e).slice(0, 400)]); } finally { await S.end('360x640 F'); } };
+    if (ser) {
+      for (const [what, raw] of [['a Ground room', ser.ground], ['an unknown room', ser.unknown]]) await seeded(raw, null, async (S, L) =>
+        R.check(`360x640 F fresh-signature First plan listing ${what}: discarded silently (no Resume, start panel), draft key gone, raw text under ${SIDE}`, !L.resume && L.start && L.draft === null && L.side === raw ? [] : [JSON.stringify({ ...L, side: L.side && L.side.length })]));
+      await seeded(ser.stale, ser.ground, async (S, L) => {
+        R.check('360x640 F the same plan with a stale signature: Resume offered; the side key is left as it was', L.resume && L.side === ser.ground ? [] : [JSON.stringify({ resume: L.resume, side: String(L.side).slice(0, 80) })]);
         if (L.resume) { await S.act('btn-resume'); await S.settle(); const t = await S.state(), ids = t.plans['1'].rooms.map((r) => r.id).sort().join(), want = t.ans.rooms.filter((r) => r.level === '1').map((r) => r.id).sort().join();
-          R.check('360x640 F Resume lays the forged stale First plan out again (exactly its rooms) and keeps the Ground plan', ids === want && eq(t.plans.G, base.plans.G) ? [] : [ids + ' vs ' + want]); } }
-      { await write('{"v":2,"savedAt":1,"state":{broken'); const L = await look();
-        R.check(`360x640 F corrupted draft: no Resume, draft key gone, raw text under ${SIDE}`, !L.resume && L.draft === null && L.side === '{"v":2,"savedAt":1,"state":{broken' ? [] : [JSON.stringify(L)]);
-        await write(await ser(base)); R.check('360x640 F a valid draft afterwards is offered', await S.shown('resume-box'));
-        await S.act('btn-startnew'); await answer(S); R.check('360x640 F Start new deletes the draft but leaves the side key', (await S.rawKey(K)) === null && (await side()) === '{"v":2,"savedAt":1,"state":{broken' ? [] : ['side key changed']);
-        await write(await ser(base)); await S.act('btn-sample'); await answer(S); await S.flush();
-        R.check('360x640 F Load sample over an offered draft leaves the side key alone', (await side()) === '{"v":2,"savedAt":1,"state":{broken' && (await S.state()).sampleClean !== undefined ? [] : ['side key changed']); }
-    } catch (e) { R.check(`${V} crashed`, [String(e && e.stack || e).slice(0, 400)]); } finally { await S.end('360x640 F'); }
+          R.check('360x640 F Resume lays the forged stale First plan out again (exactly its rooms) and keeps the Ground plan', ids === want && eq(t.plans.G, base.plans.G) ? [] : [ids + ' vs ' + want]); } });
+      await seeded(BROKEN, null, async (S, L) => R.check(`360x640 F corrupted draft: no Resume, draft key gone, raw text under ${SIDE}`, !L.resume && L.draft === null && L.side === BROKEN ? [] : [JSON.stringify(L)]));
+      await seeded(ser.base, BROKEN, async (S, L) => {
+        R.check('360x640 F a valid draft afterwards is offered', L.resume);
+        await S.act('btn-startnew'); await okDialog(S); R.check('360x640 F Start new deletes the draft but leaves the side key', (await S.rawKey(K)) === null && (await S.rawKey(SIDE)) === BROKEN ? [] : ['side key changed']); });
+      await seeded(ser.base, BROKEN, async (S, L) => {
+        await S.act('btn-sample'); await okDialog(S); await S.flush();
+        R.check('360x640 F Load sample over an offered draft leaves the side key alone', L.resume && (await S.rawKey(SIDE)) === BROKEN && (await S.state()).sampleClean !== undefined ? [] : ['side key changed']); });
+    }
     for (const mode of ['getter-throws', 'set-throws']) { const T = await session(browser, vp, { init: [STORAGE_MODES[mode]] }); try {
       await T.act('btn-sample'); await T.settle(); R.check(`360x640 F localStorage ${mode}: the sample loads and works (stage 2 reachable), no Resume card`, !(await T.shown('resume-box')) && (await T.state()).plot.closed ? [] : ['broken']);
     } finally { await T.end(`360x640 F ${mode}`); } }
