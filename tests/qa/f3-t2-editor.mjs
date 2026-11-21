@@ -8,7 +8,7 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT, VIEWPORTS, launch, collector } from './lib.mjs';
-import { sessions, eq } from './session.mjs';
+import { sessions, eq, PAGE } from './session.mjs';
 import * as Q from './f2-t1-ref.mjs';
 import { fmtArea, stage2Kit, lab } from './stage2kit.mjs';
 import { GRID, myMove, myResize, myOverlaps } from './f3-t2-ref.mjs';
@@ -190,7 +190,9 @@ try {
       await S.act(lab('q-interior-style', other)); await S.act(lab('q-interior-density', 'sparse')); const after = await S.state();
       R.check(`${V} 8 Q18 -> ${other}, Q19 -> sparse: stored, approvals and plans unchanged (appearance)`, after.ans.interior.style === other && after.ans.interior.density === 'sparse' && eq(after.plans, before.plans) && !(await S.dialogOpen()) ? [] : [JSON.stringify(after.ans.interior)]);
       await S.act('btn-next'); await S.settle(); const b5 = await S.page.evaluate(() => { const t = document.querySelector('[data-pc="banner-slot"] [data-pc="banner-text"]'); if (!t) return null; const r = t.getBoundingClientRect(); return { text: t.textContent, inView: r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth && r.width > 0 }; });
-      R.check(`${V} 8 "Build 3D model" opens stage 5 with "This stage is not built yet: static preview" in view`, (await S.stages()) === '5' && b5 && b5.text === 'This stage is not built yet: static preview' && b5.inView ? [] : [JSON.stringify(b5)]);
+      if (PAGE.house) { await S.until(async () => (await S.v3()).unavailable, 3000); const v = await S.v3();   // F4-T1 controller; three.js blocked here
+        R.check(`${V} 8 "Build 3D model" opens stage 5 (F4-T1 controller, three.js blocked): no notice, "3D view unavailable" in view, panel hidden`, (await S.stages()) === '5' && !b5 && v.unavailableInView && !v.panel ? [] : [JSON.stringify({ b5, v })]); }
+      else R.check(`${V} 8 "Build 3D model" opens stage 5 with "This stage is not built yet: static preview" in view`, (await S.stages()) === '5' && b5 && b5.text === 'This stage is not built yet: static preview' && b5.inView ? [] : [JSON.stringify(b5)]);
       await S.layout(`${V} 8 stage 5`); if (touch) await S.shot('8-stage5');
       await S.act('btn-back'); await S.settle(); R.check(`${V} 8 Back from stage 5 opens stage 4, choices kept`, (await S.stages()) === '4' && (await S.state()).ans.interior.style === other); }
 

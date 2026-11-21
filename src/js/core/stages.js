@@ -28,7 +28,7 @@
   }
 
   PC.stages = {
-    MAX_BUILT: 5,            // highest stage that can be opened (F3-T1: 3; F3-T2: 5, stage 5 a static preview until F4-T1)
+    MAX_BUILT: 5,            // highest stage that can be opened (F3-T1: 3; F3-T2: 5; F4-T1: stage 5 is the live 3D view)
     TEXT: TEXT,
 
     // { 1..5: { reachable, valid, reason } }. reason: why it is locked, else why it is not valid, else ''.

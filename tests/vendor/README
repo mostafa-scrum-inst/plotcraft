@@ -1,0 +1,22 @@
+tests/vendor — third-party files used by tests only (A-16 "Real r128 in tests", CTO F3 review H2)
+
+three-r128.min.js
+  What:    three.js r128 global build, package three@0.128.0, file package/build/three.min.js (MIT, licence header kept).
+  Why:     cdnjs.cloudflare.com is blocked in the build workspace; registry.npmjs.org is reachable. Tests fulfil ONLY the
+           exact cdnjs URL of the brief (https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js) with this
+           file through page.route (tests/helpers/browser.mjs, three: 'real'). The app, src/index.html, dist/index.html
+           and build.mjs never reference this folder; the published page keeps loading r128 from cdnjs.
+           tests/lint-constraints.mjs fails if the build output ever contains the three.js licence banner.
+  Tarball: https://registry.npmjs.org/three/-/three-0.128.0.tgz (6 543 441 bytes)
+           integrity sha512-i0ap/E+OaSfzw7bD1TtYnPo3VEplkl70WX5fZqZnfZsE3k3aSFudqrrC9ldFZfYFkn1zwDmBcdGfiIm/hnbyZA==
+           (= `npm view three@0.128.0 dist.integrity`)
+  File:    603 445 bytes, sha512sum
+           74bc547a50299d8c692ede8ada2a261a78271cef37894bd9cad0376230d40a34f41c33872979d561d7f7854e098ccf2e121c5ff670f5fdecbdf14deddaf674a9
+  Refetch (in an empty scratch directory):
+           npm pack three@0.128.0            # or: curl -sO https://registry.npmjs.org/three/-/three-0.128.0.tgz
+           openssl dgst -sha512 -binary three-0.128.0.tgz | base64 -w0    # must equal the integrity above
+           tar -xzf three-0.128.0.tgz package/build/three.min.js
+           cp package/build/three.min.js <repo>/tests/vendor/three-r128.min.js
+           sha512sum <repo>/tests/vendor/three-r128.min.js                 # must equal the file hash above
+  Note:    byte identity with the cdnjs copy cannot be checked from here; it is the same r128 release and
+           tests/e2e/view3d-real.spec.mjs asserts THREE.REVISION === '128'.

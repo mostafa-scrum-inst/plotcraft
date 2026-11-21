@@ -27,10 +27,13 @@ const STORAGE = {
   quota: () => { Storage.prototype.setItem = function () { throw new DOMException('full', 'QuotaExceededError'); }; }
 };
 
-// opts: three 'abort' (default) | 'mock'; storage 'normal' | 'throw' | 'quota'; init: function run before page scripts.
+export const VENDOR_THREE = join(ROOT, 'tests', 'vendor', 'three-r128.min.js');
+
+// opts: three 'abort' (default) | 'mock' (tests/three-mock.js) | 'real' (vendored r128, A-16; only the exact cdnjs URL);
+// dpr: deviceScaleFactor; storage 'normal' | 'throw' | 'quota'; init: function run before page scripts.
 // Returns { ctx, page, log, hook, act, problems }. log collects page errors, console errors, native dialogs, requests.
 export async function open(browser, vp, opts = {}) {
-  const ctx = await browser.newContext({ viewport: { width: vp.w, height: vp.h }, hasTouch: !!vp.touch });
+  const ctx = await browser.newContext({ viewport: { width: vp.w, height: vp.h }, hasTouch: !!vp.touch, deviceScaleFactor: opts.dpr || 1 });
   const page = await ctx.newPage();
   const log = { errors: [], dialogs: [], requests: [] };
   await page.route('**/*', (route) => {
@@ -39,13 +42,16 @@ export async function open(browser, vp, opts = {}) {
     log.requests.push(u);
     if (u === THREE_URL && opts.three === 'mock')
       return route.fulfill({ contentType: 'application/javascript', body: readFileSync(join(ROOT, 'tests', 'three-mock.js'), 'utf8') });
+    if (u === THREE_URL && opts.three === 'real') return route.fulfill({ contentType: 'application/javascript', body: readFileSync(VENDOR_THREE, 'utf8') });
     return route.abort();
   });
   page.on('pageerror', (e) => log.errors.push('pageerror: ' + e.message));
   page.on('console', (m) => {
+    // With real r128 its warnings (shader compile errors, deprecated members) count as errors too (CTO H2).
+    if (opts.three === 'real' && m.type() === 'warning' && /^THREE\./.test(m.text())) { log.errors.push('THREE warning: ' + m.text()); return; }
     if (m.type() !== 'error') return;
     // The one accepted console error: the aborted three.js request, only in suites that abort it (A-16).
-    if (opts.three !== 'mock' && m.location().url === THREE_URL && /Failed to load resource/.test(m.text())) return;
+    if (opts.three !== 'mock' && opts.three !== 'real' && m.location().url === THREE_URL && /Failed to load resource/.test(m.text())) return;
     log.errors.push('console.error: ' + m.text());
   });
   page.on('dialog', (d) => { log.dialogs.push(d.type() + ': ' + d.message()); d.dismiss().catch(() => {}); });

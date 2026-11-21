@@ -1577,7 +1577,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
               <h3>View</h3>
               <div class="pc-v3row">
                 <div class="pc-seg" role="radiogroup" aria-label="Visible levels" data-pc="v3-level">
-                  <label class="pc-opt"><input type="radio" name="v3-level" value="all" checked><span class="pc-seg__txt">All</span></label>
+                  <label class="pc-opt"><input type="radio" name="v3-level" value="all" checked aria-label="All floors"><span class="pc-seg__txt">All</span></label>
                 </div>
               </div>
               <div class="pc-v3row">
@@ -1762,6 +1762,12 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     // A-8 generator: room scale range, shared wall (length, tolerance), overlap tolerance, assignments tried for pairs
     LAYOUT: { fMin: 0.8, fMax: 1.2, adjMin: 0.5, adjTol: 0.02, overlapTol: 0.011, topAssignments: 60,
       retry: { fMin: 0.75, fMax: 1.25 } },          // 4.4: retry only when the first pass finds no layout (F3-T2)
+    // 3D (F4-T1; A-9, A-10, A-12). HOUSE: slab 0.2 m (pitch = Q8 + slab; floor at baseY + slab), dollhouse walls
+    // 1.2 m x 0.15 m, entrance door 1.2 m wide, z-offsets of A-10. CAM: angles in degrees, see A-12.
+    HOUSE: { slab: 0.2, wallH: 1.2, wallT: 0.15, door: 1.2, tintLift: 0.015, capLift: 0.01, outerDrop: 0.05, outerK: 8 },
+    CAM: { fov: 45, nearMin: 0.5, nearK: 0.02, farK: 20, phiMin: 5, phiMax: 85, rMin: 4, rMaxK: 3, rMaxReset: 1.2,
+      eyeMin: 1, resetK: 2.2, resetFit: 1.05, resetTheta: 30, resetPhi: 50, keyDeg: 5, keyZoom: 1.1, wheelK: 0.0015 },
+    VIEW3D: { maxDpr: 2, shadowMap: 1024, shadowBias: -0.0005, shadowNormalBias: 0.02, sunDist: 2.5, shadowK: 2.5, shadowR: 1.2 },
     FOOTPRINT_ROUND: 0.5, FOOTPRINT_MAX_RATIO: 2, FOOTPRINT_STRETCH_RATIO: 3, FOOTPRINT_STRETCH_EXTRA: 0.5, BACK_ANGLE: 40
   };
 })(globalThis.PC = globalThis.PC || {});
@@ -3405,7 +3411,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   }
 
   PC.stages = {
-    MAX_BUILT: 5,            // highest stage that can be opened (F3-T1: 3; F3-T2: 5, stage 5 a static preview until F4-T1)
+    MAX_BUILT: 5,            // highest stage that can be opened (F3-T1: 3; F3-T2: 5; F4-T1: stage 5 is the live 3D view)
     TEXT: TEXT,
 
     // { 1..5: { reachable, valid, reason } }. reason: why it is locked, else why it is not valid, else ''.
@@ -3616,6 +3622,150 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       a.extras = { wall: true, gate: 'centre', seating: true };
       return s;
     }
+  };
+})(globalThis.PC = globalThis.PC || {});
+
+</script>
+<script>/* js/core/house.js */
+/* PC.house.build(state): the house model (A-9), the only hand-off from 2D to 3D. Pure.
+   Reads the APPROVED plans (frame P) and PC.layout.core only; never generates or syncs. Returns null unless stage 3
+   is reachable and valid (CTO H3; TL F4-T1 plan review, item 2).
+   Frames: P -> L is u = fp.u + x, v = fp.v + y; the 3D layer maps L -> T with PC.frames.l2t (street at +Z).
+   Storey k occupies [baseY, baseY + pitch]: slab = the bottom PC.C.HOUSE.slab, floor at baseY + slab, the next
+   slab's underside at floor + storeyH (Q8). F4-T1 fills levels / rooms / core / roof descriptor / site rectangles;
+   furniture, gate, seating, north marker (F4-T2) and vegetation (F4-T3) stay empty. */
+(function (PC) {
+  'use strict';
+  var INDEX = { B: -1, G: 0, 1: 1, 2: 2 };
+
+  // FNV-1a 32-bit over a string, as 8 hex digits.
+  function hash(str) {
+    var h = 0x811c9dc5;
+    for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return ('0000000' + h.toString(16)).slice(-8);
+  }
+  function rect(fp, r) { return r ? { u: fp.u + r.x, v: fp.v + r.y, w: r.w, d: r.h } : null; }
+
+  PC.house = {
+    hash: hash,
+    build: function (state) {
+      var st = PC.stages.status(state);
+      if (!st[3].reachable || !st[3].valid) return null;
+      var site = PC.site.analyse(state), fp = site.footprint, a = state.ans, L = PC.levels, H = PC.C.HOUSE;
+      if (!fp) return null;
+      var b = PC.geom.bbox(site.ptsL), cu = (b.x0 + b.x1) / 2, cv = (b.y0 + b.y1) / 2;
+      var radius = site.ptsL.reduce(function (m, p) { return Math.max(m, Math.hypot(p[0] - cu, p[1] - cv)); }, 0);
+      var core = PC.layout.core(fp.w, fp.d, L.stairsExist(state), a.stairPos, L.liftExists(state));
+      var names = L.roomNames(state), types = {};
+      a.rooms.forEach(function (r) { types[r.id] = r.type; });
+      var storeyH = a.ceilingH, pitch = storeyH + H.slab;
+      var levels = L.ids(state).map(function (id) {
+        var index = INDEX[id];
+        return {
+          id: id, name: L.name(id), index: index, baseY: index * pitch,
+          rooms: state.plans[id].rooms.map(function (r) {
+            return { id: r.id, name: names[r.id], type: types[r.id], u: fp.u + r.x, v: fp.v + r.y, w: r.w, d: r.h, area: r.w * r.h, furniture: [] };
+          }),
+          stair: rect(fp, core.stair), lift: rect(fp, core.lift)
+        };
+      });
+      var top = levels[levels.length - 1].index;
+      var copy = function (o) { return o ? JSON.parse(JSON.stringify(o)) : null; };
+      var house = {
+        v: 1, key: '',
+        center: [cu, cv], radius: radius,
+        plot: { pts: site.ptsL.map(function (p) { return [p[0], p[1]]; }), area: site.plotArea },
+        northDeg: PC.frames.northL(state),
+        footprint: { u: fp.u, v: fp.v, w: fp.w, d: fp.d },
+        storeyH: storeyH, pitch: pitch,
+        levels: levels,
+        roof: { type: a.roofType, usable: !!a.usableRoof, baseY: (top + 1) * pitch, stairHead: null },
+        exterior: a.exterior, interior: { style: a.interior.style, density: a.interior.density },
+        site: {
+          entrance: { u: fp.u + fp.w / 2, v: fp.v, w: H.door },
+          parking: copy(site.parking), pool: copy(site.pool),
+          wall: !!a.extras.wall, gate: null, seating: null,
+          trees: [], shrubs: [], vegPct: site.veg ? site.veg.pct : 0,
+          northMarker: null
+        }
+      };
+      house.key = hash(JSON.stringify(house));
+      return house;
+    }
+  };
+})(globalThis.PC = globalThis.PC || {});
+
+</script>
+<script>/* js/core/cam.js */
+/* PC.cam: orbit-camera pose maths (A-12), frame T, plain arrays, angles in radians. Pure.
+   pose = { target: [x, y, z], radius, theta, phi }: theta = azimuth about +Y (0 = eye on the +Z / street side,
+   positive towards +X), phi = angle from the vertical. The eye is target + radius (sin phi sin theta, cos phi,
+   sin phi cos theta). Limits come from the house model and the canvas aspect (the reset radius is aspect-aware,
+   TL F4-T1 plan review ruling 1): phi in [5, 85] degrees, radius in [4, rMax], target in the plot bounding box with
+   Y in [0, roof base], then phi is lowered until the eye is 1 m or more above ground. */
+(function (PC) {
+  'use strict';
+  var D = Math.PI / 180;
+  function K() { return PC.C.CAM; }
+  function clampN(x, a, b) { return Math.max(a, Math.min(b, x)); }
+  function wrapAngle(a) { a = a % (2 * Math.PI); if (a > Math.PI) a -= 2 * Math.PI; if (a <= -Math.PI) a += 2 * Math.PI; return a; }
+  function copy(p) { return { target: [p.target[0], p.target[1], p.target[2]], radius: p.radius, theta: p.theta, phi: p.phi }; }
+
+  var C = PC.cam = {
+    // Distance at which the plot's bounding circle fits both half-angles of the view.
+    resetRadius: function (house, aspect) {
+      var k = K(), hv = k.fov / 2 * D, hh = Math.atan(Math.tan(hv) * (aspect > 0 ? aspect : 1));
+      return Math.max(k.resetK * house.radius, k.resetFit * house.radius / Math.sin(Math.min(hv, hh)));
+    },
+    limits: function (house, aspect) {
+      var k = K(), xs = house.plot.pts.map(function (p) { return p[0] - house.center[0]; });
+      var zs = house.plot.pts.map(function (p) { return -(p[1] - house.center[1]); });
+      return {
+        phiMin: k.phiMin * D, phiMax: k.phiMax * D, rMin: k.rMin,
+        rMax: Math.max(k.rMaxK * house.radius, k.rMaxReset * C.resetRadius(house, aspect)),
+        box: { x0: Math.min.apply(null, xs), x1: Math.max.apply(null, xs), y0: 0, y1: Math.max(0, house.roof.baseY),
+          z0: Math.min.apply(null, zs), z1: Math.max.apply(null, zs) },
+        eyeMin: k.eyeMin
+      };
+    },
+    reset: function (house, aspect) {
+      return { target: [0, 0, 0], radius: C.resetRadius(house, aspect), theta: K().resetTheta * D, phi: K().resetPhi * D };
+    },
+    clamp: function (p, L) {
+      var q = copy(p), b = L.box;
+      q.theta = wrapAngle(q.theta);
+      q.phi = clampN(q.phi, L.phiMin, L.phiMax);
+      q.radius = clampN(q.radius, L.rMin, L.rMax);
+      q.target = [clampN(q.target[0], b.x0, b.x1), clampN(q.target[1], b.y0, b.y1), clampN(q.target[2], b.z0, b.z1)];
+      var need = L.eyeMin - q.target[1];
+      if (need > 0) q.phi = Math.min(q.phi, Math.acos(Math.min(1, need / q.radius)));
+      return q;
+    },
+    position: function (p) {
+      var s = Math.sin(p.phi);
+      return [p.target[0] + p.radius * s * Math.sin(p.theta), p.target[1] + p.radius * Math.cos(p.phi), p.target[2] + p.radius * s * Math.cos(p.theta)];
+    },
+    orbit: function (p, dTheta, dPhi) { var q = copy(p); q.theta += dTheta; q.phi += dPhi; return q; },
+    zoom: function (p, factor) { var q = copy(p); q.radius *= factor; return q; },
+    // Ground-plane pan by a screen drag (px) at mPerPx metres per pixel: the content follows the pointer.
+    pan: function (p, dx, dy, mPerPx) {
+      var q = copy(p), c = Math.cos(p.theta), s = Math.sin(p.theta);
+      q.target[0] += -c * dx * mPerPx - s * dy * mPerPx;
+      q.target[2] += s * dx * mPerPx - c * dy * mPerPx;
+      return q;
+    },
+    metresPerPx: function (p, fovDeg, viewH) { return 2 * p.radius * Math.tan(fovDeg / 2 * D) / Math.max(1, viewH); },
+    // Near plane that follows the orbit radius (TL ruling, required item 9).
+    near: function (p) { return Math.max(K().nearMin, K().nearK * p.radius); },
+    // Smoothstep interpolation, shortest arc in theta (F5 flights).
+    lerpPose: function (a, b, k) {
+      var s = k <= 0 ? 0 : k >= 1 ? 1 : k * k * (3 - 2 * k), dT = wrapAngle(b.theta - a.theta);
+      return {
+        target: [0, 1, 2].map(function (i) { return a.target[i] + (b.target[i] - a.target[i]) * s; }),
+        radius: a.radius + (b.radius - a.radius) * s, theta: wrapAngle(a.theta + dT * s), phi: a.phi + (b.phi - a.phi) * s
+      };
+    },
+    copy: copy
   };
 })(globalThis.PC = globalThis.PC || {});
 
@@ -3856,6 +4006,485 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       winter: { elevMax: 32, tint: '#D3E0F2', tintAmount: 0.20, canopy: '#6F6A5C', canopyVisible: false, shrub: '#DCE4EA', ground: '#EDF1F4' }
     },
     groundBounce: 0.25
+  };
+})(globalThis.PC = globalThis.PC || {});
+
+</script>
+<script>/* js/three/util.js */
+/* PC.three helpers (A-10, A-11). THREE is touched only inside functions, so this file loads without it.
+   - mixHex(a, b, k): the one colour mix of the app (A-10): per-channel lerp of the 0-255 sRGB values, Math.round per
+     channel, upper-case '#RRGGBB'. Pure (no THREE).
+   - col(hex): sRGB hex -> linear THREE.Color. Every material, vertex and light colour goes through it; the scene
+     background does not (A-10).
+   - BoxBatch: hand-written merge of boxes and up-facing quads into ONE Mesh with per-vertex colours (A-11).
+     add(cx, cy, cz, sx, sy, sz, hex[, topHex]) in frame T (centre and full sizes); topHex colours the top face only
+     (the slab's hall tint, TL F4-T1 ruling 6). addQuad(cx, y, cz, sx, sz, hex): horizontal, facing up. */
+(function (PC) {
+  'use strict';
+  var three = PC.three = PC.three || {};
+
+  function hex2(n) { return ('0' + n.toString(16).toUpperCase()).slice(-2); }
+  three.mixHex = function (a, b, k) {
+    var out = '#';
+    for (var i = 1; i < 7; i += 2) {
+      var x = parseInt(a.slice(i, i + 2), 16), y = parseInt(b.slice(i, i + 2), 16);
+      out += hex2(Math.round(x + (y - x) * k));
+    }
+    return out;
+  };
+  three.col = function (hex) { return new THREE.Color(hex).convertSRGBToLinear(); };
+
+  // Faces as [normal axis, sign, u axis, v axis] with u x v = normal, so (-u-v, +u-v, +u+v, -u+v) runs counter-clockwise
+  // seen from outside. Axes: 0 = X, 1 = Y, 2 = Z. The +Y face is index 2 (the top).
+  var FACES = [[0, 1, 1, 2], [0, -1, 2, 1], [1, 1, 2, 0], [1, -1, 0, 2], [2, 1, 0, 1], [2, -1, 1, 0]];
+  var CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+
+  function BoxBatch() { this.pos = []; this.nor = []; this.rgb = []; this.idx = []; this.boxes = 0; this.quads = 0; this.cache = {}; }
+  BoxBatch.prototype.color = function (hex) {
+    var c = this.cache[hex];
+    if (!c) { var k = three.col(hex); c = this.cache[hex] = [k.r, k.g, k.b]; }
+    return c;
+  };
+  BoxBatch.prototype.face = function (c, h, f, rgb) {
+    var n = f[0], s = f[1], u = f[2], v = f[3], base = this.pos.length / 3;
+    for (var i = 0; i < 4; i++) {
+      var p = [c[0], c[1], c[2]];
+      p[n] += s * h[n]; p[u] += CORNERS[i][0] * h[u]; p[v] += CORNERS[i][1] * h[v];
+      var nn = [0, 0, 0]; nn[n] = s;
+      this.pos.push(p[0], p[1], p[2]); this.nor.push(nn[0], nn[1], nn[2]); this.rgb.push(rgb[0], rgb[1], rgb[2]);
+    }
+    this.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  };
+  BoxBatch.prototype.add = function (cx, cy, cz, sx, sy, sz, hex, topHex) {
+    var c = [cx, cy, cz], h = [sx / 2, sy / 2, sz / 2], side = this.color(hex), top = topHex ? this.color(topHex) : side;
+    for (var i = 0; i < 6; i++) this.face(c, h, FACES[i], i === 2 ? top : side);
+    this.boxes++;
+  };
+  BoxBatch.prototype.addQuad = function (cx, y, cz, sx, sz, hex) {
+    this.face([cx, y, cz], [sx / 2, 0, sz / 2], FACES[2], this.color(hex));
+    this.quads++;
+  };
+  BoxBatch.prototype.count = function () { return this.boxes + this.quads; };
+  // One Mesh, or null when nothing was added.
+  BoxBatch.prototype.build = function (material, name) {
+    if (!this.idx.length) return null;
+    var g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(this.pos), 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(this.nor), 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(this.rgb), 3));
+    g.setIndex(this.idx);
+    var m = new THREE.Mesh(g, material);
+    m.name = name || '';
+    m.castShadow = true; m.receiveShadow = true;
+    m.userData.boxes = this.boxes; m.userData.quads = this.quads;
+    return m;
+  };
+  three.BoxBatch = BoxBatch;
+})(globalThis.PC = globalThis.PC || {});
+
+</script>
+<script>/* js/three/build-shell.js */
+/* PC.three.buildShell(house, world, mats): the F4-T1 house shell into the `world` group (A-10, F4-T1 plan §5).
+   ground: groundOuter (plane, 0.05 m below), groundPlot (ShapeGeometry of the plot with the footprint as a hole),
+   groundCap (plane over the footprint, 0.01 m up; hidden for the basement view). Per level a group "level-<id>"
+   (userData.index) with "slab" (slab box whose top face is the hall tint + one tint quad per room at 0.015 m) and
+   "walls" (exterior walls with the entrance gap on the ground front wall, merged partitions along room edges, stair
+   and lift as plain 1.2 m boxes, basement pit walls up to ground level). Empty "roof" and "site" groups (F4-T2).
+   L -> T: X = u - cu, Z = -(v - cv) (PC.frames.l2t). Colours: Q10 exteriors, room tints mixed with the Q18 wood
+   (one sRGB lerp), stair / lift unmixed (H4, F3-T3 outcome section 7). */
+(function (PC) {
+  'use strict';
+  var three = PC.three = PC.three || {};
+  var EPS = 0.011;
+
+  // Union of [a, b] intervals (touching within EPS joins), sorted.
+  function union(list) {
+    list.sort(function (p, q) { return p[0] - q[0]; });
+    var out = [];
+    list.forEach(function (s) {
+      var last = out[out.length - 1];
+      if (last && s[0] <= last[1] + EPS) last[1] = Math.max(last[1], s[1]); else out.push([s[0], s[1]]);
+    });
+    return out;
+  }
+  // Intervals minus one interval.
+  function minus(list, a, b) {
+    var out = [];
+    list.forEach(function (s) {
+      if (b <= s[0] + EPS || a >= s[1] - EPS) { out.push(s); return; }
+      if (a > s[0] + EPS) out.push([s[0], a]);
+      if (b < s[1] - EPS) out.push([b, s[1]]);
+    });
+    return out;
+  }
+
+  // Partition segments of one level in L: { u: [[uLine, v0, v1], ...], v: [[vLine, u0, u1], ...] } (exported for tests).
+  three.partitions = function (house, level) {
+    var fp = house.footprint, t = PC.C.HOUSE.wallT, lines = { u: {}, v: {} };
+    function put(axis, at, a, b, lo, hi) {
+      if (Math.abs(at - lo) < EPS || Math.abs(at - hi) < EPS) return;        // on the footprint outline: exterior wall
+      var k = Math.round(at * 100);
+      (lines[axis][k] = lines[axis][k] || { at: at, s: [] }).s.push([a, b]);
+    }
+    level.rooms.forEach(function (r) {
+      put('u', r.u, r.v, r.v + r.d, fp.u, fp.u + fp.w); put('u', r.u + r.w, r.v, r.v + r.d, fp.u, fp.u + fp.w);
+      put('v', r.v, r.u, r.u + r.w, fp.v, fp.v + fp.d); put('v', r.v + r.d, r.u, r.u + r.w, fp.v, fp.v + fp.d);
+    });
+    var core = [level.stair, level.lift].filter(Boolean), out = { u: [], v: [] };
+    ['u', 'v'].forEach(function (axis) {
+      Object.keys(lines[axis]).sort(function (a, b) { return a - b; }).forEach(function (k) {
+        var L = lines[axis][k], s = union(L.s);
+        // never along the stair / lift block (its box is there; coplanar tops of two colours would fight)
+        core.forEach(function (c) {
+          var edges = axis === 'u' ? [c.u, c.u + c.w] : [c.v, c.v + c.d];
+          if (edges.some(function (e) { return Math.abs(e - L.at) < EPS; })) s = axis === 'u' ? minus(s, c.v, c.v + c.d) : minus(s, c.u, c.u + c.w);
+        });
+        var lo = axis === 'u' ? fp.v + t : fp.u + t, hi = axis === 'u' ? fp.v + fp.d - t : fp.u + fp.w - t;
+        s.forEach(function (i) { var a = Math.max(lo, i[0]), b = Math.min(hi, i[1]); if (b - a > 0.05) out[axis].push([L.at, a, b]); });
+      });
+    });
+    return out;
+  };
+
+  three.buildShell = function (house, world, mats) {
+    var H = PC.C.HOUSE, fp = house.footprint, cu = house.center[0], cv = house.center[1];
+    var E = PC.data.exteriors[house.exterior], I = PC.data.interiors[house.interior.style], RT = PC.data.roomTints, SC = PC.data.siteColors;
+    var mix = three.mixHex, R = house.radius, made = [];
+    var X = function (u) { return u - cu; }, Z = function (v) { return -(v - cv); };
+    function mesh(geo, mat, name, parent) { var m = new THREE.Mesh(geo, mat); m.name = name; parent.add(m); made.push(m); return m; }
+    function group(name, parent) { var g = new THREE.Group(); g.name = name; parent.add(g); return g; }
+    // a box from L rectangle [u0, u1] x [v0, v1] and heights [y0, y1]
+    function box(b, u0, u1, v0, v1, y0, y1, hex, topHex) { b.add((X(u0) + X(u1)) / 2, (y0 + y1) / 2, (Z(v0) + Z(v1)) / 2, u1 - u0, y1 - y0, v1 - v0, hex, topHex); }
+
+    // ground
+    var ground = group('ground', world), flat = -Math.PI / 2;
+    var outer = mesh(new THREE.PlaneGeometry(H.outerK * R, H.outerK * R), mats.groundOuter, 'groundOuter', ground);
+    outer.rotation.x = flat; outer.position.y = -H.outerDrop;
+    var shape = new THREE.Shape();
+    house.plot.pts.forEach(function (p, i) { if (i) shape.lineTo(p[0] - cu, p[1] - cv); else shape.moveTo(p[0] - cu, p[1] - cv); });
+    shape.closePath();
+    var hole = new THREE.Path();
+    hole.moveTo(fp.u - cu, fp.v - cv); hole.lineTo(fp.u + fp.w - cu, fp.v - cv); hole.lineTo(fp.u + fp.w - cu, fp.v + fp.d - cv); hole.lineTo(fp.u - cu, fp.v + fp.d - cv);
+    hole.closePath();
+    shape.holes.push(hole);
+    var plot = mesh(new THREE.ShapeGeometry(shape), mats.ground, 'groundPlot', ground);
+    plot.rotation.x = flat;
+    var cap = mesh(new THREE.PlaneGeometry(fp.w, fp.d), mats.ground, 'groundCap', ground);
+    cap.rotation.x = flat; cap.position.set(X(fp.u + fp.w / 2), H.capLift, Z(fp.v + fp.d / 2));
+    [outer, plot, cap].forEach(function (m) { m.receiveShadow = true; m.castShadow = false; });
+
+    // levels
+    var hall = mix(RT.hall, I.wood, I.floorMix), t = H.wallT;
+    house.levels.forEach(function (lv) {
+      var g = group('level-' + lv.id, world); g.userData.index = lv.index; g.userData.id = lv.id;
+      var floorY = lv.baseY + H.slab, top = floorY + H.wallH, slab = new three.BoxBatch(), walls = new three.BoxBatch();
+      box(slab, fp.u, fp.u + fp.w, fp.v, fp.v + fp.d, lv.baseY, floorY, E.slab, hall);
+      lv.rooms.forEach(function (r) {
+        slab.addQuad(X(r.u + r.w / 2), floorY + H.tintLift, Z(r.v + r.d / 2), r.w, r.d, mix(RT[r.type], I.wood, I.floorMix));
+      });
+      var u0 = fp.u, u1 = fp.u + fp.w, v0 = fp.v, v1 = fp.v + fp.d;
+      if (lv.index < 0) {                         // basement: pit walls from the basement floor to ground level
+        box(walls, u0, u1, v0, v0 + t, floorY, 0, E.slab); box(walls, u0, u1, v1 - t, v1, floorY, 0, E.slab);
+        box(walls, u0, u0 + t, v0 + t, v1 - t, floorY, 0, E.slab); box(walls, u1 - t, u1, v0 + t, v1 - t, floorY, 0, E.slab);
+      } else {
+        if (lv.index === 0) {                     // entrance gap in the front wall, centred on the door
+          var e = house.site.entrance, a = Math.max(u0, e.u - e.w / 2), b = Math.min(u1, e.u + e.w / 2);
+          if (a - u0 > 0.05) box(walls, u0, a, v0, v0 + t, floorY, top, E.wall);
+          if (u1 - b > 0.05) box(walls, b, u1, v0, v0 + t, floorY, top, E.wall);
+        } else box(walls, u0, u1, v0, v0 + t, floorY, top, E.wall);
+        box(walls, u0, u1, v1 - t, v1, floorY, top, E.wall);
+        box(walls, u0, u0 + t, v0 + t, v1 - t, floorY, top, E.wall); box(walls, u1 - t, u1, v0 + t, v1 - t, floorY, top, E.wall);
+      }
+      var parts = three.partitions(house, lv);
+      parts.u.forEach(function (s) { box(walls, s[0] - t / 2, s[0] + t / 2, s[1], s[2], floorY, top, E.wallInner); });
+      parts.v.forEach(function (s) { box(walls, s[1], s[2], s[0] - t / 2, s[0] + t / 2, floorY, top, E.wallInner); });
+      if (lv.stair) box(walls, lv.stair.u, lv.stair.u + lv.stair.w, lv.stair.v, lv.stair.v + lv.stair.d, floorY, top, RT.stair);
+      if (lv.lift) box(walls, lv.lift.u, lv.lift.u + lv.lift.w, lv.lift.v, lv.lift.v + lv.lift.d, floorY, top, RT.lift);
+      [slab.build(mats.batch, 'slab'), walls.build(mats.batch, 'walls')].forEach(function (m) { if (m) { g.add(m); made.push(m); } });
+    });
+    group('roof', world);
+    group('site', world);
+    return made;
+  };
+})(globalThis.PC = globalThis.PC || {});
+
+</script>
+<script>/* js/three/camera.js */
+/* PC.three.controls: Pointer Events adapter for the orbit camera (A-12). Pure pose maths lives in PC.cam.
+   attach(canvas, api) -> detach(). api: { active(), get(), set(pose) (clamps + invalidates), size() -> [w, h],
+   fov, onInput() }. One pointer (mouse left without Shift, or one finger) orbits; mouse right button or Shift+drag
+   pans; two pointers pinch (distance ratio -> zoom) and pan (midpoint shift) together; wheel zooms (passive: false,
+   preventDefault); context menu suppressed; keys on the focused canvas: arrows orbit, + / - zoom. Every input calls
+   api.onInput() (F5: cancels flights and tours). No THREE here. */
+(function (PC) {
+  'use strict';
+  var three = PC.three = PC.three || {};
+  var D = Math.PI / 180;
+
+  three.controls = {
+    attach: function (canvas, api) {
+      var pts = new Map(), mode = null, two = null;
+      function K() { return PC.C.CAM; }
+      function minSide() { var s = api.size(); return Math.max(1, Math.min(s[0], s[1])); }
+      function apply(p) { api.set(p); if (api.onInput) api.onInput(); }
+      function twoState() { var a = Array.from(pts.values()); return { d: Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) || 1, mx: (a[0].x + a[1].x) / 2, my: (a[0].y + a[1].y) / 2 }; }
+      function down(e) {
+        if (!api.active()) return;
+        if (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 2) return;
+        if (canvas.setPointerCapture) try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
+        pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pts.size === 1) mode = (e.pointerType === 'mouse' && (e.button === 2 || e.shiftKey)) ? 'pan' : 'orbit';
+        if (pts.size === 2) { mode = 'two'; two = twoState(); }
+        if (e.preventDefault) e.preventDefault();
+      }
+      function move(e) {
+        var q = pts.get(e.pointerId);
+        if (!q || !api.active()) return;
+        var dx = e.clientX - q.x, dy = e.clientY - q.y;
+        q.x = e.clientX; q.y = e.clientY;
+        var p = api.get(), s = api.size();
+        if (!p || (!dx && !dy)) return;
+        if (pts.size >= 2) {
+          if (pts.size > 2) return;
+          var n = twoState(), mpp = PC.cam.metresPerPx(p, api.fov, s[1]);
+          p = PC.cam.zoom(p, two.d / n.d);
+          p = PC.cam.pan(p, n.mx - two.mx, n.my - two.my, mpp);
+          two = n;
+        } else if (mode === 'pan') p = PC.cam.pan(p, dx, dy, PC.cam.metresPerPx(p, api.fov, s[1]));
+        else p = PC.cam.orbit(p, -dx * Math.PI / minSide(), -dy * Math.PI / minSide());
+        apply(p);
+      }
+      function up(e) {
+        if (!pts.delete(e.pointerId)) return;
+        if (canvas.releasePointerCapture) try { canvas.releasePointerCapture(e.pointerId); } catch (err) { /* not captured */ }
+        if (pts.size === 2) two = twoState();
+        else if (pts.size === 1) mode = 'orbit';          // the remaining finger orbits from where it is: no jump
+        else mode = null;
+      }
+      function wheel(e) {
+        if (!api.active() || !api.get()) return;
+        e.preventDefault();
+        apply(PC.cam.zoom(api.get(), Math.exp(e.deltaY * K().wheelK)));
+      }
+      function menu(e) { e.preventDefault(); }
+      function key(e) {
+        if (!api.active() || !api.get()) return;
+        var p = api.get(), st = K().keyDeg * D, z = K().keyZoom, k = e.key;
+        if (k === 'ArrowLeft') p = PC.cam.orbit(p, -st, 0);
+        else if (k === 'ArrowRight') p = PC.cam.orbit(p, st, 0);
+        else if (k === 'ArrowUp') p = PC.cam.orbit(p, 0, -st);
+        else if (k === 'ArrowDown') p = PC.cam.orbit(p, 0, st);
+        else if (k === '+' || k === '=') p = PC.cam.zoom(p, 1 / z);
+        else if (k === '-' || k === '_') p = PC.cam.zoom(p, z);
+        else return;
+        e.preventDefault();
+        apply(p);
+      }
+      var L = [['pointerdown', down], ['pointermove', move], ['pointerup', up], ['pointercancel', up], ['lostpointercapture', up],
+        ['wheel', wheel, { passive: false }], ['contextmenu', menu], ['keydown', key]];
+      L.forEach(function (l) { canvas.addEventListener(l[0], l[1], l[2]); });
+      return function detach() { L.forEach(function (l) { canvas.removeEventListener(l[0], l[1], l[2]); }); pts.clear(); };
+    }
+  };
+})(globalThis.PC = globalThis.PC || {});
+
+</script>
+<script>/* js/three/scene.js */
+/* PC.view3d: renderer, on-demand loop, resize, visibility, context loss, lights, open / close (A-10, F4-T1 plan §4).
+   THREE only inside functions: the file loads without it, and PC.view3d.open() then reports 'unavailable'.
+   Loop (TL ruling 2): invalidate() requests ONE frame, only while open, visible, not lost, not building and none
+   pending; an idle view requests no frames. Building... yields one painted frame first: rAF -> setTimeout 0 -> build
+   (TL required item 3), guarded by a token so PC.view3d.close() during the yield builds nothing.
+   Lights: one hemisphere + one sun (the only shadow caster), fixed at noon / summer from PC.data.sky as it is
+   (A-13 rule: hemiGround = mix(noon hemiGround, summer ground, groundBounce)); F4-T3 swaps in PC.sky.compute. */
+(function (PC) {
+  'use strict';
+  var three = PC.three = PC.three || {};
+  var D = Math.PI / 180;
+  var S = {
+    renderer: null, scene: null, camera: null, world: null, hemi: null, sun: null, mats: null, canvas: null,
+    house: null, builtKey: null, pose: null, limits: null, size: [0, 0],
+    active: false, lost: false, dirty: false, frame: 0, building: 0, token: 0, onState: null,
+    meshes: [], level: 'all', roof: false, renders: 0, builds: 0, restores: 0
+  };
+  function V() { return PC.C.VIEW3D; }
+  function dpr() { var d = typeof devicePixelRatio === 'number' && devicePixelRatio > 0 ? devicePixelRatio : 1; return Math.min(d, V().maxDpr); }
+  function visible() { return typeof document === 'undefined' || document.visibilityState !== 'hidden'; }
+
+  three.makeRenderer = function (canvas) {
+    var r = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+    r.setPixelRatio(dpr());
+    r.shadowMap.enabled = true;
+    r.shadowMap.type = THREE.PCFSoftShadowMap;
+    r.outputEncoding = THREE.sRGBEncoding;
+    return r;
+  };
+
+  // The opening look (noon, summer) from the tables as they are.
+  three.noonLook = function () {
+    var sky = PC.data.sky, k = sky.keys.filter(function (x) { return x.h === 12; })[0], su = sky.seasons.summer;
+    return { sunColor: k.sunColor, sunI: k.sunI, hemiSky: k.hemiSky, hemiI: k.hemiI, background: k.background,
+      hemiGround: three.mixHex(k.hemiGround, su.ground, sky.groundBounce), elevMax: su.elevMax };
+  };
+  // A-13 at a = PI / 2 (noon): s = y sin E - n cos E, n = (sin N, 0, -cos N).
+  three.noonSunDir = function (northDeg, elevDeg) {
+    var N = northDeg * D, E = elevDeg * D;
+    return [-Math.sin(N) * Math.cos(E), Math.sin(E), Math.cos(N) * Math.cos(E)];
+  };
+
+  function cancelFrame() { if (S.frame) { cancelAnimationFrame(S.frame); S.frame = 0; } }
+  function request() {
+    if (!S.active || S.lost || S.building || S.frame || !S.house || !visible()) return;
+    S.frame = requestAnimationFrame(frame);
+  }
+  function invalidate() { S.dirty = true; request(); }
+  function frame() { S.frame = 0; if (!S.dirty || !S.active || S.lost || !visible()) return; S.dirty = false; render(); }
+  function render() {
+    var p = S.pose, e = PC.cam.position(p), cam = S.camera, n = PC.cam.near(p);
+    cam.position.set(e[0], e[1], e[2]);
+    cam.lookAt(p.target[0], p.target[1], p.target[2]);
+    if (cam.near !== n) { cam.near = n; cam.updateProjectionMatrix(); }
+    S.renderer.render(S.scene, cam);
+    S.renders++;
+  }
+  function aspect() { return S.size[0] && S.size[1] ? S.size[0] / S.size[1] : 1; }
+  function resize() {
+    var c = S.canvas;
+    if (!c || !S.renderer) return;
+    var w = c.clientWidth, h = c.clientHeight;
+    if (!w || !h) return;                                        // stage hidden
+    S.renderer.setPixelRatio(dpr());
+    S.renderer.setSize(w, h, false);
+    S.size = [w, h];
+    S.camera.aspect = w / h; S.camera.updateProjectionMatrix();
+    if (S.house) { S.limits = PC.cam.limits(S.house, aspect()); if (S.pose) S.pose = PC.cam.clamp(S.pose, S.limits); }
+    invalidate();
+  }
+
+  function setup(canvas) {
+    S.canvas = canvas;
+    S.scene = new THREE.Scene();
+    S.camera = new THREE.PerspectiveCamera(PC.C.CAM.fov, 1, PC.C.CAM.nearMin, 100);
+    S.hemi = new THREE.HemisphereLight(three.col('#FFFFFF'), three.col('#FFFFFF'), 1); S.hemi.name = 'hemi';
+    S.sun = new THREE.DirectionalLight(three.col('#FFFFFF'), 1); S.sun.name = 'sun';
+    S.sun.castShadow = true;
+    S.sun.shadow.mapSize.set(V().shadowMap, V().shadowMap);
+    S.sun.shadow.bias = V().shadowBias; S.sun.shadow.normalBias = V().shadowNormalBias;
+    S.sun.target.name = 'sunTarget';
+    S.world = new THREE.Group(); S.world.name = 'world';
+    S.scene.add(S.hemi, S.sun, S.sun.target, S.world);
+    canvas.addEventListener('webglcontextlost', function (e) { e.preventDefault(); S.lost = true; cancelFrame(); });
+    canvas.addEventListener('webglcontextrestored', function () {
+      S.lost = false; S.restores++;
+      if (S.house) { S.builtKey = null; build(S.house); }
+      invalidate();
+    });
+    if (typeof ResizeObserver === 'function' && canvas.parentElement) new ResizeObserver(resize).observe(canvas.parentElement);
+    else if (typeof addEventListener === 'function') addEventListener('resize', resize);
+    if (typeof document !== 'undefined' && document.addEventListener) {
+      document.addEventListener('visibilitychange', function () { if (visible()) invalidate(); else cancelFrame(); });
+    }
+    S.detach = three.controls.attach(canvas, {
+      active: function () { return S.active && !!S.house && !S.building; },
+      get: function () { return S.pose; },
+      set: function (p) { S.pose = PC.cam.clamp(p, S.limits); invalidate(); },
+      size: function () { return S.size[0] ? S.size : [canvas.clientWidth || 1, canvas.clientHeight || 1]; },
+      fov: PC.C.CAM.fov,
+      onInput: function () { if (S.onInput) S.onInput(); }
+    });
+  }
+
+  // Every geometry and material of the last build, exactly once (the meshes are tracked: nodes are not probed).
+  function dispose() {
+    S.meshes.forEach(function (m) { m.geometry.dispose(); });
+    Object.keys(S.mats || {}).forEach(function (k) { S.mats[k].dispose(); });
+    S.world.children.slice().forEach(function (c) { S.world.remove(c); });
+    S.meshes = []; S.mats = null;
+  }
+
+  function lights(house) {
+    var L = three.noonLook(), fp = house.footprint, cu = house.center[0], cv = house.center[1];
+    S.hemi.color.copy(three.col(L.hemiSky)); S.hemi.groundColor.copy(three.col(L.hemiGround)); S.hemi.intensity = L.hemiI;
+    S.sun.color.copy(three.col(L.sunColor)); S.sun.intensity = L.sunI;
+    var tx = fp.u + fp.w / 2 - cu, tz = -(fp.v + fp.d / 2 - cv), s = three.noonSunDir(house.northDeg, L.elevMax), dist = V().sunDist * house.radius;
+    S.sun.target.position.set(tx, 0, tz);
+    S.sun.position.set(tx + s[0] * dist, s[1] * dist, tz + s[2] * dist);
+    var half = Math.min(V().shadowK * Math.hypot(fp.w, fp.d) / 2, V().shadowR * house.radius), c = S.sun.shadow.camera;
+    c.left = -half; c.right = half; c.top = half; c.bottom = -half; c.near = 0.5; c.far = dist + 2 * half;
+    c.updateProjectionMatrix();
+    S.scene.background = new THREE.Color(L.background);
+  }
+
+  function build(house) {
+    dispose();
+    var SC = PC.data.siteColors;
+    S.mats = {
+      batch: new THREE.MeshLambertMaterial({ vertexColors: true }),
+      ground: new THREE.MeshLambertMaterial({ color: three.col(SC.ground) }),
+      groundOuter: new THREE.MeshLambertMaterial({ color: three.col(SC.groundOuter) })
+    };
+    S.meshes = three.buildShell(house, S.world, S.mats);
+    var keep = S.house && S.pose && S.house.radius === house.radius && S.house.center[0] === house.center[0] && S.house.center[1] === house.center[1];
+    S.house = house; S.builtKey = house.key; S.builds++;
+    S.limits = PC.cam.limits(house, aspect());
+    S.pose = keep ? PC.cam.clamp(S.pose, S.limits) : PC.cam.reset(house, aspect());
+    S.camera.far = PC.C.CAM.farK * house.radius; S.camera.updateProjectionMatrix();
+    lights(house);
+    if (!house.levels.some(function (l) { return l.id === S.level; })) S.level = 'all';
+    applyVisibility();
+  }
+
+  function applyVisibility() {
+    if (!S.house) return;
+    var sel = S.level, lv = S.house.levels.filter(function (l) { return l.id === sel; })[0], top = lv ? lv.index : Infinity;
+    S.world.children.forEach(function (g) {
+      if (g.name.indexOf('level-') === 0) g.visible = g.userData.index <= top;
+      if (g.name === 'roof') g.visible = S.roof && sel === 'all';
+    });
+    var cap = S.world.getObjectByName('groundCap');
+    if (cap) cap.visible = sel !== 'B';
+  }
+
+  PC.view3d = {
+    // onState('building' | 'ready' | 'unavailable'). Returns { ok }.
+    open: function (house, canvas, onState) {
+      S.onState = onState || function () {};
+      if (typeof THREE === 'undefined' || !house) { S.onState('unavailable'); return { ok: false }; }
+      if (!S.renderer) {
+        try { S.renderer = three.makeRenderer(canvas); } catch (e) { S.renderer = null; S.onState('unavailable'); return { ok: false }; }
+        setup(canvas);
+      }
+      S.active = true;
+      resize();
+      if (house.key === S.builtKey) { S.onState('ready'); invalidate(); return { ok: true }; }
+      S.onState('building');
+      var token = ++S.token;
+      S.building = token;
+      requestAnimationFrame(function () {
+        setTimeout(function () {
+          if (S.building !== token || !S.active) return;
+          build(house);
+          S.building = 0;
+          S.onState('ready');
+          resize();
+          invalidate();
+        }, 0);
+      });
+      return { ok: true };
+    },
+    close: function () { S.active = false; S.building = 0; cancelFrame(); },
+    invalidate: invalidate,
+    setLevel: function (sel) { S.level = sel; applyVisibility(); invalidate(); },
+    setRoof: function (on) { S.roof = !!on; applyVisibility(); invalidate(); },
+    resetView: function () { if (!S.house) return; S.pose = PC.cam.reset(S.house, aspect()); invalidate(); },
+    setOnInput: function (fn) { S.onInput = fn; },
+    pose: function () { return S.pose ? PC.cam.copy(S.pose) : null; },
+    // Read-only snapshot for tests and PC.debug.scene().
+    info: function () {
+      return { renderer: S.renderer, scene: S.scene, camera: S.camera, world: S.world, house: S.house, active: S.active, lost: S.lost,
+        building: !!S.building, frame: !!S.frame, dirty: S.dirty, renders: S.renders, builds: S.builds, restores: S.restores,
+        meshCount: S.meshes.length, meshes: S.meshes.slice(), level: S.level, roof: S.roof, size: S.size.slice(), renderNow: function () { if (S.house && !S.lost) render(); } };
+    }
   };
 })(globalThis.PC = globalThis.PC || {});
 
@@ -6280,7 +6909,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 <script>/* js/ui/stage-interior.js */
 /* PC.ui.stages.interior: stage 4 controller (F3-S4): Q18 interior style and Q19 furniture density, appearance
    class (plain commit, A-7: no signature changes, approvals kept). "Build 3D model" is the shell's Next (stage 5,
-   a static preview until F4-T1). The hint pictures are the Designer's markup until F3-T3. */
+   the 3D view since F4-T1). The hint pictures are the Designer's markup until F3-T3. */
 (function (PC) {
   'use strict';
   var ui = PC.ui = PC.ui || {}, fields = [];
@@ -6296,6 +6925,101 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       ];
       var render = function (s) { fields.forEach(function (f) { f.render(s); }); };
       ui.shell.register(4, { enter: function () { render(PC.store.get()); }, render: render });
+    }
+  };
+})(globalThis.PC = globalThis.PC || {});
+
+</script>
+<script>/* js/ui/stage-3d.js */
+/* PC.ui.stages.view3d: stage 5 controller (F4-S1 / F4-S2, F4-T1). Builds the house model from the store, hands it
+   to PC.view3d (three layer) and owns the stage-5 DOM: Building... / unavailable overlays, the level selector
+   ("All" + the house's own levels, lowest first; PM round 9 labels), Reset view, the collapsible panel and its tabs.
+   Session state only (A-4): level selection and roof toggle survive leaving and returning; the view opens on All
+   with the roof off. Controls of later tasks (time, presets, season, room finder, tour, Roof until F4-T2) are
+   disabled here (TL F4-T1 ruling 3); the Roof state logic is wired. This file never touches three.js (ui layer, A-2). */
+(function (PC) {
+  'use strict';
+  var ui = PC.ui = PC.ui || {};
+  ui.stages = ui.stages || {};
+  var LATER = ['v3-time', 'v3-preset-morning', 'v3-preset-noon', 'v3-preset-evening', 'v3-preset-night', 'v3-season',
+    'v3-room', 'v3-tour-start', 'v3-tour-pause', 'v3-tour-stop', 'v3-roof'];
+  var TABS = ['view', 'light', 'tour'];
+  var open = false, house = null, level = 'all', levelsKey = '';
+
+  function shortName(id) { return PC.C.LEVEL_LABEL[id].replace(/ floor$/, ''); }
+  function onState(s) {
+    ui.show(ui.$('v3-building'), s === 'building');
+    ui.show(ui.$('v3-unavailable'), s === 'unavailable');
+    ui.show(ui.$('v3-panel'), s !== 'unavailable');
+    ui.show(ui.$('v3-canvas'), s !== 'unavailable');
+  }
+  // "All" stays in the markup; one option per plan level of this house is added from tpl-v3-level.
+  function fillLevels(h) {
+    var key = h.levels.map(function (l) { return l.id; }).join(',');
+    if (key === levelsKey) return;
+    levelsKey = key;
+    var group = ui.$('v3-level');
+    Array.prototype.slice.call(group.querySelectorAll('input[name="v3-level"]')).forEach(function (inp) {
+      if (inp.value !== 'all') group.removeChild(inp.closest('label'));
+    });
+    h.levels.forEach(function (l) {
+      var frag = ui.$('tpl-v3-level').content.cloneNode(true), inp = frag.querySelector('input');
+      inp.value = l.id; inp.setAttribute('aria-label', PC.C.LEVEL_LABEL[l.id]);
+      ui.$('level-label', frag).textContent = shortName(l.id);
+      group.appendChild(frag);
+    });
+    if (level !== 'all' && h.levels.every(function (l) { return l.id !== level; })) level = 'all';
+  }
+  function renderLevels() {
+    Array.prototype.slice.call(ui.$('v3-level').querySelectorAll('input')).forEach(function (inp) { inp.checked = inp.value === level; });
+  }
+  function show(state) {
+    house = PC.house.build(state);
+    if (house) fillLevels(house);
+    renderLevels();
+    PC.view3d.open(house, ui.$('v3-canvas'), onState);
+    if (house) PC.view3d.setLevel(level);
+  }
+  function tab(name) {
+    TABS.forEach(function (t) {
+      var on = t === name;
+      ui.$('v3-tab-' + t).setAttribute('aria-selected', on ? 'true' : 'false');
+      ui.$('v3-pane-' + t).classList.toggle('is-current', on);
+    });
+  }
+
+  ui.stages.view3d = {
+    init: function () {
+      LATER.forEach(function (h) { ui.$(h).disabled = true; });
+      Array.prototype.slice.call(ui.$('v3-tour-speed').querySelectorAll('input')).forEach(function (i) { i.disabled = true; });
+      ui.on(ui.$('v3-level'), 'change', function (e) {
+        if (!e.target || e.target.name !== 'v3-level' || !e.target.checked) return;
+        level = e.target.value;
+        PC.view3d.setLevel(level);
+      });
+      ui.on(ui.$('v3-roof'), 'change', function (e) { PC.view3d.setRoof(e.target.checked); });
+      ui.on(ui.$('v3-reset'), 'click', function () { PC.view3d.resetView(); });
+      ui.on(ui.$('v3-panel-toggle'), 'click', function () {
+        var p = ui.$('v3-panel'), collapsed = !p.classList.contains('is-collapsed');
+        p.classList.toggle('is-collapsed', collapsed);
+        ui.$('v3-panel-toggle').setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      });
+      TABS.forEach(function (t) { ui.on(ui.$('v3-tab-' + t), 'click', function () { tab(t); }); });
+      Object.assign(PC.debug = PC.debug || {}, {
+        house: function () { return house; },
+        scene: function () { return PC.view3d.info(); },
+        cam: function () { return PC.view3d.pose(); }
+      });
+      ui.shell.register(5, {
+        enter: function () { open = true; show(PC.store.get()); },
+        leave: function () { open = false; PC.view3d.close(); },
+        // a store change while the 3D view is open rebuilds only when the model really changed (house.key)
+        render: function (s) {
+          if (!open) return;
+          var h = PC.house.build(s);
+          if ((h && h.key) !== (house && house.key)) show(s);
+        }
+      });
     }
   };
 })(globalThis.PC = globalThis.PC || {});
@@ -6325,6 +7049,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   ui.stages.questions.init();
   ui.stages.plans.init();
   ui.stages.interior.init();
+  ui.stages.view3d.init();
   ui.shell.init();
   ui.start.init();
   ui.autosave.start();

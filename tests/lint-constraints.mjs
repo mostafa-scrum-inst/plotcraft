@@ -38,9 +38,42 @@ export const RULES = [
   { id: 'css-url', kind: 'css', re: /url\s*\(\s*(?!['"]?data:)/i },
   // layer rules (A-2)
   { id: 'core-purity', kind: 'js', layer: 'core', re: /\b(?:window|document|navigator|localStorage|THREE|setTimeout|setInterval|clearTimeout|clearInterval|requestAnimationFrame)\b/ },
-  { id: 'data-literals-only', kind: 'js', layer: 'data', re: /(?:=>|\bfunction\b[\s\S]*\bfunction\b)/ },
+  { id: 'data-literals-only', kind: 'js', layer: 'data', find: (t) => dataLiteralViolation(t) },
+  { id: 'mock-backdoor', kind: 'any', re: /__threeMock/ },
   { id: 'ui-no-three', kind: 'js', layer: 'ui', re: /\bTHREE\b/ }
 ];
+
+// data-literals-only (TL F4-T1 rider): a data-layer file, after comments and strings are stripped, holds only the
+// IIFE skeleton, `PC.data.<name> =` heads, { } [ ] : , ;, numbers (a leading - only after : [ or ,), true / false /
+// null, strings and bare keys (an identifier directly followed by :). No template literals. Returns { index } | null.
+const PRE = ['(', 'function', '(', 'PC', ')', '{'];
+const POST = ['}', ')', '(', 'globalThis', '.', 'PC', '=', 'globalThis', '.', 'PC', '||', '{', '}', ')', ';'];
+const STR = '\u0000S';
+export function dataLiteralViolation(src) {
+  const blank = (m) => m.replace(/[^\n]/g, ' ');
+  let t = src.replace(/\/\*[\s\S]*?\*\//g, blank).replace(/\/\/[^\n]*/g, blank);
+  const tick = t.indexOf('`');
+  if (tick >= 0) return { index: tick };
+  t = t.replace(/'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"/g, (m) => STR + ' '.repeat(Math.max(0, m.length - STR.length)));
+  const toks = [], re = /\u0000S|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|[A-Za-z_$][\w$]*|\|\||\S/g;
+  let m;
+  while ((m = re.exec(t))) toks.push({ v: m[0], i: m.index });
+  const at = (k) => ({ index: k < toks.length ? toks[k].i : t.length });
+  for (let k = 0; k < PRE.length; k++) if (!toks[k] || toks[k].v !== PRE[k]) return at(k);
+  const end = toks.length - POST.length;
+  for (let k = 0; k < POST.length; k++) if (!toks[end + k] || toks[end + k].v !== POST[k]) return at(Math.max(PRE.length, end + k));
+  const ident = (v) => /^[A-Za-z_$][\w$]*$/.test(v || '');
+  for (let k = PRE.length; k < end; k++) {
+    const v = toks[k].v, nx = toks[k + 1] && toks[k + 1].v, pv = toks[k - 1] && toks[k - 1].v;
+    if (v === 'PC' && nx === '.' && toks[k + 2]?.v === 'data' && toks[k + 3]?.v === '.' && ident(toks[k + 4]?.v) && toks[k + 5]?.v === '=') { k += 5; continue; }
+    if (v.length === 1 && '{}[]:,;'.includes(v)) continue;
+    if (v === STR || /^\d/.test(v) || v === 'true' || v === 'false' || v === 'null') continue;
+    if (v === '-' && /^\d/.test(nx || '') && (pv === ':' || pv === '[' || pv === ',')) continue;
+    if (ident(v) && nx === ':') continue;
+    return at(k);
+  }
+  return null;
+}
 
 // Violations of one text. o: { kind: 'js' | 'html' | 'css', file, layer }.
 export function scan(text, o) {
@@ -49,7 +82,7 @@ export function scan(text, o) {
     if (r.kind !== 'any' && r.kind !== o.kind) continue;
     if (r.layer && r.layer !== o.layer) continue;
     if (r.allow && r.allow(o.file || '')) continue;
-    const m = r.re.exec(text);
+    const m = r.find ? r.find(text) : r.re.exec(text);
     if (m) out.push(`${o.file || '(text)'}: ${r.id} near "${text.slice(Math.max(0, m.index - 20), m.index + 40).replace(/\s+/g, ' ')}"`);
   }
   return out;
@@ -87,6 +120,17 @@ export function scanExternal(html, file) {
   return out;
 }
 
+// The vendored test copy of three.js (tests/vendor, A-16) must never reach the build: the licence banner is the real
+// guard; the size cap is a tripwire (the vendored file alone is 603 445 bytes) — raise it only with that in mind.
+export const DIST_MAX_BYTES = 600000;
+export function scanVendor(html, file) {
+  const out = [];
+  if (/Copyright 2010-2021 Three\.js Authors/.test(html)) out.push(`${file}: contains the three.js r128 licence banner: the vendored test copy (tests/vendor) must never be inlined; the app loads r128 from cdnjs only`);
+  const bytes = Buffer.byteLength(html, 'utf8');
+  if (bytes >= DIST_MAX_BYTES) out.push(`${file}: ${bytes} bytes >= ${DIST_MAX_BYTES} (tripwire against an inlined three.js; see tests/vendor/README)`);
+  return out;
+}
+
 const walk = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]);
 
 export function lintProject(root = ROOT) {
@@ -104,7 +148,10 @@ export function lintProject(root = ROOT) {
   }
   const dist = join(root, 'dist', 'index.html');
   if (!existsSync(dist)) out.push('dist/index.html is missing: run node build.mjs');
-  else { const html = readFileSync(dist, 'utf8'); out.push(...scanHtml(html, 'dist/index.html', layers)); out.push(...scanExternal(html, 'dist/index.html')); }
+  else {
+    const html = readFileSync(dist, 'utf8'); out.push(...scanHtml(html, 'dist/index.html', layers)); out.push(...scanExternal(html, 'dist/index.html'));
+    out.push(...scanVendor(html, 'dist/index.html'));
+  }
   return { violations: out, warnings: warn };
 }
 

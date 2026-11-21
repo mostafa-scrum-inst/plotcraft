@@ -64,6 +64,12 @@ const stable = (page) => page.evaluate(() => new Promise((resolve) => {
   const tick = () => { const k = key(); if (k === last || performance.now() - t0 > 2000) resolve(); else { last = k; requestAnimationFrame(tick); } };
   requestAnimationFrame(() => requestAnimationFrame(tick));
 }));
+// Stage-5 states (F4-T1): with the stage-5 controller (marker !!(PC.house && PC.house.build)) the panel is hidden while
+// three.js is unavailable, so these states load the FS's THREE mock (lib openPage three: 'mock'); s5-unavailable keeps
+// the aborted request and is the controller's real unavailable state. Before the controller the mock changes nothing.
+const threeFor = (name, stage) => (stage === 5 && name !== 's5-unavailable' ? { three: 'mock' } : {});
+const v3settle = (page) => page.evaluate(() => new Promise((res) => { if (!(PC.house && PC.house.build)) return res(); const t0 = performance.now(), q = (h) => document.querySelector(`[data-pc="${h}"]`);
+  const tick = () => (q('v3-building').hidden || performance.now() - t0 > 3000 ? res() : requestAnimationFrame(tick)); requestAnimationFrame(tick); }));
 const browser = await launch();
 try {
   // ================= markup contract (once, pristine document) =================
@@ -158,9 +164,12 @@ try {
     if (only && vp.tag !== only) continue;
     metrics[vp.tag] = {};
     for (const [name, stage, setup, flags = {}] of SCENARIOS) {
-      const { ctx, page, log } = await openPage(browser, vp);
+      const { ctx, page, log } = await openPage(browser, vp, threeFor(name, stage));
       await page.evaluate(INPAGE);
+      if (stage === 5) { await page.evaluate(() => __qa.S.stage(5)); await v3settle(page); }
+      if (name === 's5-unavailable' && (await page.evaluate(() => !!(PC.house && PC.house.build)))) R.check(`${vp.tag} s5-unavailable is the controller's own state (three.js blocked): message shown, panel hidden`, await page.evaluate(() => { const q = (h) => document.querySelector(`[data-pc="${h}"]`); return !q('v3-unavailable').hidden && (q('v3-panel').hidden || q('v3-panel').closest('[hidden]') || q('v3-panel').getBoundingClientRect().height === 0) ? [] : ['unavailable ' + !q('v3-unavailable').hidden + ', panel shown']; }));
       await page.evaluate(({ stage, setup, ROOMS8 }) => { __qa.S.stage(stage); (0, eval)('(' + setup + ')')(Object.assign({ q: __qa.q }, __qa), ROOMS8); __qa.S.paint(); }, { stage, setup: setup.toString(), ROOMS8 });
+      if (stage === 5) await v3settle(page);
       await settled(page, { motion: true }); // transitions ended
       const T = `${vp.tag} ${name}`;
       if (!noShots) await page.screenshot({ path: join(SHOTS, `${name}-${vp.tag}.png`) });
@@ -235,8 +244,10 @@ try {
   // ================= focus (keyboard) =================
   for (const vp of VIEWPORTS.filter((v) => ['360x640', '1280x800'].includes(v.tag) && (!only || v.tag === only))) {
     for (const [name, stage, setup] of SCENARIOS.filter((s) => ['s1-resume', 's2-site', 's2-building', 's2-rooms', 's2-outdoor', 's3-max', 's4', 's5-view', 's5-light', 's5-tour'].includes(s[0]))) {
-      const { ctx, page } = await openPage(browser, vp); await page.evaluate(INPAGE);
+      const { ctx, page } = await openPage(browser, vp, threeFor(name, stage)); await page.evaluate(INPAGE);
+      if (stage === 5) { await page.evaluate(() => __qa.S.stage(5)); await v3settle(page); }
       await page.evaluate(({ stage, setup, ROOMS8 }) => { __qa.S.stage(stage); (0, eval)('(' + setup + ')')(Object.assign({ q: __qa.q }, __qa), ROOMS8); __qa.S.paint(); }, { stage, setup: setup.toString(), ROOMS8 });
+      if (stage === 5) await v3settle(page);
       const seen = [], problems = []; let shot = 0;
       for (let i = 0; i < 160; i++) {
         await page.keyboard.press('Tab');

@@ -21,6 +21,7 @@
   ui.stages.questions.init();
   ui.stages.plans.init();
   ui.stages.interior.init();
+  ui.stages.view3d.init();
   ui.shell.init();
   ui.start.init();
   ui.autosave.start();

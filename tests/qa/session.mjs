@@ -6,7 +6,7 @@ import { ROOT, openPage, cleanLog, until, settled } from './lib.mjs';
 const INPAGE = readFileSync(join(ROOT, 'tests/qa/inpage.js'), 'utf8');
 // Draft key and version of the build under test, read from the page when a session opens (A-4: 'plotcraft.draft.v' +
 // PC.DRAFT_V; from draft v2 on PC.draft.KEYS lists the current key first, then the older ones it migrates from).
-export const PAGE = { V: 1, KEY: 'plotcraft.draft.v1', KEYS: ['plotcraft.draft.v1'], stretch: false, layout: false, editor: false };   // editor: PC.stages.MAX_BUILT >= 5 (F3-T2 plan editor and stage 4)   // layout: PC.layout exists (F3-T1)
+export const PAGE = { V: 1, KEY: 'plotcraft.draft.v1', KEYS: ['plotcraft.draft.v1'], stretch: false, layout: false, editor: false, house: false };   // house: !!(PC.house && PC.house.build) (F4-T1 stage-5 controller)   // editor: PC.stages.MAX_BUILT >= 5 (F3-T2 plan editor and stage 4)   // layout: PC.layout exists (F3-T1)
 export let KEY = PAGE.KEY;
 // A real pause. Only for durations that are themselves under test (say which in a comment at the call); to wait for the
 // UI use s.settle(), s.until(), s.waitDraft() or s.flush().
@@ -19,7 +19,7 @@ export function sessions({ R, shots, noShots }) {
 // One browser context per scenario. Storage persists across reload() inside a context, never across contexts.
 async function session(browser, vp, opts = {}) {
   const { ctx, page, log } = await openPage(browser, vp, opts);
-  if (!opts.noGoto) { Object.assign(PAGE, await page.evaluate(() => ({ V: PC.DRAFT_V, KEY: PC.draft.KEY, KEYS: (PC.draft.KEYS || [PC.draft.KEY]).slice(), stretch: PC.C.FOOTPRINT_STRETCH_RATIO !== undefined, layout: typeof PC.layout === 'object', editor: PC.stages.MAX_BUILT >= 5 }))); KEY = PAGE.KEY; }
+  if (!opts.noGoto) { Object.assign(PAGE, await page.evaluate(() => ({ V: PC.DRAFT_V, KEY: PC.draft.KEY, KEYS: (PC.draft.KEYS || [PC.draft.KEY]).slice(), stretch: PC.C.FOOTPRINT_STRETCH_RATIO !== undefined, layout: typeof PC.layout === 'object', editor: PC.stages.MAX_BUILT >= 5, house: !!(PC.house && PC.house.build) }))); KEY = PAGE.KEY; }
   const S = {
     ctx, page, log, vp,
     // Real input at the control's centre (touchscreen tap or mouse click). The control must be rendered and be the hit target
@@ -58,6 +58,9 @@ async function session(browser, vp, opts = {}) {
     steps: async () => { const o = []; for (let n = 1; n <= 5; n++) { const s = await S.step(n); o.push(s.cur ? 'C' : s.locked ? 'L' : s.done ? 'D' : 'a'); } return o.join(''); },
     bar: () => page.evaluate(() => { const q = (h) => document.querySelector(`[data-pc="${h}"]`); return { back: !q('btn-back').disabled, next: !q('btn-next').disabled && !q('btn-next').hidden, nextHidden: q('btn-next').hidden, label: q('btn-next-label').textContent }; }),
     toasts: () => page.evaluate(() => [...document.querySelectorAll('[data-pc="toast-region"] [data-pc="toast-text"]')].map((t) => t.textContent)),
+    // stage 5 with the F4-T1 controller: building / unavailable overlays, panel and canvas shown
+    v3: () => page.evaluate(() => { const q = (h) => document.querySelector(`[data-pc="${h}"]`), vis = (h) => { const e = q(h); if (!e || e.hidden || e.closest('[hidden]')) return false; const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; }, inView = (h) => { const r = q(h).getBoundingClientRect(); return r.width > 0 && r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight && r.right <= innerWidth; };
+      return { building: vis('v3-building'), unavailable: vis('v3-unavailable'), unavailableInView: vis('v3-unavailable') && inView('v3-unavailable'), panel: vis('v3-panel'), canvas: vis('v3-canvas') }; }),
     banners: () => page.evaluate(() => [...document.querySelectorAll('[data-pc="banner-slot"] [data-pc="banner-text"]')].map((t) => t.textContent)),
     dialogOpen: () => page.evaluate(() => !document.querySelector('[data-pc="dialog-layer"]').hidden),
     focus: () => page.evaluate(() => { const a = document.activeElement; return !a || a === document.body ? 'BODY' : (a.dataset.pc || a.tagName.toLowerCase() + (a.name ? ':' + a.name : '')); }),

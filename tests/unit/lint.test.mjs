@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { RULES, scan, scanHtml, scanExternal, lintProject, THREE_TAG } from '../lint-constraints.mjs';
+import { RULES, scan, scanHtml, scanExternal, scanVendor, DIST_MAX_BYTES, lintProject, THREE_TAG } from '../lint-constraints.mjs';
 
 // For every rule: texts that must be flagged (pos) and close look-alikes that must not be (neg).
 const CASES = {
@@ -31,7 +31,26 @@ const CASES = {
   'css-import': { pos: ['@import "a.css";', '@IMPORT url(a.css);'], neg: ['.a { color: red !important; }', '/* important note */'] },
   'css-url': { pos: ['.a { background: url(img.png); }', '.a { background: url( "x.svg" ); }'], neg: ['.a { background: url(data:image/png;base64,AA); }', '.a { background: url("data:image/svg+xml,x"); }', '.curl { color: red; }'] },
   'core-purity': { layer: 'core', pos: ['var w = window.innerWidth;', 'document.title', 'navigator.userAgent', 'setTimeout(f, 1)', 'requestAnimationFrame(f)', 'new THREE.Vector3()', 'clearInterval(t)'], neg: ['var windowed = 1; var documents = []; var three = 3;', 'globalThis.PC = globalThis.PC || {};', 'var timeout = 400;'] },
-  'data-literals-only': { layer: 'data', pos: ['(function (PC) { PC.data.a = [1].map(function (x) { return x; }); })(PC);', '(function (PC) { PC.data.f = (x) => x; })(PC);'], neg: ['(function (PC) { PC.data.a = { fill: "#fff", dash: [4, 3] }; })(globalThis.PC = globalThis.PC || {});'] },
+  'data-literals-only': { layer: 'data',
+    pos: [
+      '(function (PC) { PC.data.a = [1].map(function (x) { return x; }); })(PC);',
+      '(function (PC) { PC.data.f = (x) => x; })(globalThis.PC = globalThis.PC || {});',
+      "(function (PC) {\n  'use strict';\n  PC.data.sky = { groundBounce: Math.min(0.25, 1) };\n})(globalThis.PC = globalThis.PC || {});",
+      '(function (PC) { PC.data.a = PC.data.b; })(globalThis.PC = globalThis.PC || {});',
+      '(function (PC) { PC.data.a = { k: b }; })(globalThis.PC = globalThis.PC || {});',
+      '(function (PC) { PC.data.a = { k: 1 + 2 }; })(globalThis.PC = globalThis.PC || {});',
+      '(function (PC) { PC.data.a = { w: 2-1 }; })(globalThis.PC = globalThis.PC || {});',
+      '(function (PC) { PC.data.a = { s: `x` }; })(globalThis.PC = globalThis.PC || {});',
+      '(function (PC) { PC.data.a = { k: x ? 1 : 2 }; })(globalThis.PC = globalThis.PC || {});',
+      '(function (PC) { PC.data.a = { x: -y }; })(globalThis.PC = globalThis.PC || {});',
+      'PC.data.a = { k: 1 };',
+      '(function (PC) { PC.data.a = { k: 1 }; PC.other = 1; })(globalThis.PC = globalThis.PC || {});'
+    ],
+    neg: [
+      '(function (PC) { PC.data.a = { fill: "#fff", dash: [4, 3] }; })(globalThis.PC = globalThis.PC || {});',
+      "(function (PC) {\n  'use strict';\n  /* a comment with Math.min( and => */\n  PC.data.a = { '1': 'G', k: -0.5, n: [1e-3, -2], t: true, f: false, z: null }; // tail\n  PC.data.b = [];\n})(globalThis.PC = globalThis.PC || {});"
+    ] },
+  'mock-backdoor': { pos: ['var m = globalThis.__threeMock;', 'if (window.__threeMock) x();'], neg: ['var threeMock = 1; var mock = PC.three;'] },
   'ui-no-three': { layer: 'ui', pos: ['var v = new THREE.Vector3();'], neg: ['var three = PC.view3d; var THREEISH = 1;'] }
 };
 
@@ -81,4 +100,19 @@ test('the project is clean, and a token planted in the built page is caught', ()
   assert.ok(plant('/* js/core/store.js */', '\nvar d = document;').some((v) => v.includes('core-purity')));
   assert.ok(plant('<body>', '<form>').some((v) => v.includes('form')));
   assert.ok(plant('<body>', '<button onclick="x()">').some((v) => v.includes('inline-handler')));
+});
+
+test('data-literals-only: today\'s five data files pass as they are (TL F4-T1 rider)', () => {
+  for (const f of ['palette2d', 'room-labels', 'look3d', 'furniture', 'sky']) {
+    const t = readFileSync(new URL(`../../src/js/data/${f}.js`, import.meta.url), 'utf8');
+    assert.deepEqual(scan(t, { kind: 'js', file: f, layer: 'data' }), [], f);
+  }
+});
+
+test('the vendored three.js never reaches the build: licence banner and size tripwire', () => {
+  assert.deepEqual(scanVendor('<html>small</html>', 'x'), []);
+  assert.equal(scanVendor('/** Copyright 2010-2021 Three.js Authors */', 'x').length, 1);
+  assert.equal(scanVendor('x'.repeat(DIST_MAX_BYTES), 'x').length, 1);
+  const vendored = readFileSync(new URL('../vendor/three-r128.min.js', import.meta.url), 'utf8');
+  assert.ok(scanVendor(vendored, 'x').length === 2, 'the vendored file itself trips both checks');
 });

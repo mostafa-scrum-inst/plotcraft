@@ -2,7 +2,7 @@
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const DIST = join(ROOT, 'dist', 'index.html');
@@ -30,10 +30,14 @@ export async function openPage(browser, vp, opts = {}) {
   });
   const page = await ctx.newPage();
   const log = { requests: [], errors: [], dialogs: [] };
+  // opts.three === 'mock' (F4-T1 onwards): the exact three.js URL is answered with the FS's THREE mock (tests/three-mock.js,
+  // A-16) when that file exists; everything else is aborted as before. Default: abort (three.js unavailable).
+  const MOCK = join(ROOT, 'tests/three-mock.js'), mock = opts.three === 'mock' && existsSync(MOCK) ? readFileSync(MOCK, 'utf8') : null;
   await page.route('**/*', (route) => {
     const u = route.request().url();
     if (u.startsWith('file:')) return route.continue();
     log.requests.push(u);
+    if (mock && u === THREE_URL) return route.fulfill({ status: 200, contentType: 'application/javascript', body: mock });
     return route.abort();
   });
   page.on('pageerror', (e) => log.errors.push('pageerror: ' + e.message));

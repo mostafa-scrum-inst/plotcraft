@@ -30,11 +30,17 @@
     { "file": "js/core/stages.js", "layer": "core" },
     { "file": "js/core/draft.js", "layer": "core" },
     { "file": "js/core/sample.js", "layer": "core" },
+    { "file": "js/core/house.js", "layer": "core" },
+    { "file": "js/core/cam.js", "layer": "core" },
     { "file": "js/data/palette2d.js", "layer": "data" },
     { "file": "js/data/room-labels.js", "layer": "data" },
     { "file": "js/data/look3d.js", "layer": "data" },
     { "file": "js/data/furniture.js", "layer": "data" },
     { "file": "js/data/sky.js", "layer": "data" },
+    { "file": "js/three/util.js", "layer": "three" },
+    { "file": "js/three/build-shell.js", "layer": "three" },
+    { "file": "js/three/camera.js", "layer": "three" },
+    { "file": "js/three/scene.js", "layer": "three" },
     { "file": "js/ui/dom.js", "layer": "ui" },
     { "file": "js/ui/storage.js", "layer": "ui" },
     { "file": "js/ui/dialog.js", "layer": "ui" },
@@ -52,6 +58,7 @@
     { "file": "js/ui/plan-editor.js", "layer": "ui" },
     { "file": "js/ui/stage-plans.js", "layer": "ui" },
     { "file": "js/ui/stage-interior.js", "layer": "ui" },
+    { "file": "js/ui/stage-3d.js", "layer": "ui" },
     { "file": "js/main.js", "layer": "ui" }
   ]
 }

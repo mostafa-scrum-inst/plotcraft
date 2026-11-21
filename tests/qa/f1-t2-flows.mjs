@@ -25,6 +25,9 @@ const NEXT = { 1: 'Next: Questions', 2: 'Next: Floor plans', 3: 'Next: Interior'
 const L3 = () => PAGE.layout;
 // F3-T2 (marker PC.stages.MAX_BUILT >= 5): stages 4-5 open after approvals, stage 4 has a controller, Skip lands on stage 5.
 const L5 = () => PAGE.editor;
+// F4-T1 (marker !!(PC.house && PC.house.build)): stage 5 has its controller; with three.js blocked (QA default: the request
+// is aborted) it shows the in-page v3-unavailable message, hides the panel, and no shell banner.
+const L3D = () => PAGE.house;
 const SKIP_TO = () => (L5() ? 5 : L3() ? 3 : 2);
 const noPlans = (st) => ({ ...st, plans: {} });
 // One valid generated plan per plan level: signature equal to the level's own (checked in the page), not approved.
@@ -129,7 +132,9 @@ try {
       await s.layout(`${V} D stage 4 with strip`);
       await s.act('btn-next'); await s.settle(); bar = await s.bar();
       R.check(`${V} D stage 5: Next hidden, Back enabled, strip hidden, steps 1-4 done`, (await s.stages()) === '5' && bar.nextHidden && bar.back && !(await s.shown('sample-strip')) && (await s.steps()) === 'DDDDC' ? [] : [JSON.stringify(bar) + await s.steps()]);
-      R.check(`${V} D stage 5 (no controller): notice shown`, eq(await s.banners(), ['This stage is not built yet: static preview']) ? [] : [JSON.stringify(await s.banners())]);
+      if (L3D()) { await s.until(async () => (await s.v3()).unavailable, 3000); const v = await s.v3();
+        R.check(`${V} D stage 5 (F4-T1 controller, three.js blocked): no notice, "3D view unavailable" shown in view, view panel and Building… hidden`, eq(await s.banners(), []) && v.unavailableInView && !v.panel && !v.building ? [] : [JSON.stringify({ banners: await s.banners(), v })]); }
+      else R.check(`${V} D stage 5 (no controller): notice shown`, eq(await s.banners(), ['This stage is not built yet: static preview']) ? [] : [JSON.stringify(await s.banners())]);
       await s.layout(`${V} D stage 5`);
       await s.act('btn-back'); await s.settle(); R.check(`${V} D Back from stage 5 opens stage 4`, (await s.stages()) === '4' && (await s.state()).stage === 4);
       await s.act('btn-back'); await s.act('btn-back'); await s.settle();

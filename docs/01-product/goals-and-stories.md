@@ -1,7 +1,21 @@
 # PlotCraft — Product goals and user stories (prototype)
 
-Owner: PM. Source: `docs/00-brief.md`. Status: approved by the CTO (round 2); round 3 edits made at the F1 feature review; round 4 edits apply the client's binding decisions `docs/01-product/client-decisions.md` (CD-1 to CD-3); round 5 edits made at the F2 feature review; rounds 6 and 7 fix user-facing texts at the F3-T2 and F3-T3 plan reviews; round 8 edits made at the F3 feature review.
+Owner: PM. Source: `docs/00-brief.md`. Status: approved by the CTO (round 2); round 3 edits made at the F1 feature review; round 4 edits apply the client's binding decisions `docs/01-product/client-decisions.md` (CD-1 to CD-3); round 5 edits made at the F2 feature review; rounds 6 and 7 fix user-facing texts at the F3-T2 and F3-T3 plan reviews; round 8 edits made at the F3 feature review; round 9 fixes the stage-5 level selector labels at the F4-T1 plan review.
 This document says **what** and **how we know it works**. How it is built is the Tech Lead's call.
+
+## Changes in round 9 (2026-11-21, F4-T1 plan review: stage-5 level selector labels and two confirmations; no story IDs changed)
+
+TL recommendations in `docs/03-tasks/F4-T1/plan-review.md` ("For the PM", Q11 and Q3) confirmed. The visible words are the ones the room "Floor" pickers already use on stages 2 and 3 (Basement / Ground / First / Second); the full names match the stage-3 floor tabs ("Ground floor", "First floor").
+
+| Where | Final text |
+|---|---|
+| Stage-5 level selector (F4-S1), visible labels | "All / Basement / Ground / First / Second" (only the house's levels are shown, in that order, "All" first and selected on open). Confirmed as the TL recommended. |
+| Stage-5 level selector, screen-reader names (`aria-label`) | "All floors", "Basement", "Ground floor", "First floor", "Second floor" (the `LEVEL_LABEL` names; each contains its visible word). "All floors" added by the PM so the first option names what it shows; the group keeps its existing name. |
+| Fallback, only if the 5-option house overflows at 360 px in the e2e check (Designer judges the shot) | "All / B / G / 1 / 2" for that case only, same screen-reader names. Never the default: "1" and "2" read differently to UK and US clients. |
+| Disabled controls not built yet (Light: time, presets, season; Tour: room select, tour buttons; Roof switch until F4-T2) | No new UI text: they are shown disabled, with no "coming soon" note. The phone-check guide sent with the F4-T1 publish says, in one line: "Light, Tour and the Roof switch are greyed out on purpose: they arrive in the next builds." Confirmed as the TL recommended. |
+| Stage 4, F4-T1 publish | "Skip to 3D" (sample strip) stays beside "Build 3D model" until F4-T2 applies round-8 decision 9 (strip on stages 1 and 3 only). Accepted as cosmetic: same one tap; the phone-check guide does not mention it. |
+
+F4-S1 amended to name the labels.
 
 ## Changes in round 8 (2026-11-21, F3 feature review; no story IDs changed)
 
@@ -412,7 +426,7 @@ Draw the land as a polygon with live measurements; includes the stage navigation
 
 **F4-S1 See the house on the plot.** As an architect, I want a block-style dollhouse of the approved plans on my plot so that I and my client can read the design at a glance.
 - The 3D view shows the plot at the drawn shape, the building at the footprint position (3.1), and one storey per plan level at the Q8 height; rooms match the approved plans in position and size.
-- Dollhouse: no ceilings, and walls are cut away/lowered so room interiors are visible from above. A level selector (All / each plan level) hides everything above the chosen level. **The view opens on "All" with the roof off, so the top floor's interiors are visible immediately.**
+- Dollhouse: no ceilings, and walls are cut away/lowered so room interiors are visible from above. A level selector (All / each plan level, labelled "All / Basement / Ground / First / Second" with the full floor names for screen readers, round 9) hides everything above the chosen level. **The view opens on "All" with the roof off, so the top floor's interiors are visible immediately.**
 - A "Roof" toggle (default off) shows the Q9 roof per 3.3 when the level selector is "All"; flat, pitched and terrace are visibly different, and a usable roof shows its stair head.
 - Selecting Basement opens the ground inside the footprint so basement rooms are visible from above (3.2).
 - Each room has a fixed set of block furniture for its type (e.g. bed in bedroom, counter in kitchen, sofa in living, table in dining, floor seating in majlis, desk in office, fixtures in bathroom, shelves in storage, machines in laundry). Q18 changes colours/finishes only; Q19 "sparse" shows visibly fewer pieces than "full". Furniture stays inside its room.

@@ -1,6 +1,6 @@
 /* PC.ui.stages.interior: stage 4 controller (F3-S4): Q18 interior style and Q19 furniture density, appearance
    class (plain commit, A-7: no signature changes, approvals kept). "Build 3D model" is the shell's Next (stage 5,
-   a static preview until F4-T1). The hint pictures are the Designer's markup until F3-T3. */
+   the 3D view since F4-T1). The hint pictures are the Designer's markup until F3-T3. */
 (function (PC) {
   'use strict';
   var ui = PC.ui = PC.ui || {}, fields = [];

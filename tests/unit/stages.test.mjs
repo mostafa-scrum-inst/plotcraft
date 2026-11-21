@@ -75,7 +75,7 @@ test('no fail-open guards: stages needs its modules', () => {
   assert.ok(PC.stages.status(s)[1].valid);
 });
 
-test('MAX_BUILT caps reachability with its own reason; default is 5 since F3-T2 (stage 5 a static preview)', () => {
+test('MAX_BUILT caps reachability with its own reason; default is 5 since F3-T2 (stage 5 the live 3D view since F4-T1)', () => {
   const PC = loadCore(), s = PC.sample.state();
   assert.equal(PC.stages.MAX_BUILT, 5);
   let st = PC.stages.status(s);

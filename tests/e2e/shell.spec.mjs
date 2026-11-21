@@ -126,8 +126,10 @@ async function skipAndEdit(vp) {
   await act('btn-sample');
   await act('btn-skip3d');
   let s = await t.state();
-  T.eq([s.stage, s.sampleClean, s.plans.G.approved, s.plans['1'].approved], [5, true, true, true], `${tag} Skip approves the generated plans, lands on the last built stage (5 since F3-T2, a static preview) and keeps the sample unmodified`);
-  T.eq(await page.evaluate(() => [...document.querySelectorAll('[data-pc="banner-slot"] > *')].map((e) => e.textContent.trim())), ['This stage is not built yet: static preview'], `${tag} Skip: stage 5 shows the not-built banner`);
+  T.eq([s.stage, s.sampleClean, s.plans.G.approved, s.plans['1'].approved], [5, true, true, true], `${tag} Skip approves the generated plans, lands on stage 5 (the 3D view since F4-T1) and keeps the sample unmodified`);
+  // three.js is aborted in this suite: stage 5 has its controller (no banner) and shows the in-page "3D unavailable" message
+  await page.waitForFunction(() => !document.querySelector('[data-pc="v3-unavailable"]').hidden);
+  T.eq(await page.evaluate(() => [document.querySelectorAll('[data-pc="banner-slot"] > *').length, document.querySelector('[data-pc="v3-panel"]').hidden]), [0, true], `${tag} Skip: no banner on stage 5; without three.js the unavailable message shows and the panel is hidden`);
   await t.press('step-1');
   T.ok(!(await t.hidden('btn-skip3d')), `${tag} Skip still offered back on stage 1`);
   await t.build5();

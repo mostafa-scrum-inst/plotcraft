@@ -164,7 +164,9 @@
   "s5-view": {
    "minContrast": 6.42,
    "textNodes": 20,
-   "disabledLow": [],
+   "disabledLow": [
+    "v3-pane-view > span \"Roof\" 4.36 (rgb(22, 33, 43) on rgb(255,255,255))"
+   ],
    "panel": {
     "panelW": 360,
     "panelH": 144,
@@ -173,7 +175,7 @@
     "heightShare": 0.2938775510204082,
     "areaShare": 0.2938775510204082
    },
-   "tabStops": 15
+   "tabStops": 14
   },
   "s5-light": {
    "minContrast": 6.42,
@@ -187,7 +189,7 @@
     "heightShare": 0.3306122448979592,
     "areaShare": 0.3306122448979592
    },
-   "tabStops": 18
+   "tabStops": 12
   },
   "s5-tour": {
    "minContrast": 6.42,
@@ -201,7 +203,7 @@
     "heightShare": 0.2938775510204082,
     "areaShare": 0.2938775510204082
    },
-   "tabStops": 19
+   "tabStops": 16
   },
   "s5-collapsed": {
    "minContrast": 6.42,
@@ -210,12 +212,14 @@
   },
   "s5-building": {
    "minContrast": 6.42,
-   "textNodes": 17,
-   "disabledLow": []
+   "textNodes": 19,
+   "disabledLow": [
+    "v3-pane-view > span \"Roof\" 4.36 (rgb(22, 33, 43) on rgb(255,255,255))"
+   ]
   },
   "s5-unavailable": {
-   "minContrast": 6.42,
-   "textNodes": 18,
+   "minContrast": 7.89,
+   "textNodes": 12,
    "disabledLow": []
   },
   "x-dialog-confirm": {
@@ -363,7 +367,9 @@
   "s5-view": {
    "minContrast": 6.42,
    "textNodes": 24,
-   "disabledLow": [],
+   "disabledLow": [
+    "v3-pane-view > span \"Roof\" 4.36 (rgb(22, 33, 43) on rgb(255,255,255))"
+   ],
    "panel": {
     "panelW": 768,
     "panelH": 144,
@@ -406,12 +412,14 @@
   },
   "s5-building": {
    "minContrast": 6.42,
-   "textNodes": 21,
-   "disabledLow": []
+   "textNodes": 23,
+   "disabledLow": [
+    "v3-pane-view > span \"Roof\" 4.36 (rgb(22, 33, 43) on rgb(255,255,255))"
+   ]
   },
   "s5-unavailable": {
-   "minContrast": 6.42,
-   "textNodes": 22,
+   "minContrast": 7.89,
+   "textNodes": 16,
    "disabledLow": []
   },
   "x-dialog-confirm": {
@@ -566,7 +574,9 @@
   "s5-view": {
    "minContrast": 5.55,
    "textNodes": 33,
-   "disabledLow": [],
+   "disabledLow": [
+    "v3-pane-view > span \"Roof\" 4.36 (rgb(22, 33, 43) on rgb(255,255,255))"
+   ],
    "panel": {
     "panelW": 320,
     "panelH": 575.390625,
@@ -575,12 +585,14 @@
     "heightShare": 0.8338994565217391,
     "areaShare": 0.20847486413043478
    },
-   "tabStops": 21
+   "tabStops": 11
   },
   "s5-light": {
    "minContrast": 5.55,
-   "textNodes": 29,
-   "disabledLow": [],
+   "textNodes": 31,
+   "disabledLow": [
+    "v3-pane-view > span \"Roof\" 4.36 (rgb(22, 33, 43) on rgb(255,255,255))"
+   ],
    "panel": {
     "panelW": 320,
     "panelH": 575.390625,
@@ -589,12 +601,14 @@
     "heightShare": 0.8338994565217391,
     "areaShare": 0.20847486413043478
    },
-   "tabStops": 21
+   "tabStops": 11
   },
   "s5-tour": {
    "minContrast": 5.55,
-   "textNodes": 30,
-   "disabledLow": [],
+   "textNodes": 32,
+   "disabledLow": [
+    "v3-pane-view > span \"Roof\" 4.36 (rgb(22, 33, 43) on rgb(255,255,255))"
+   ],
    "panel": {
     "panelW": 320,
     "panelH": 575.390625,
@@ -603,7 +617,7 @@
     "heightShare": 0.8338994565217391,
     "areaShare": 0.20847486413043478
    },
-   "tabStops": 25
+   "tabStops": 15
   },
   "s5-collapsed": {
    "minContrast": 6.81,
@@ -612,12 +626,14 @@
   },
   "s5-building": {
    "minContrast": 5.55,
-   "textNodes": 30,
-   "disabledLow": []
+   "textNodes": 32,
+   "disabledLow": [
+    "v3-pane-view > span \"Roof\" 4.36 (rgb(22, 33, 43) on rgb(255,255,255))"
+   ]
   },
   "s5-unavailable": {
-   "minContrast": 5.55,
-   "textNodes": 31,
+   "minContrast": 6.81,
+   "textNodes": 16,
    "disabledLow": []
   },
   "x-dialog-confirm": {
@@ -765,7 +781,9 @@
   "s5-view": {
    "minContrast": 6.42,
    "textNodes": 19,
-   "disabledLow": [],
+   "disabledLow": [
+    "v3-pane-view > span \"Roof\" 4.36 (rgb(22, 33, 43) on rgb(255,255,255))"
+   ],
    "panel": {
     "panelW": 272,
     "panelH": 262,
@@ -808,12 +826,14 @@
   },
   "s5-building": {
    "minContrast": 6.42,
-   "textNodes": 16,
-   "disabledLow": []
+   "textNodes": 18,
+   "disabledLow": [
+    "v3-pane-view > span \"Roof\" 4.36 (rgb(22, 33, 43) on rgb(255,255,255))"
+   ]
   },
   "s5-unavailable": {
-   "minContrast": 6.42,
-   "textNodes": 17,
+   "minContrast": 6.67,
+   "textNodes": 11,
    "disabledLow": []
   },
   "x-dialog-confirm": {

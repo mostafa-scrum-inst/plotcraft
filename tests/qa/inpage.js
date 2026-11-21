@@ -47,7 +47,10 @@
   };
   // F3-T2 (marker MAX_BUILT >= 5): stage 4 has a controller too; it is reached for real with every level approved.
   S.real4 = () => { S.real3(['G', '1']); PC.store.commit((st) => { for (const id in st.plans) if (!st.plans[id].error) st.plans[id].approved = true; }, { nav: true }); PC.store.go(4); };
+  // F4-T1 (marker !!(PC.house && PC.house.build)): stage 5 has a controller; it is reached for real (all levels approved).
+  S.real5 = () => { if (PC.store.get().stage === 5) return; S.real4(); PC.store.go(5); };
   S.stage = (n) => {
+    if (n === 5 && PC.house && PC.house.build) { S.real5(); return; }
     if (n === 3 && LAYOUT()) { S.real3(['G', '1']); return; }
     if (n === 4 && PC.stages.MAX_BUILT >= 5) { S.real4(); return; }
     for (const s of document.querySelectorAll('[data-stage]')) s.hidden = s.dataset.stage !== String(n);
@@ -102,7 +105,8 @@
     }
   };
   S.planWarn = (items) => { const l = q('plan-warn-list'); l.textContent = ''; for (const s of items) { const r = tpl('tpl-plan-warn'); q('warn-text', r).textContent = s; l.appendChild(r); } q('plan-warn-toggle').hidden = !items.length; q('plan-warn-count').textContent = String(items.length); };
-  S.v3levels = (ids) => { const g = q('v3-level'); for (const [v, label] of ids) { const o = tpl('tpl-v3-level'); o.querySelector('input').value = v; q('level-label', o).textContent = label; g.appendChild(o); } };
+  // the worst-case level list (B, G, 1, 2 + All): options the controller filled are replaced, never duplicated; All is kept
+  S.v3levels = (ids) => { const g = q('v3-level'); for (const o of [...g.querySelectorAll('label')]) { const i = o.querySelector('input'); if (!i || i.value !== 'all') o.remove(); } for (const [v, label] of ids) { const o = tpl('tpl-v3-level'); o.querySelector('input').value = v; q('level-label', o).textContent = label; g.appendChild(o); } };
   S.v3pane = (p) => { for (const k of ['view', 'light', 'tour']) { q('v3-pane-' + k).classList.toggle('is-current', k === p); q('v3-tab-' + k).setAttribute('aria-selected', String(k === p)); } };
   S.v3rooms = () => { const s = q('v3-room'); for (const [g, rooms] of [['Ground floor', ['Living', 'Kitchen', 'Bathroom']], ['First floor', ['Master bedroom', 'Bedroom 2', 'Bathroom']]]) { const og = document.createElement('optgroup'); og.label = g; for (const r of rooms) og.appendChild(new Option(r, r)); s.appendChild(og); } };
   S.toast = (text) => { const t = tpl('tpl-toast'); q('toast-text', t).textContent = text; q('toast-region').appendChild(t); };

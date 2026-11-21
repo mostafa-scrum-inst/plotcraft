@@ -132,7 +132,7 @@ async function regenerateAndResume(vp) {
   const saved = await k.state();
   await page.reload(); await act('btn-resume'); await settled(page);
   T.eq((await k.state()).plans, saved.plans, `${tag} reload + Resume keeps the plans as stored`);
-  // Skip to 3D on a fresh sample: plans approved, lands on stage 5 (F3-T2: MAX_BUILT 5, the static preview)
+  // Skip to 3D on a fresh sample: plans approved, lands on stage 5 (MAX_BUILT 5; the 3D view since F4-T1)
   const k2 = await kit(vp); await k2.act('btn-sample'); await k2.act('btn-skip3d'); await settled(k2.page);
   const st2 = await k2.state();
   T.eq([st2.stage, ['G', '1'].map((id) => st2.plans[id].approved)], [5, [true, true]], `${tag} Skip to 3D: every level approved, stage 5`);

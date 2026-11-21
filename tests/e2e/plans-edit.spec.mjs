@@ -158,7 +158,7 @@ async function edit(vp) {
   await k.end('edit');
 }
 
-// Approval of every floor, the lock of stage 4, Q18 / Q19, Build 3D model -> stage 5 (static preview), Back.
+// Approval of every floor, the lock of stage 4, Q18 / Q19, Build 3D model -> stage 5 (3D view; unavailable here), Back.
 async function interior(vp) {
   const k = await kit(vp), { page, hook, act, tag } = k;
   await toStage3(k);
@@ -181,7 +181,8 @@ async function interior(vp) {
   T.eq([s.ans.interior, s.plans], [{ style: 'classic', density: 'sparse' }, sigs.plans], `${tag} Q18 / Q19 change commits; plans and approvals kept`);
   await act('btn-next'); await settled(page);
   const banners = await page.evaluate(() => [...document.querySelectorAll('[data-pc="banner-slot"] > *')].map((e) => e.textContent.trim()));
-  T.eq([(await k.state()).stage, banners, await hook('btn-next').isHidden()], [5, ['This stage is not built yet: static preview'], true], `${tag} Build 3D model opens stage 5 with its not-built banner`);
+  const unavailable = await page.evaluate(() => !document.querySelector('[data-pc="v3-unavailable"]').hidden);
+  T.eq([(await k.state()).stage, banners, unavailable, await hook('btn-next').isHidden()], [5, [], true, true], `${tag} Build 3D model opens stage 5 (F4-T1: no banner; three.js aborted here, so the unavailable message)`);
   await k.shot('7-stage5');
   await act('btn-back'); await settled(page);
   s = await k.state();
