@@ -1,6 +1,6 @@
 # F5-T1 plan: room finder (FS)
 
-Date: 2026-11-21. Owner: FS. Status: **draft for the TL plan review.**
+Date: 2026-11-21. Owner: FS. Status: **APPROVED by the TL with required items 1–6 and rulings Q1–Q5 (`plan-review.md`); PM Q6 / Q7 answered (goals-and-stories round 12). Amended in §11; §11 wins where it differs from §1–§10.**
 
 Sources:
 - `docs/02-features/F5-plan.md` F5-T1 (scope, files, QA list);
@@ -201,3 +201,41 @@ Sources:
    The alternative is name plus level ("Bedroom 2 · First floor").
 7. **Select after a choice.** **Proposal:** it keeps showing the chosen room until the selection is cleared; then it
    returns to "Go to room…". Choosing the same room again does nothing (Reset view or another room is the way out).
+
+## 11. Amendments after the plan review (TL `plan-review.md`, PM round 12)
+
+1. **Basement view (item 1).** Basement rooms use phi 15° (`CAM.finderPhiB`); other levels keep 35°. Unit test: for
+   every basement room of the maximum house and of the sample with two small edge rooms in a basement, at 16 current
+   thetas, the eye→target line crosses Y 0 inside the footprint, and the eye is 1.0 m or more above ground.
+2. **Cancel order (item 2).** The controls call `api.interrupt()` first, before they read the pose, on pointer-down,
+   each non-zero move, wheel and the canvas keys (arrows, + / -; other keys neither cancel nor move). A wheel
+   mid-flight therefore gives the interpolated pose × the zoom factor. Tests: the call order
+   `interrupt, get, set, onInput`, plus the wheel case on a real flight. Mutation: "cancel after the delta".
+3. **Caption (item 3, PM Q6).** "Bedroom 2 · First floor": one UI helper `caption([name, level] | null)`, fed by
+   `PC.cam.caption(house, id)`. Markup inside `v3-caption-text`: `.pc-caption__room` (no shrink) and
+   `.pc-caption__level` (" · " + the full `LEVEL_LABEL`, `white-space: pre`, ellipsis). The level part truncates
+   first. `textContent` is the full text with plain spaces.
+4. **Select state (item 4, PM Q7).** As proposed in §5.
+5. **Naming (item 5).** The API is `PC.view3d.flyTo(pose, ms)` on the shared driver (`PC.view3d.animate`,
+   `stopAnimation`, `flying`). It replaces §1's `PC.three.flyTo`. The TL already updated A-12, A-14 and the F5-plan
+   rider.
+6. **Full run (item 6)** at `--jobs 3`: see `impl-notes.md`.
+
+**Rulings:**
+- **Q1:** limits Y floor = the lowest floorY.
+- **Q2:** smoothstep restart.
+- **Q3:** these clear the selection: All, any manual level change, Reset view, **Roof on**, "Go to room…", a
+  rebuild. `close()` clears it too.
+- **Q4:** no new e2e file.
+- **Q5:** one geometry per pick, disposed.
+
+**Non-blocking checks:**
+- the hidden tab (one capped step on return) and a context restore mid-flight (cancel and clear) are tested;
+- the highlight has `castShadow = receiveShadow = false`;
+- the extra mutations are in the list.
+
+**Deviations from §4:**
+- A new `highlight` Mesh is made per pick, and the old one's geometry is disposed. The plan said the mesh is kept and
+  only its geometry swapped. The mock whitelist has no geometry setter.
+- Bars are 0.08 × 0.04 m with the bottom at floorY + 0.02, inset 0.15 m from the room edges.
+- The material is the shared `mats.batch` (vertex colours), so no new material is created.
