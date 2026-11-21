@@ -200,7 +200,17 @@ async function summaryDash(vp) {
 }
 
 try {
-  for (const vp of VPS) { await view(vp); await problems(vp); await regenerateAndResume(vp); }
+  // A-16 trim (F3-T3 first item, QA; docs/03-tasks/F3-T3/qa-trim.md): a function no longer runs at a viewport where its
+  // twin in tests/qa/f3-t1-stage3.mjs / f3-t2-editor.mjs runs with the same input (VPS = 360x640, 640x360, 768x1024, 1280x800).
+  //   view                 360x640, 768x1024, 1280x800 (640x360 twin: QA F3-T1 A, tabs / counter / labels / tap readouts
+  //                        m and ft / Fit view after pan; kept elsewhere for the fit formula and the >= 768 label checks)
+  //   problems             768x1024 (twin: QA F3-T1 B no-layout tab, banner text, "Go to room list" focus, at 360x640,
+  //                        640x360, 1280x800; unmet-pair warnings: QA F3-T1 check3 at every viewport)
+  //   regenerateAndResume  768x1024 (twin: QA F3-T1 D Regenerate asks after an edit / Cancel / fresh Draft, reload + Resume
+  //                        keeps plans, Skip approves both, at 360x640, 1280x800; QA F3-T2 6 Regenerate texts and
+  //                        "untouched Draft: no dialog, same deterministic layout" at 360x640, 640x360, 1280x800)
+  for (const vp of [VPS[0], VPS[2], VPS[3]]) await view(vp);
+  await problems(VPS[2]); await regenerateAndResume(VPS[2]);
   await summaryDash(VPS[0]);
   for (const vp of [VPS[0], VPS[3]]) await r5Rules(vp);
 } catch (e) { T.ok(false, 'spec crashed: ' + (e && e.stack || e)); } finally { await browser.close(); }

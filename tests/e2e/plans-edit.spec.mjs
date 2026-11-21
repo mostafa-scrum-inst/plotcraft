@@ -239,7 +239,11 @@ async function keyboard(vp) {
 }
 
 try {
-  for (const vp of VPS) { await edit(vp); await interior(vp); }
+  // A-16 trim (F3-T3 first item, QA; docs/03-tasks/F3-T3/qa-trim.md): edit() and interior() no longer run at 1280x800,
+  // where their twin tests/qa/f3-t2-editor.mjs sections 1-8 run by mouse (select, move / resize = QA oracle, 10 px handle
+  // radius, stair pans, overlap texts + aria-disabled Approve, Approve / Approved toggle, back-to-Draft note, Regenerate
+  // texts, reload, stage 4 Q18 / Q19 and stage 5, Back). They keep 360x640 touch here; keyboard() and tiers() keep 1280x800.
+  await edit(VPS[0]); await interior(VPS[0]);
   await keyboard(VPS[1]); await tiers(VPS[1]);
 } catch (e) { T.ok(false, 'spec crashed: ' + e.message); }
 await browser.close();

@@ -535,8 +535,20 @@ async function keyboardR5(vp) {
 }
 
 try {
-  for (const vp of [LANDSCAPE]) { await fieldsAndUnits(vp); await gateAndRiders(vp); await keyboardR5(vp); }
-  for (const vp of VIEWPORTS) {
-    await keyboardR5(vp); await defaultsAndGroups(vp); await fieldsAndUnits(vp); await previewAndConflicts(vp); await gateAndRiders(vp); await sliderGestureEnd(vp); await round2(vp); }
+  // A-16 trim (F3-T3 first item, QA; docs/03-tasks/F3-T3/qa-trim.md): a function no longer runs at a viewport where
+  // its twin section in tests/qa/f2-t2-questions.mjs runs with the same input; each keeps at least one viewport here.
+  //   keyboardR5          768x1024           (twin: QA K at 360x640, 640x360, 1280x800)
+  //   defaultsAndGroups   768x1024           (twin: QA F at 360x640, 768x1024, 1280x800, + QA G layout; kept once for its own checks)
+  //   fieldsAndUnits      768x1024, 1280x800 (twin: QA A at 360x640 / 640x360 touch, QA B at 360x640 / 1280x800)
+  //   previewAndConflicts 768x1024           (twin: QA C at 360x640, 1280x800 (wheel), 640x360; QA D at 360x640, 1280x800)
+  //   gateAndRiders       640x360, 768x1024  (twin: QA E at 360x640, 1280x800)
+  //   sliderGestureEnd    768x1024, 1280x800 (twin: QA A Q3 / Q8 "away and back" at 360x640, 640x360)
+  //   round2              all three          (no single QA twin: kept)
+  const [PH, TAB, DESK] = VIEWPORTS;
+  await fieldsAndUnits(TAB); await fieldsAndUnits(DESK);
+  await gateAndRiders(LANDSCAPE); await gateAndRiders(TAB);
+  await keyboardR5(TAB); await defaultsAndGroups(TAB); await previewAndConflicts(TAB);
+  await sliderGestureEnd(TAB); await sliderGestureEnd(DESK);
+  for (const vp of [PH, TAB, DESK]) await round2(vp);
 } catch (e) { T.ok(false, 'spec crashed: ' + (e && e.stack || e)); } finally { await browser.close(); }
 process.exit(T.done() ? 1 : 0);

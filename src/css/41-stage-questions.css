@@ -77,11 +77,14 @@
 .pc-grid2 > .pc-span2 { grid-column: 1 / -1; }
 .pc-qgroup__next { margin-top: var(--s4); }
 
-/* Exterior swatches (placeholders until F3-T3) */
-.pc-sw-sand > i:nth-child(1) { background: #D9C7A3; } .pc-sw-sand > i:nth-child(2) { background: #B89F78; }
-.pc-sw-white > i:nth-child(1) { background: #F2F0EA; } .pc-sw-white > i:nth-child(2) { background: #C9CCC8; }
-.pc-sw-terracotta > i:nth-child(1) { background: #C4704F; } .pc-sw-terracotta > i:nth-child(2) { background: #8F4A32; }
-.pc-sw-grey > i:nth-child(1) { background: #9BA1A6; } .pc-sw-grey > i:nth-child(2) { background: #5F676E; }
+/* Exterior swatches (F3-T3): wall 2 : trim 1 : roof 1, the same hex as PC.data.exteriors (tests/unit/data-tables) */
+.pc-sw-sand { --x-wall: #D9C7A3; --x-trim: #B89F78; --x-roof: #9C7E5E; }
+.pc-sw-white { --x-wall: #F2F0EA; --x-trim: #C9CCC8; --x-roof: #7F878C; }
+.pc-sw-terracotta { --x-wall: #C4704F; --x-trim: #8F4A32; --x-roof: #6E3A2A; }
+.pc-sw-grey { --x-wall: #9BA1A6; --x-trim: #5F676E; --x-roof: #454B51; }
+.pc-swatch[class*="pc-sw-"] > i:nth-child(1) { flex: 2 1 0; background: var(--x-wall); }
+.pc-swatch[class*="pc-sw-"] > i:nth-child(2) { flex: 1 1 0; background: var(--x-trim); }
+.pc-swatch[class*="pc-sw-"] > i:nth-child(3) { flex: 1 1 0; background: var(--x-roof); }
 
 /* Rooms */
 .pc-rgroup { padding-top: var(--s2); }

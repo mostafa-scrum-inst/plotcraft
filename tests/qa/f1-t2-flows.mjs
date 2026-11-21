@@ -10,7 +10,11 @@ const noShots = process.argv.includes('--no-shots');
 const only = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7);
 const R = collector('F1-T2 flows');
 // (F1-T2 bugs 1 and 2 were listed here as known; fixed in F1-T3 and re-tested on 2026-11-20, entries removed.)
-const MAIN = VIEWPORTS.filter((v) => v.tag !== '640x360' && (!only || v.tag === only)); // 360x640 touch, 768x1024 touch, 1280x800 mouse
+// A-16 trim (F3-T3 first item, docs/03-tasks/F3-T3/qa-trim.md): sections A-H run at 360x640 touch and 1280x800 mouse.
+// Their 768x1024 twin is tests/e2e/shell.spec.mjs, which runs gating (A-D: fresh load, locked steps, sample, Next / Back,
+// gating table), skipAndEdit (E), drafts (F, G: autosave, Resume, Start new, sample over a draft) and focusAndTaps (H:
+// keyboard) at 768x1024 touch; the same behaviours by touch stay here at 360x640.
+const MAIN = VIEWPORTS.filter((v) => !['640x360', '768x1024'].includes(v.tag) && (!only || v.tag === only)); // 360x640 touch, 1280x800 mouse
 const LAND = VIEWPORTS.find((v) => v.tag === '640x360');
 
 const session = sessions({ R, shots: SHOTS, noShots });

@@ -4,10 +4,31 @@
 .pc-interior__lead { color: var(--ink-2); font-size: var(--fs-sm); }
 .pc-hint { display: block; width: 100%; height: 72px; border: 1px solid var(--rule); border-radius: var(--r1); background: var(--canvas); }
 .pc-interior .pc-cards { grid-template-columns: minmax(0, 1fr); }
-.pc-interior .pc-card { display: grid; grid-template-columns: 112px minmax(0, 1fr); grid-template-areas: "hint name" "hint desc"; column-gap: var(--s3); row-gap: 2px; align-content: center; }
+/* Phone: 100 px hint column and an 8 px gap leave the text 202 px at 360 px, so each Q18 / Q19 description stays on one
+   line (PM round 7; widest "Every piece for the room type" 197 px, "Graphite, dark wood, copper" 190 px in system-ui 14 px). */
+.pc-interior .pc-card { display: grid; grid-template-columns: 100px minmax(0, 1fr); grid-template-areas: "hint name" "hint desc"; column-gap: var(--s2); row-gap: 2px; align-content: center; }
 .pc-interior .pc-card > .pc-hint { grid-area: hint; }
 .pc-interior .pc-card__name { grid-area: name; align-self: end; }
 .pc-interior .pc-card__desc { grid-area: desc; align-self: start; }
+
+/* Hint visuals (F3-T3). Every fill comes from the --h-* properties below, which carry the same hex as PC.data.interiors
+   (tests/unit/data-tables); --h-floor = mix(roomTints.living, wood, floorMix). Q18 cards: chip strip (fabric, wood,
+   accent, metal, dark) over a top-down living room (6.4 x 4.7 m, full set). Q19 cards: the same room, sparse vs full,
+   in the colours of the chosen Q18 style (Modern where :has() is unsupported). Pieces: top + a 25 % ink front strip. */
+.pc-hint--modern, .pc-hint--density { --h-fabric: #3B4652; --h-wood: #4E3D33; --h-accent: #C8742F; --h-metal: #8A9299; --h-dark: #23292F; --h-floor: #B4C895; }
+.pc-hint--classic { --h-fabric: #E3D3B5; --h-wood: #7A4A2E; --h-accent: #8E3B33; --h-metal: #B08D45; --h-dark: #3A2A22; --h-floor: #B5C28F; }
+.pc-hint--minimal { --h-fabric: #C9CDCF; --h-wood: #C8A878; --h-accent: #8FA698; --h-metal: #AEB3B5; --h-dark: #6E7477; --h-floor: #C0D29C; }
+.pc-interior:has(input[name="q-interior-style"][value="classic"]:checked) .pc-hint--density { --h-fabric: #E3D3B5; --h-wood: #7A4A2E; --h-accent: #8E3B33; --h-metal: #B08D45; --h-dark: #3A2A22; --h-floor: #B5C28F; }
+.pc-interior:has(input[name="q-interior-style"][value="minimal"]:checked) .pc-hint--density { --h-fabric: #C9CDCF; --h-wood: #C8A878; --h-accent: #8FA698; --h-metal: #AEB3B5; --h-dark: #6E7477; --h-floor: #C0D29C; }
+.pc-hint .h-fabric { fill: var(--h-fabric); }
+.pc-hint .h-wood { fill: var(--h-wood); }
+.pc-hint .h-accent { fill: var(--h-accent); }
+.pc-hint .h-metal { fill: var(--h-metal); }
+.pc-hint .h-dark { fill: var(--h-dark); }
+.pc-hint .h-floor { fill: var(--h-floor); stroke: var(--ink); stroke-width: 1.5; }
+.pc-hint .h-chip { stroke: var(--ink); stroke-width: 1; }
+.pc-hint .h-top { stroke: var(--ink); stroke-width: 0.75; }
+.pc-hint .h-shade { fill: var(--ink); fill-opacity: 0.25; }
 
 @media (min-width: 600px) {
   .pc-interior__col { padding: var(--s5) var(--s4); gap: var(--s5); }

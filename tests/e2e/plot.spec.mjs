@@ -1,5 +1,5 @@
 // F1-T3: plot drawing, measurements, corner editing, canvas gestures (F1-S1, F1-S2, F1-S3, R2, R4).
-import { launch, open, suite, VIEWPORTS, LANDSCAPE } from '../helpers/browser.mjs';
+import { launch, open, suite, VIEWPORTS } from '../helpers/browser.mjs';
 import { gestures } from '../helpers/touch.mjs';
 import * as A from '../helpers/assertions.mjs';
 
@@ -299,81 +299,13 @@ async function gesturesAndUnits(vp) {
   await k.end('gestures+units');
 }
 
-// QA bug 1 (F1-T3): every edge that is long enough is labelled, also right next to the canvas border.
-async function borderLabels(vp) {
-  const k = await kit(vp), { page, hook, act, tag } = k;
-  const count = async (text) => (await k.labels()).filter((l) => l.text === text).length;
-  const sane = async (label) => {
-    const lab = await k.labels(), rc = await k.rect(), bad = [];
-    const chip = await page.evaluate(() => { const c = document.querySelector('[data-pc="plot-scale"]').parentNode.getBoundingClientRect(), r = document.querySelector('[data-pc="plot-canvas"]').getBoundingClientRect(); return { x: c.left - r.left, y: c.top - r.top, w: c.width, h: c.height }; });
-    const fitBtn = await page.evaluate(() => { const c = document.querySelector('[data-pc="plot-fit"]').getBoundingClientRect(), r = document.querySelector('[data-pc="plot-canvas"]').getBoundingClientRect(); return { x: c.left - r.left, y: c.top - r.top, w: c.width, h: c.height }; });
-    const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
-    lab.forEach((a, i) => {
-      if (a.x < 0 || a.y < 0 || a.x + a.w > rc.width || a.y + a.h > rc.height) bad.push(a.text + ' leaves the canvas');
-      if (hit(a, chip)) bad.push(a.text + ' under the scale chip');
-      if (hit(a, fitBtn)) bad.push(a.text + ' under the Fit view button');
-      lab.forEach((b, j) => { if (i < j && hit(a, b)) bad.push(a.text + ' overlaps ' + b.text); });
-    });
-    T.none(bad, `${tag} ${label}: labels on the canvas, clear of each other and of the chip`);
-  };
-  // a 20 x 20 m plot drawn from the origin of the default view: two of its edges run along the canvas border
-  await k.tapW([0, 0]); await k.tapW([20, 0]);
-  T.eq(await count('20.0 m'), 1, `${tag} the first edge from the origin shows its length`);
-  await k.tapW([20, 20]);
-  T.eq(await count('20.0 m'), 2, `${tag} two edges drawn: two lengths`);
-  await k.tapW([0, 20]);
-  T.eq(await count('20.0 m'), 3, `${tag} three edges drawn: three lengths`);
-  await sane('open, at the border');
-  await act('btn-close-shape');
-  T.eq([await count('20.0 m'), await count('400 m\u00B2')], [4, 1], `${tag} closed at the border: all four lengths and the area`);
-  await sane('closed, at the border');
-  await hook('unit-ft').check({ force: true });
-  T.eq([await count('65.6 ft'), await count('4306 sq ft')], [4, 1], `${tag} ...also in feet`);
-  await sane('closed, feet');
-  await hook('unit-m').check({ force: true });
-  // zoomed in so that the edges run off the canvas: the visible part of each edge still carries its length
-  await hook('plot-canvas').focus(); for (let i = 0; i < 3; i++) await page.keyboard.press('+');
-  const on = await page.evaluate(() => { const v = PC.debug.view('plot'), p = PC.debug.state().plot.pts, n = p.length; let c = 0;
-    for (let i = 0; i < n; i++) { const a = p[i], b = p[(i + 1) % n]; let len = 0;                       // visible length by sampling
-      for (let t = 0; t < 200; t++) { const x = v.ox + (a[0] + (b[0] - a[0]) * (t + 0.5) / 200) * v.scale, y = v.oy - (a[1] + (b[1] - a[1]) * (t + 0.5) / 200) * v.scale; if (x > 2 && y > 2 && x < v.width - 2 && y < v.height - 2) len += Math.hypot(b[0] - a[0], b[1] - a[1]) * v.scale / 200; }
-      if (len >= 90) c++; }
-    return c; });
-  T.ok(on >= 1, `${tag} (test) zoomed in: ${on} edge(s) with 90 px or more on screen`);
-  T.ok((await count('20.0 m')) >= on, `${tag} zoomed in: every edge with enough visible length is labelled (${await count('20.0 m')} of ${on})`);
-  await sane('zoomed in');
-  // a triangle with a slanted edge into the corner, drawn clockwise along the left border
-  await page.keyboard.press('0'); await act('btn-clear'); await act('dialog-ok');
-  await hook('plot-canvas').focus(); await page.keyboard.press('0');
-  await k.tapW([0, 0]); await k.tapW([0, 18]); await k.tapW([24, 0]);
-  T.eq([await count('18.0 m'), await count('30.0 m')], [1, 1], `${tag} open outline along the left border: both lengths`);
-  await act('btn-close-shape');
-  T.eq([await count('18.0 m'), await count('30.0 m'), await count('24.0 m')], [1, 1, 1], `${tag} closed triangle in the corner: all three lengths`);
-  await sane('triangle');
-  await k.end('border labels');
-}
-
-// CTO finding (F1 review): a corner drag must never turn a closed plot clockwise (the draft would be discarded on reload).
-async function noFlip(vp) {
-  const k = await kit(vp), { page, act, tag } = k;
-  const B = await k.base(0.35), TRI = [add(B, [0, -12]), add(B, [12, -12]), add(B, [6, -2])];       // base low, apex up: 60 m2
-  for (const p of TRI) await k.tapW(p);
-  await act('btn-close-shape');
-  const before = await k.pts(), apex = before.findIndex((p) => p[1] === B[1] - 2);
-  T.ok((await k.area()) === 60 && apex >= 0, `${tag} triangle closed, counter-clockwise`);
-  await k.G.drag(await k.S(before[apex]), await k.S(add(B, [6, -22])), null, 14);                     // apex pulled straight across the base
-  const after = await k.pts();
-  T.ok((await k.area()) > 0, `${tag} apex dragged across the base: the plot is still counter-clockwise (area ${await k.area()})`);
-  T.ok(after[apex][1] > B[1] - 12, `${tag} the apex stopped on its side of the base (${after[apex]})`);
-  T.eq(await k.msg(), { text: 'A corner cannot be moved across the outline.', kind: 'warn' }, `${tag} with the refusal message`);
-  T.ok(await page.evaluate(() => PC.plot.valid(PC.debug.state().plot) && PC.draft.validState(PC.debug.state())), `${tag} the state is a valid draft`);
-  await k.waitSaved();
-  const saved = await k.state();
-  await page.reload();
-  T.ok(!(await k.hidden('resume-box')), `${tag} after a reload the draft is offered, not discarded`);
-  await act('btn-resume');
-  T.eq(await k.state(), saved, `${tag} and resumes exactly`);
-  await k.end('no flip');
-}
+// A-16 trim (F3-T3 first item, QA; docs/03-tasks/F3-T3/qa-trim.md): two specs were removed here as duplicates.
+// - borderLabels (QA F1-T3 bug 1, edge lengths at the canvas border, 4 viewports): its twin is tests/qa/f1-t3-plot.mjs
+//   section L, same four viewports in m and in ft (first edge from the origin, every edge open and closed, area label,
+//   plot pushed into the corners so edges run off the canvas, labels clear of the chip and Fit view, corner triangle).
+// - noFlip (CTO F1 finding, a corner drag never turns the plot clockwise, 3 viewports): its twin is
+//   tests/qa/f1-t3-plot.mjs section O at the same three viewports (apex dragged and thrown across, base corner, refusal
+//   message, valid counter-clockwise state; its end() reloads and resumes the draft exactly).
 
 async function ftDrawing(vp) {
   const k = await kit(vp), { hook, tag } = k;
@@ -429,7 +361,5 @@ async function draftsAndGuard(vp) {
 
 try {
   for (const vp of VIEWPORTS) { await drawing(vp); await gesturesAndUnits(vp); await ftDrawing(vp); await draftsAndGuard(vp); }
-  for (const vp of [...VIEWPORTS, LANDSCAPE]) await borderLabels(vp);
-  for (const vp of VIEWPORTS) await noFlip(vp);
 } catch (e) { T.ok(false, 'spec crashed: ' + (e && e.stack || e)); } finally { await browser.close(); }
 process.exit(T.done() ? 1 : 0);

@@ -2,7 +2,7 @@
 // resize by each edge with the live readout, footprint and 1.5 m stops, handles (outward on small rooms, 44 px on
 // touch), stair not draggable, second finger cancels, pinch, no page scroll, no commit during a drag and one on release,
 // overlaps marked on release with the PM texts, approval / toggle / back-to-Draft note / counter / badges / Next lock,
-// Regenerate texts, reload, stage 4 (Q18 / Q19) and stage 5, R5 end to end. Real input (CDP touch, mouse); expected
+// Regenerate texts, reload, stage 4 (Q18 / Q19) and stage 5 (R5 end to end: tests/e2e/r5.spec.mjs since the A-16 trim). Real input (CDP touch, mouse); expected
 // rectangles from QA's own oracle (f3-t2-ref.mjs), texts from goals-and-stories.md round 6.
 // Run: node tests/qa/f3-t2-editor.mjs [--no-shots] [--only=360x640,...]
 import { mkdirSync } from 'node:fs';
@@ -194,19 +194,12 @@ try {
       await S.layout(`${V} 8 stage 5`); if (touch) await S.shot('8-stage5');
       await S.act('btn-back'); await S.settle(); R.check(`${V} 8 Back from stage 5 opens stage 4, choices kept`, (await S.stages()) === '4' && (await S.state()).ans.interior.style === other); }
 
-    // ---- 9. R5 end to end (phone and desktop): one question naming only what is at risk; Cancel returns a dragged vertex ----
-    if (V !== '640x360') { await S.act('step-2'); await S.settle(); await S.openGroup('rooms'); const s0 = await S.state(), r1 = s0.ans.rooms.find((r) => r.level === '1' && r.type === 'office');
-      await S.page.locator(`[data-pc="room-list"] [data-room="${r1.id}"] [data-pc="room-size"]`).selectOption('L'); const open = await S.waitDialog(), d = open ? await S.dialogText() : null;
-      R.check(`${V} 9 First-floor room change with Ground edited + approved and First approved: one question naming only the First floor and its approval`, open && d.text.includes('The floor plan of the First floor will be regenerated, with its approval.') && !/Ground floor/.test(d.text) ? [] : [JSON.stringify(d)]);
-      if (open) { await S.act('dialog-ok'); await S.waitDialog(false); }
-      await S.openGroup('building'); await S.act(lab('q-exterior', 'white')); R.check(`${V} 9 Q10 exterior change after that: no question, approvals kept`, !(await S.dialogOpen()) && (await S.state()).plans.G.approved);
-      await S.act('step-3'); await S.settle(); const s1 = await S.state();
-      R.check(`${V} 9 back on stage 3: only First is a new Draft; Ground keeps its edits and approval exactly`, eq(s1.plans.G, s0.plans.G) && !s1.plans['1'].approved && !s1.plans['1'].edited && s1.plans['1'].sig !== s0.plans['1'].sig ? [] : [JSON.stringify({ G: eq(s1.plans.G, s0.plans.G), one: s1.plans['1'].approved })]);
-      // stage 1: drag the vertex (20, 30) 3 m back; the gate asks (Ground at risk); Cancel returns the vertex exactly
-      await S.act('step-1'); await S.settle(); const p0 = await S.state(); const at = await S.page.evaluate(() => PC.debug.toScreen('plot', 20, 30)), to = await S.page.evaluate(() => PC.debug.toScreen('plot', 20, 32));
-      await S.dragPts(at, to); const asked = await S.waitDialog(), dt = asked ? await S.dialogText() : null; if (asked) { await S.act('dialog-cancel'); await S.waitDialog(false); }
-      const p1 = await S.state(), back = await S.page.evaluate(() => PC.debug.toScreen('plot', 20, 30));
-      R.check(`${V} 9 stage-1 vertex drag with an approved, edited Ground floor: the question names the Ground floor; Cancel returns the vertex and keeps every plan`, asked && /Ground floor/.test(dt.text) && eq(p1.plot, p0.plot) && eq(p1.plans, p0.plans) && eq(back, at) ? [] : [JSON.stringify({ asked, dt, plot: p1.plot.pts })]); }
+    // ---- 9. R5 end to end: removed in the A-16 trim (F3-T3 first item, docs/03-tasks/F3-T3/qa-trim.md). It ran at
+    // 360x640 and 1280x800, exactly the viewports of its twin tests/e2e/r5.spec.mjs, which seeds the same state (Ground
+    // edited + approved, First approved) and checks a superset: rooms() "First-floor room change: one question naming only
+    // the First floor and only its approval", "stage 3: Ground as left (edited, approved), First a new Draft", "Q10 change:
+    // no question, approvals kept"; vertex() "size-changing corner release asks", "Cancel returns the corner; nothing
+    // resets" (plus Q6, setback Cancel / move-only, Clear sentence). QA's own R5 wording oracle stays in f2-t1-site.mjs 9.
     // the fixed-height line is the phone-portrait layout (32 px); in the side panels the message does not set the canvas height
     R.check(`${V} 10 ${V === '360x640' ? 'the message line keeps one height (' + [...heights] + ' px) and ' : ''}the canvas never resizes (${[...canv]} px) across hint, overlap, approval and note texts`, (V !== '360x640' || heights.size === 1) && canv.size === ([...canv].some((c) => /strip/.test(c)) ? 2 : 1) ? [] : [JSON.stringify({ heights: [...heights], canvas: [...canv] })]);
     } catch (e) { R.check(`${V} scenario aborted`, [String(e.message).split('\n')[0]]); }

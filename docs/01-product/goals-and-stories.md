@@ -1,7 +1,19 @@
 # PlotCraft — Product goals and user stories (prototype)
 
-Owner: PM. Source: `docs/00-brief.md`. Status: approved by the CTO (round 2); round 3 edits made at the F1 feature review; round 4 edits apply the client's binding decisions `docs/01-product/client-decisions.md` (CD-1 to CD-3); round 5 edits made at the F2 feature review.
+Owner: PM. Source: `docs/00-brief.md`. Status: approved by the CTO (round 2); round 3 edits made at the F1 feature review; round 4 edits apply the client's binding decisions `docs/01-product/client-decisions.md` (CD-1 to CD-3); round 5 edits made at the F2 feature review; rounds 6 and 7 fix user-facing texts at the F3-T2 and F3-T3 plan reviews.
 This document says **what** and **how we know it works**. How it is built is the Tech Lead's call.
+
+## Changes in round 7 (2026-11-21, F3-T3 plan review: Q18 card descriptions; no story IDs changed)
+
+Q18 is a palette swap of furniture and floor finish only (F4-S1); walls follow Q10. Each description names the fabric, wood and accent/metal colours that the card's swatch strip shows (F3-T3 plan §1.2, §4), in plain words:
+
+| Where | Final text |
+|---|---|
+| Q18 card description, Modern (F3-S4) | "Graphite, dark wood, copper" (was "Dark wood, graphite, warm accent"). Confirmed as the TL recommended. |
+| Q18 card description, Classic (F3-S4) | "Cream fabric, walnut, brass" (was "Cream walls, walnut, brass": wrong, walls follow Q10). Confirmed as the TL recommended. |
+| Q18 card description, Minimal (F3-S4) | "Pale grey, light oak, sage" (was "White, pale grey, light oak"). **Changed from the recommendation:** the swatch strip leaves white out (plan §4), and white is shared by all three styles, so it does not describe Minimal; sage is the Minimal accent and is shown. |
+
+Every description stays on one line at 360 px (Designer checks the fit). F3-S4 amended to name them.
 
 ## Changes in round 6 (2026-11-21, F3-T2 plan review: user-facing texts and two product answers; no story IDs changed)
 
@@ -378,7 +390,7 @@ Draw the land as a polygon with live measurements; includes the stage navigation
 - Next (to Interior) is disabled until all plan levels are approved. R5 applies to upstream changes.
 
 **F3-S4 Choose the interior.** As an architect, I want the interior questions asked only once the plans are fixed so that I decide the look after the layout.
-- Stage 4 is locked until every plan level is approved; it asks exactly Q18 (modern / classic / minimal) and Q19 (sparse / full), with the defaults from 4.1 and a small visual hint of the difference.
+- Stage 4 is locked until every plan level is approved; it asks exactly Q18 (modern / classic / minimal) and Q19 (sparse / full), with the defaults from 4.1 and a small visual hint of the difference. Each Q18 card names its furniture colours, never the walls (round 7): Modern "Graphite, dark wood, copper", Classic "Cream fabric, walnut, brass", Minimal "Pale grey, light oak, sage".
 - A single "Build 3D model" action opens stage 5.
 - Returning from 3D to change Q18/Q19 and rebuilding keeps approvals and updates the furniture.
 

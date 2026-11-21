@@ -12,7 +12,8 @@ import { collector } from './lib.mjs';
 import * as Q from './f2-t1-ref.mjs';
 
 const R = collector('F3-T2 edit');
-// Open minor bugs (docs/03-tasks/F3-T2/qa-report.md): listed as KNOWN, do not fail the run. Remove an entry when fixed.
+// Open minor bugs (docs/03-tasks/F3-T2/qa-report.md) would be listed here as R.known entries. None open: bug 1 (ft resize
+// short of the wall) was fixed by FS and confirmed; its KNOWN entry was removed (re-confirmed in the A-16 trim).
 const PC = Q.loadPC();
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }

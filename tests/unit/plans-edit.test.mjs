@@ -142,3 +142,14 @@ test('resizeRect in ft: an edge dragged past the footprint lands exactly on it (
     const n = rz('n', 0, 5.5 + over); assert.equal(n.y + n.h, 15, `back edge ${over} m past: D`);
   }
 });
+
+test('moveRect: a move past the footprint takes the neighbours\' span from the clamped room, not the finger (QA F3-T2 obs 5)', () => {
+  // A dragged 9 m back: the finger span is y 9..13, the clamped room y 6..10. B (y 5..8.5) overlaps the clamped span
+  // only (0.5 m from the finger span, beyond the 0.3 m allowance), so A's right edge (raw 4.33) snaps to B's left edge.
+  for (const grid of [0.5, 0.3048]) {
+    const c = synth(grid, [{ id: 'b', x: 4.13, y: 5, w: 1.5, h: 3.5 }]);
+    const r = plain(P.moveRect(A, 0.33, 9, c)).rect;
+    assert.equal(r.y, 6, 'clamped at the back');
+    assert.equal(r.x + r.w, 4.13, `grid ${grid}: the right edge lands on the neighbour seen from the clamped span`);
+  }
+});

@@ -695,11 +695,14 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 .pc-grid2 > .pc-span2 { grid-column: 1 / -1; }
 .pc-qgroup__next { margin-top: var(--s4); }
 
-/* Exterior swatches (placeholders until F3-T3) */
-.pc-sw-sand > i:nth-child(1) { background: #D9C7A3; } .pc-sw-sand > i:nth-child(2) { background: #B89F78; }
-.pc-sw-white > i:nth-child(1) { background: #F2F0EA; } .pc-sw-white > i:nth-child(2) { background: #C9CCC8; }
-.pc-sw-terracotta > i:nth-child(1) { background: #C4704F; } .pc-sw-terracotta > i:nth-child(2) { background: #8F4A32; }
-.pc-sw-grey > i:nth-child(1) { background: #9BA1A6; } .pc-sw-grey > i:nth-child(2) { background: #5F676E; }
+/* Exterior swatches (F3-T3): wall 2 : trim 1 : roof 1, the same hex as PC.data.exteriors (tests/unit/data-tables) */
+.pc-sw-sand { --x-wall: #D9C7A3; --x-trim: #B89F78; --x-roof: #9C7E5E; }
+.pc-sw-white { --x-wall: #F2F0EA; --x-trim: #C9CCC8; --x-roof: #7F878C; }
+.pc-sw-terracotta { --x-wall: #C4704F; --x-trim: #8F4A32; --x-roof: #6E3A2A; }
+.pc-sw-grey { --x-wall: #9BA1A6; --x-trim: #5F676E; --x-roof: #454B51; }
+.pc-swatch[class*="pc-sw-"] > i:nth-child(1) { flex: 2 1 0; background: var(--x-wall); }
+.pc-swatch[class*="pc-sw-"] > i:nth-child(2) { flex: 1 1 0; background: var(--x-trim); }
+.pc-swatch[class*="pc-sw-"] > i:nth-child(3) { flex: 1 1 0; background: var(--x-roof); }
 
 /* Rooms */
 .pc-rgroup { padding-top: var(--s2); }
@@ -967,10 +970,31 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 .pc-interior__lead { color: var(--ink-2); font-size: var(--fs-sm); }
 .pc-hint { display: block; width: 100%; height: 72px; border: 1px solid var(--rule); border-radius: var(--r1); background: var(--canvas); }
 .pc-interior .pc-cards { grid-template-columns: minmax(0, 1fr); }
-.pc-interior .pc-card { display: grid; grid-template-columns: 112px minmax(0, 1fr); grid-template-areas: "hint name" "hint desc"; column-gap: var(--s3); row-gap: 2px; align-content: center; }
+/* Phone: 100 px hint column and an 8 px gap leave the text 202 px at 360 px, so each Q18 / Q19 description stays on one
+   line (PM round 7; widest "Every piece for the room type" 197 px, "Graphite, dark wood, copper" 190 px in system-ui 14 px). */
+.pc-interior .pc-card { display: grid; grid-template-columns: 100px minmax(0, 1fr); grid-template-areas: "hint name" "hint desc"; column-gap: var(--s2); row-gap: 2px; align-content: center; }
 .pc-interior .pc-card > .pc-hint { grid-area: hint; }
 .pc-interior .pc-card__name { grid-area: name; align-self: end; }
 .pc-interior .pc-card__desc { grid-area: desc; align-self: start; }
+
+/* Hint visuals (F3-T3). Every fill comes from the --h-* properties below, which carry the same hex as PC.data.interiors
+   (tests/unit/data-tables); --h-floor = mix(roomTints.living, wood, floorMix). Q18 cards: chip strip (fabric, wood,
+   accent, metal, dark) over a top-down living room (6.4 x 4.7 m, full set). Q19 cards: the same room, sparse vs full,
+   in the colours of the chosen Q18 style (Modern where :has() is unsupported). Pieces: top + a 25 % ink front strip. */
+.pc-hint--modern, .pc-hint--density { --h-fabric: #3B4652; --h-wood: #4E3D33; --h-accent: #C8742F; --h-metal: #8A9299; --h-dark: #23292F; --h-floor: #B4C895; }
+.pc-hint--classic { --h-fabric: #E3D3B5; --h-wood: #7A4A2E; --h-accent: #8E3B33; --h-metal: #B08D45; --h-dark: #3A2A22; --h-floor: #B5C28F; }
+.pc-hint--minimal { --h-fabric: #C9CDCF; --h-wood: #C8A878; --h-accent: #8FA698; --h-metal: #AEB3B5; --h-dark: #6E7477; --h-floor: #C0D29C; }
+.pc-interior:has(input[name="q-interior-style"][value="classic"]:checked) .pc-hint--density { --h-fabric: #E3D3B5; --h-wood: #7A4A2E; --h-accent: #8E3B33; --h-metal: #B08D45; --h-dark: #3A2A22; --h-floor: #B5C28F; }
+.pc-interior:has(input[name="q-interior-style"][value="minimal"]:checked) .pc-hint--density { --h-fabric: #C9CDCF; --h-wood: #C8A878; --h-accent: #8FA698; --h-metal: #AEB3B5; --h-dark: #6E7477; --h-floor: #C0D29C; }
+.pc-hint .h-fabric { fill: var(--h-fabric); }
+.pc-hint .h-wood { fill: var(--h-wood); }
+.pc-hint .h-accent { fill: var(--h-accent); }
+.pc-hint .h-metal { fill: var(--h-metal); }
+.pc-hint .h-dark { fill: var(--h-dark); }
+.pc-hint .h-floor { fill: var(--h-floor); stroke: var(--ink); stroke-width: 1.5; }
+.pc-hint .h-chip { stroke: var(--ink); stroke-width: 1; }
+.pc-hint .h-top { stroke: var(--ink); stroke-width: 0.75; }
+.pc-hint .h-shade { fill: var(--ink); fill-opacity: 0.25; }
 
 @media (min-width: 600px) {
   .pc-interior__col { padding: var(--s5) var(--s4); gap: var(--s5); }
@@ -1322,7 +1346,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       </div>
       <div class="pc-q" data-q="10">
         <div class="pc-q__head"><span class="pc-tag">Q10</span><h4 class="pc-q__label">Exterior style / colour palette</h4></div>
-        <div class="pc-cards" role="radiogroup" aria-label="Exterior style" data-pc="q-exterior"><label class="pc-opt"><input type="radio" name="q-exterior" value="sand" checked><span class="pc-card"><span class="pc-swatch pc-sw-sand"><i></i><i></i></span><span class="pc-card__name">Sand</span></span></label><label class="pc-opt"><input type="radio" name="q-exterior" value="white"><span class="pc-card"><span class="pc-swatch pc-sw-white"><i></i><i></i></span><span class="pc-card__name">White</span></span></label><label class="pc-opt"><input type="radio" name="q-exterior" value="terracotta"><span class="pc-card"><span class="pc-swatch pc-sw-terracotta"><i></i><i></i></span><span class="pc-card__name">Terracotta</span></span></label><label class="pc-opt"><input type="radio" name="q-exterior" value="grey"><span class="pc-card"><span class="pc-swatch pc-sw-grey"><i></i><i></i></span><span class="pc-card__name">Grey</span></span></label></div>
+        <div class="pc-cards" role="radiogroup" aria-label="Exterior style" data-pc="q-exterior"><label class="pc-opt"><input type="radio" name="q-exterior" value="sand" checked><span class="pc-card"><span class="pc-swatch pc-sw-sand"><i></i><i></i><i></i></span><span class="pc-card__name">Sand</span></span></label><label class="pc-opt"><input type="radio" name="q-exterior" value="white"><span class="pc-card"><span class="pc-swatch pc-sw-white"><i></i><i></i><i></i></span><span class="pc-card__name">White</span></span></label><label class="pc-opt"><input type="radio" name="q-exterior" value="terracotta"><span class="pc-card"><span class="pc-swatch pc-sw-terracotta"><i></i><i></i><i></i></span><span class="pc-card__name">Terracotta</span></span></label><label class="pc-opt"><input type="radio" name="q-exterior" value="grey"><span class="pc-card"><span class="pc-swatch pc-sw-grey"><i></i><i></i><i></i></span><span class="pc-card__name">Grey</span></span></label></div>
       </div>
             <button class="pc-btn pc-btn--block pc-qgroup__next" type="button" data-pc="btn-q-continue-building">Continue to Rooms<svg class="pc-i" aria-hidden="true"><use href="#i-chev-right"/></svg></button>
           </div>
@@ -1508,11 +1532,11 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
         </div>
       <div class="pc-q" data-q="18">
         <div class="pc-q__head"><span class="pc-tag">Q18</span><h4 class="pc-q__label">Interior style preset</h4></div>
-        <div class="pc-cards" role="radiogroup" aria-label="Interior style" data-pc="q-interior-style"><label class="pc-opt"><input type="radio" name="q-interior-style" value="modern" checked><span class="pc-card"><svg class="pc-hint" viewBox="0 0 112 72" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><rect x="6" y="6" width="12" height="12" fill="#E8E6E0" stroke="#16212B" stroke-width="1"/><rect x="20" y="6" width="12" height="12" fill="#3B4652" stroke="#16212B" stroke-width="1"/><rect x="34" y="6" width="12" height="12" fill="#B5773C" stroke="#16212B" stroke-width="1"/><rect x="48" y="6" width="12" height="12" fill="#F5F4F0" stroke="#16212B" stroke-width="1"/><path d="M8 62V30h96v32z" fill="#F5F4F0" stroke="#16212B" stroke-width="1.5"/><rect x="14" y="36" width="34" height="20" fill="#3B4652"/><rect x="54" y="42" width="16" height="12" fill="#B5773C"/><rect x="78" y="34" width="20" height="8" fill="#E8E6E0" stroke="#16212B" stroke-width="1"/></svg><span class="pc-card__name">Modern</span><span class="pc-card__desc">Dark wood, graphite, warm accent</span></span></label><label class="pc-opt"><input type="radio" name="q-interior-style" value="classic"><span class="pc-card"><svg class="pc-hint" viewBox="0 0 112 72" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><rect x="6" y="6" width="12" height="12" fill="#EFE3CF" stroke="#16212B" stroke-width="1"/><rect x="20" y="6" width="12" height="12" fill="#6B3F2A" stroke="#16212B" stroke-width="1"/><rect x="34" y="6" width="12" height="12" fill="#9A7B3F" stroke="#16212B" stroke-width="1"/><rect x="48" y="6" width="12" height="12" fill="#F7F1E6" stroke="#16212B" stroke-width="1"/><path d="M8 62V30h96v32z" fill="#F7F1E6" stroke="#16212B" stroke-width="1.5"/><rect x="14" y="36" width="34" height="20" fill="#6B3F2A"/><rect x="54" y="42" width="16" height="12" fill="#9A7B3F"/><rect x="78" y="34" width="20" height="8" fill="#EFE3CF" stroke="#16212B" stroke-width="1"/></svg><span class="pc-card__name">Classic</span><span class="pc-card__desc">Cream walls, walnut, brass</span></span></label><label class="pc-opt"><input type="radio" name="q-interior-style" value="minimal"><span class="pc-card"><svg class="pc-hint" viewBox="0 0 112 72" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><rect x="6" y="6" width="12" height="12" fill="#F4F4F1" stroke="#16212B" stroke-width="1"/><rect x="20" y="6" width="12" height="12" fill="#B9BDBE" stroke="#16212B" stroke-width="1"/><rect x="34" y="6" width="12" height="12" fill="#D9D2C3" stroke="#16212B" stroke-width="1"/><rect x="48" y="6" width="12" height="12" fill="#FFFFFF" stroke="#16212B" stroke-width="1"/><path d="M8 62V30h96v32z" fill="#FFFFFF" stroke="#16212B" stroke-width="1.5"/><rect x="14" y="36" width="34" height="20" fill="#B9BDBE"/><rect x="54" y="42" width="16" height="12" fill="#D9D2C3"/><rect x="78" y="34" width="20" height="8" fill="#F4F4F1" stroke="#16212B" stroke-width="1"/></svg><span class="pc-card__name">Minimal</span><span class="pc-card__desc">White, pale grey, light oak</span></span></label></div>
+        <div class="pc-cards" role="radiogroup" aria-label="Interior style" data-pc="q-interior-style"><label class="pc-opt"><input type="radio" name="q-interior-style" value="modern" checked><span class="pc-card"><svg class="pc-hint pc-hint--modern" viewBox="0 0 112 72" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><rect class="h-chip h-fabric" x="4" y="4" width="18" height="10"/><rect class="h-chip h-wood" x="25.5" y="4" width="18" height="10"/><rect class="h-chip h-accent" x="47" y="4" width="18" height="10"/><rect class="h-chip h-metal" x="68.5" y="4" width="18" height="10"/><rect class="h-chip h-dark" x="90" y="4" width="18" height="10"/><rect class="h-floor" x="24" y="19" width="64" height="46.9"/><g class="h-piece h-fabric"><rect class="h-top" x="45" y="20.5" width="22" height="7.5"/><rect class="h-shade" x="45" y="28" width="22" height="1.5"/></g><g class="h-piece h-wood"><rect class="h-top" x="50.5" y="39.4" width="11" height="4.5"/><rect class="h-shade" x="50.5" y="43.9" width="11" height="1.5"/></g><g class="h-piece h-dark"><rect class="h-top" x="47" y="59.9" width="18" height="3"/><rect class="h-shade" x="47" y="62.9" width="18" height="1.5"/></g><g class="h-piece h-accent"><rect class="h-top" x="25.5" y="38.4" width="8" height="6.5"/><rect class="h-shade" x="25.5" y="44.9" width="8" height="1.5"/></g><g class="h-piece h-accent"><rect class="h-top" x="78.5" y="38.4" width="8" height="6.5"/><rect class="h-shade" x="78.5" y="44.9" width="8" height="1.5"/></g><g class="h-piece h-wood"><rect class="h-top" x="25.5" y="20.5" width="4.5" height="3"/><rect class="h-shade" x="25.5" y="23.5" width="4.5" height="1.5"/></g></svg><span class="pc-card__name">Modern</span><span class="pc-card__desc">Graphite, dark wood, copper</span></span></label><label class="pc-opt"><input type="radio" name="q-interior-style" value="classic"><span class="pc-card"><svg class="pc-hint pc-hint--classic" viewBox="0 0 112 72" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><rect class="h-chip h-fabric" x="4" y="4" width="18" height="10"/><rect class="h-chip h-wood" x="25.5" y="4" width="18" height="10"/><rect class="h-chip h-accent" x="47" y="4" width="18" height="10"/><rect class="h-chip h-metal" x="68.5" y="4" width="18" height="10"/><rect class="h-chip h-dark" x="90" y="4" width="18" height="10"/><rect class="h-floor" x="24" y="19" width="64" height="46.9"/><g class="h-piece h-fabric"><rect class="h-top" x="45" y="20.5" width="22" height="7.5"/><rect class="h-shade" x="45" y="28" width="22" height="1.5"/></g><g class="h-piece h-wood"><rect class="h-top" x="50.5" y="39.4" width="11" height="4.5"/><rect class="h-shade" x="50.5" y="43.9" width="11" height="1.5"/></g><g class="h-piece h-dark"><rect class="h-top" x="47" y="59.9" width="18" height="3"/><rect class="h-shade" x="47" y="62.9" width="18" height="1.5"/></g><g class="h-piece h-accent"><rect class="h-top" x="25.5" y="38.4" width="8" height="6.5"/><rect class="h-shade" x="25.5" y="44.9" width="8" height="1.5"/></g><g class="h-piece h-accent"><rect class="h-top" x="78.5" y="38.4" width="8" height="6.5"/><rect class="h-shade" x="78.5" y="44.9" width="8" height="1.5"/></g><g class="h-piece h-wood"><rect class="h-top" x="25.5" y="20.5" width="4.5" height="3"/><rect class="h-shade" x="25.5" y="23.5" width="4.5" height="1.5"/></g></svg><span class="pc-card__name">Classic</span><span class="pc-card__desc">Cream fabric, walnut, brass</span></span></label><label class="pc-opt"><input type="radio" name="q-interior-style" value="minimal"><span class="pc-card"><svg class="pc-hint pc-hint--minimal" viewBox="0 0 112 72" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><rect class="h-chip h-fabric" x="4" y="4" width="18" height="10"/><rect class="h-chip h-wood" x="25.5" y="4" width="18" height="10"/><rect class="h-chip h-accent" x="47" y="4" width="18" height="10"/><rect class="h-chip h-metal" x="68.5" y="4" width="18" height="10"/><rect class="h-chip h-dark" x="90" y="4" width="18" height="10"/><rect class="h-floor" x="24" y="19" width="64" height="46.9"/><g class="h-piece h-fabric"><rect class="h-top" x="45" y="20.5" width="22" height="7.5"/><rect class="h-shade" x="45" y="28" width="22" height="1.5"/></g><g class="h-piece h-wood"><rect class="h-top" x="50.5" y="39.4" width="11" height="4.5"/><rect class="h-shade" x="50.5" y="43.9" width="11" height="1.5"/></g><g class="h-piece h-dark"><rect class="h-top" x="47" y="59.9" width="18" height="3"/><rect class="h-shade" x="47" y="62.9" width="18" height="1.5"/></g><g class="h-piece h-accent"><rect class="h-top" x="25.5" y="38.4" width="8" height="6.5"/><rect class="h-shade" x="25.5" y="44.9" width="8" height="1.5"/></g><g class="h-piece h-accent"><rect class="h-top" x="78.5" y="38.4" width="8" height="6.5"/><rect class="h-shade" x="78.5" y="44.9" width="8" height="1.5"/></g><g class="h-piece h-wood"><rect class="h-top" x="25.5" y="20.5" width="4.5" height="3"/><rect class="h-shade" x="25.5" y="23.5" width="4.5" height="1.5"/></g></svg><span class="pc-card__name">Minimal</span><span class="pc-card__desc">Pale grey, light oak, sage</span></span></label></div>
       </div>
       <div class="pc-q" data-q="19">
         <div class="pc-q__head"><span class="pc-tag">Q19</span><h4 class="pc-q__label">Furniture density</h4></div>
-        <div class="pc-cards" role="radiogroup" aria-label="Furniture density" data-pc="q-interior-density"><label class="pc-opt"><input type="radio" name="q-interior-density" value="sparse"><span class="pc-card"><svg class="pc-hint" viewBox="0 0 112 72" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><path d="M8 64V8h96v56z" fill="#FBFAF6" stroke="#16212B" stroke-width="1.5"/><rect x="14" y="20" width="34" height="20" fill="#C5CBD0" stroke="#16212B" stroke-width="1"/><rect x="78" y="16" width="20" height="8" fill="#C5CBD0" stroke="#16212B" stroke-width="1"/></svg><span class="pc-card__name">Sparse</span><span class="pc-card__desc">Key pieces only</span></span></label><label class="pc-opt"><input type="radio" name="q-interior-density" value="full" checked><span class="pc-card"><svg class="pc-hint" viewBox="0 0 112 72" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><path d="M8 64V8h96v56z" fill="#FBFAF6" stroke="#16212B" stroke-width="1.5"/><rect x="14" y="20" width="34" height="20" fill="#C5CBD0" stroke="#16212B" stroke-width="1"/><rect x="78" y="16" width="20" height="8" fill="#C5CBD0" stroke="#16212B" stroke-width="1"/><rect x="54" y="26" width="16" height="12" fill="#C5CBD0" stroke="#16212B" stroke-width="1"/><rect x="14" y="46" width="18" height="12" fill="#C5CBD0" stroke="#16212B" stroke-width="1"/><rect x="70" y="44" width="28" height="14" fill="#C5CBD0" stroke="#16212B" stroke-width="1"/></svg><span class="pc-card__name">Full</span><span class="pc-card__desc">Every piece for the room type</span></span></label></div>
+        <div class="pc-cards" role="radiogroup" aria-label="Furniture density" data-pc="q-interior-density"><label class="pc-opt"><input type="radio" name="q-interior-density" value="sparse"><span class="pc-card"><svg class="pc-hint pc-hint--density" data-pieces="2" viewBox="0 0 112 72" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><rect class="h-floor" x="14.4" y="5.5" width="83.2" height="60.9"/><g class="h-piece h-fabric"><rect class="h-top" x="41.7" y="7.4" width="28.6" height="9.7"/><rect class="h-shade" x="41.7" y="17.1" width="28.6" height="2"/></g><g class="h-piece h-wood"><rect class="h-top" x="48.8" y="32.1" width="14.3" height="5.8"/><rect class="h-shade" x="48.8" y="37.9" width="14.3" height="2"/></g></svg><span class="pc-card__name">Sparse</span><span class="pc-card__desc">Key pieces only</span></span></label><label class="pc-opt"><input type="radio" name="q-interior-density" value="full" checked><span class="pc-card"><svg class="pc-hint pc-hint--density" data-pieces="6" viewBox="0 0 112 72" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><rect class="h-floor" x="14.4" y="5.5" width="83.2" height="60.9"/><g class="h-piece h-fabric"><rect class="h-top" x="41.7" y="7.4" width="28.6" height="9.7"/><rect class="h-shade" x="41.7" y="17.1" width="28.6" height="2"/></g><g class="h-piece h-wood"><rect class="h-top" x="48.8" y="32.1" width="14.3" height="5.8"/><rect class="h-shade" x="48.8" y="37.9" width="14.3" height="2"/></g><g class="h-piece h-dark"><rect class="h-top" x="44.3" y="58.6" width="23.4" height="3.9"/><rect class="h-shade" x="44.3" y="62.5" width="23.4" height="2"/></g><g class="h-piece h-accent"><rect class="h-top" x="16.4" y="30.8" width="10.4" height="8.4"/><rect class="h-shade" x="16.4" y="39.2" width="10.4" height="2"/></g><g class="h-piece h-accent"><rect class="h-top" x="85.3" y="30.8" width="10.4" height="8.4"/><rect class="h-shade" x="85.3" y="39.2" width="10.4" height="2"/></g><g class="h-piece h-wood"><rect class="h-top" x="16.4" y="7.4" width="5.9" height="3.9"/><rect class="h-shade" x="16.4" y="11.3" width="5.9" height="2"/></g></svg><span class="pc-card__name">Full</span><span class="pc-card__desc">Every piece for the room type</span></span></label></div>
       </div>
       </div>
     </section>
@@ -3038,8 +3062,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       var r = { id: start.id, x: start.x, y: start.y, w: start.w, h: start.h }, guides = [];
       [['x', 'w', 'W', 'h', dx], ['y', 'h', 'D', 'w', dy]].forEach(function (a) {
         var p = a[0], s = a[1], max = ctx[a[2]] - r[s];
-        // the moving edges' span across the axis: the dragged position on the other axis
-        var v = Math.min(max, Math.max(0, start[p] + a[4])), s0 = p === 'x' ? start.y + dy : start.x + dx, s1 = s0 + r[a[3]];
+        // the moving edges' span across the axis: the clamped position on the other axis (A-15; QA F3-T2 obs 5)
+        var v = Math.min(max, Math.max(0, start[p] + a[4])), s0 = p === 'x' ? Math.min(ctx.D - r.h, Math.max(0, start.y + dy)) : Math.min(ctx.W - r.w, Math.max(0, start.x + dx)), s1 = s0 + r[a[3]];
         var lo = P.snapEdge(v, s0, s1, ctx.cands[p], ctx.grid, 0, max);
         var hi = P.snapEdge(v + r[s], s0, s1, ctx.cands[p], ctx.grid, r[s], ctx[a[2]]);
         var useHi = hi.to === 'edge' ? lo.to !== 'edge' || hi.d < lo.d - 1e-9 : lo.to !== 'edge' && hi.d < lo.d - 1e-9;
@@ -3656,6 +3680,176 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     laundry: { full: 'Laundry', short: 'Ldry', tiny: 'Ln' },
     stair: { full: 'Stairs', short: 'Stair', tiny: 'St' },
     lift: { full: 'Lift', short: 'Lift', tiny: 'Lf' }
+  };
+})(globalThis.PC = globalThis.PC || {});
+
+</script>
+<script>/* js/data/look3d.js */
+/* 3D look tables (Designer-owned, F3-T3; A-10). Every colour is sRGB '#RRGGBB' upper case; F4 converts each through
+   PC.three.col (scene.background takes the raw hex). One mix rule for the whole app: per-channel lerp of the 0-255
+   sRGB values, Math.round per channel.
+   The hex values are the colours a horizontal face shows in sun at summer noon under the PC.data.sky rig (top-face
+   light sum about 1.0): extra lights or higher intensities wash out the pastels.
+   - exteriors (Q10): wall = exterior walls; wallInner = partitions and any walls around stair / lift; slab = slab
+     edges and basement pit walls; roof = roof slab, gable, pergola; trim = entrance step, door reveal, gate posts;
+     parapet = parapets and the stair head. wall / trim equal the stage-2 Q10 swatches (41-stage-questions.css).
+   - interiors (Q18): furniture colour keys of PC.data.furniture; floorMix (0-0.3, the only number) mixes the style's
+     wood into every room and hall floor: floor = mix(roomTints[type or 'hall'], wood, floorMix). Stair and lift are
+     not mixed. fabric / wood / accent / metal / dark equal the stage-4 hint chips (43-stage-interior.css).
+   - roomTints: 3D floor tint per room type = the 2D tint of palette2d.room at the same CIELAB hue, L* 8 lower,
+     chroma x 1.6 (the 2D pastels would wash out under the noon sun); hall by the same L* step (no extra chroma); stair / lift as in 2D.
+   - siteColors: fixed site colours. ground is the build-time plot grass and equals sky.seasons.summer.ground;
+     groundOuter (outside the plot) is never seasonal; gate is for a gate leaf (posts use exteriors.trim);
+     highlight is the F5 selection colour (the 2D selection orange). */
+(function (PC) {
+  'use strict';
+  PC.data.exteriors = {
+    sand: { wall: '#D9C7A3', wallInner: '#F3EDE0', slab: '#A89F8E', roof: '#9C7E5E', trim: '#B89F78', parapet: '#CDB993' },
+    white: { wall: '#F2F0EA', wallInner: '#F8F7F3', slab: '#B3B5B1', roof: '#7F878C', trim: '#C9CCC8', parapet: '#E2E0D9' },
+    terracotta: { wall: '#C4704F', wallInner: '#F4E9DE', slab: '#A3958A', roof: '#6E3A2A', trim: '#8F4A32', parapet: '#B9654A' },
+    grey: { wall: '#9BA1A6', wallInner: '#EEF0F0', slab: '#8D9398', roof: '#454B51', trim: '#5F676E', parapet: '#8C9298' }
+  };
+  PC.data.interiors = {
+    modern: { fabric: '#3B4652', wood: '#4E3D33', accent: '#C8742F', white: '#F2F1EC', metal: '#8A9299', dark: '#23292F', floorMix: 0.10 },
+    classic: { fabric: '#E3D3B5', wood: '#7A4A2E', accent: '#8E3B33', white: '#F7F1E6', metal: '#B08D45', dark: '#3A2A22', floorMix: 0.15 },
+    minimal: { fabric: '#C9CDCF', wood: '#C8A878', accent: '#8FA698', white: '#FAFAF8', metal: '#AEB3B5', dark: '#6E7477', floorMix: 0.10 }
+  };
+  PC.data.roomTints = {
+    bedroom: '#B8CCE7', bathroom: '#A1D8D1', kitchen: '#E5D179', living: '#BFD7A0', dining: '#EBC097',
+    majlis: '#D5BCE2', office: '#D1CD9D', maid: '#EABBC5', storage: '#CAC4B9', laundry: '#A8D2E9',
+    hall: '#D9D6CE', stair: '#C5CBD0', lift: '#AEB7BB'
+  };
+  PC.data.siteColors = {
+    ground: '#7FAE55', groundOuter: '#B3B0A6', paving: '#CFC8BA', poolWater: '#3FA7C9', poolRim: '#E6E1D6',
+    boundaryWall: '#CDC4B2', gate: '#3B4652', carCanopy: '#A3ABB1', seating: '#9A7A55', trunk: '#5B4636',
+    northMarker: '#16212B', highlight: '#C2410C'
+  };
+})(globalThis.PC = globalThis.PC || {});
+
+</script>
+<script>/* js/data/furniture.js */
+/* Furniture block sets (Designer-owned, F3-T3), A-11 schema, read by PC.furnish.room (F4-T2). Metres; y0 = height
+   above the floor; w = size along the anchor wall, d = depth into the room; color = a key of PC.data.interiors[style];
+   sparse: true = also shown at Q19 "Sparse" (always written). off: [a, b] (optional) = shift after anchoring, in room
+   axes (a to the right, b to the back) or, for center pieces, along the piece's (w, d) axes; scaled with the piece.
+   A piece with off follows the piece it is placed around. Placement rule: A-11 (0.15 m inset, scale 1.00 -> 0.60 in
+   0.05 steps, overlap > 0.01 m on both axes drops). Every piece is at most 1.1 m high (cut walls are 1.2 m) and at
+   least 0.05 m, so it reads as a block from above. Each type: 1 or more sparse, 2 or more full-only, 8 at most. */
+(function (PC) {
+  'use strict';
+  PC.data.furniture = {
+    bedroom: [
+      { id: 'bed', w: 1.6, d: 2.0, h: 0.5, y0: 0, anchor: 'back', color: 'fabric', sparse: true },
+      { id: 'wardrobe', w: 1.2, d: 0.6, h: 1.1, y0: 0, anchor: 'left', color: 'wood', sparse: true },
+      { id: 'sideL', w: 0.45, d: 0.45, h: 0.5, y0: 0, anchor: 'bl', color: 'wood', sparse: false },
+      { id: 'sideR', w: 0.45, d: 0.45, h: 0.5, y0: 0, anchor: 'br', color: 'wood', sparse: false },
+      { id: 'dresser', w: 1.0, d: 0.45, h: 0.8, y0: 0, anchor: 'right', color: 'wood', sparse: false },
+      { id: 'armchair', w: 0.7, d: 0.7, h: 0.8, y0: 0, anchor: 'fr', color: 'accent', sparse: false }
+    ],
+    bathroom: [
+      { id: 'toilet', w: 0.4, d: 0.65, h: 0.45, y0: 0, anchor: 'bl', color: 'white', sparse: true },
+      { id: 'shower', w: 0.85, d: 0.85, h: 0.1, y0: 0, anchor: 'br', color: 'metal', sparse: true },
+      { id: 'basin', w: 0.55, d: 0.45, h: 0.85, y0: 0, anchor: 'fl', color: 'white', sparse: true },
+      { id: 'cabinet', w: 0.45, d: 0.3, h: 0.9, y0: 0, anchor: 'fr', color: 'wood', sparse: false },
+      { id: 'mat', w: 0.5, d: 0.35, h: 0.05, y0: 0, anchor: 'center', color: 'accent', sparse: false },
+      { id: 'basket', w: 0.4, d: 0.35, h: 0.45, y0: 0, anchor: 'front', color: 'fabric', sparse: false }
+    ],
+    kitchen: [
+      { id: 'counter', w: 1.9, d: 0.6, h: 0.9, y0: 0, anchor: 'bl', color: 'white', sparse: true },
+      { id: 'fridge', w: 0.7, d: 0.7, h: 1.1, y0: 0, anchor: 'fr', color: 'metal', sparse: true },
+      { id: 'island', w: 1.2, d: 0.7, h: 0.9, y0: 0, anchor: 'center', color: 'wood', sparse: false },
+      { id: 'pantry', w: 0.6, d: 0.6, h: 1.1, y0: 0, anchor: 'left', color: 'wood', sparse: false },
+      { id: 'sideCounter', w: 1.2, d: 0.6, h: 0.9, y0: 0, anchor: 'right', color: 'white', sparse: false },
+      { id: 'stoolL', w: 0.4, d: 0.4, h: 0.65, y0: 0, anchor: 'center', color: 'dark', sparse: false, off: [-0.3, -0.6] },
+      { id: 'stoolR', w: 0.4, d: 0.4, h: 0.65, y0: 0, anchor: 'center', color: 'dark', sparse: false, off: [0.3, -0.6] }
+    ],
+    living: [
+      { id: 'sofa', w: 2.2, d: 0.9, h: 0.75, y0: 0, anchor: 'back', color: 'fabric', sparse: true },
+      { id: 'coffeeTable', w: 1.1, d: 0.6, h: 0.4, y0: 0, anchor: 'center', color: 'wood', sparse: true },
+      { id: 'tvUnit', w: 1.8, d: 0.45, h: 0.5, y0: 0, anchor: 'front', color: 'dark', sparse: false },
+      { id: 'armchairL', w: 0.8, d: 0.8, h: 0.8, y0: 0, anchor: 'left', color: 'accent', sparse: false },
+      { id: 'armchairR', w: 0.8, d: 0.8, h: 0.8, y0: 0, anchor: 'right', color: 'accent', sparse: false },
+      { id: 'sideTable', w: 0.45, d: 0.45, h: 0.5, y0: 0, anchor: 'bl', color: 'wood', sparse: false }
+    ],
+    dining: [
+      { id: 'table', w: 1.6, d: 0.9, h: 0.75, y0: 0, anchor: 'center', color: 'wood', sparse: true },
+      { id: 'chairB', w: 0.45, d: 0.45, h: 0.9, y0: 0, anchor: 'center', color: 'fabric', sparse: true, off: [0, 0.75] },
+      { id: 'chairF', w: 0.45, d: 0.45, h: 0.9, y0: 0, anchor: 'center', color: 'fabric', sparse: true, off: [0, -0.75] },
+      { id: 'chairL', w: 0.45, d: 0.45, h: 0.9, y0: 0, anchor: 'center', color: 'fabric', sparse: false, off: [-1.075, 0] },
+      { id: 'chairR', w: 0.45, d: 0.45, h: 0.9, y0: 0, anchor: 'center', color: 'fabric', sparse: false, off: [1.075, 0] },
+      { id: 'sideboard', w: 1.4, d: 0.45, h: 0.8, y0: 0, anchor: 'back', color: 'wood', sparse: false }
+    ],
+    majlis: [
+      { id: 'seatBack', w: 2.6, d: 0.8, h: 0.35, y0: 0, anchor: 'back', color: 'fabric', sparse: true },
+      { id: 'lowTable', w: 1.0, d: 0.6, h: 0.3, y0: 0, anchor: 'center', color: 'wood', sparse: true },
+      { id: 'seatLeft', w: 2.0, d: 0.8, h: 0.35, y0: 0, anchor: 'left', color: 'fabric', sparse: false },
+      { id: 'seatRight', w: 2.0, d: 0.8, h: 0.35, y0: 0, anchor: 'right', color: 'fabric', sparse: false },
+      { id: 'sideFL', w: 0.4, d: 0.4, h: 0.4, y0: 0, anchor: 'fl', color: 'accent', sparse: false },
+      { id: 'sideFR', w: 0.4, d: 0.4, h: 0.4, y0: 0, anchor: 'fr', color: 'accent', sparse: false }
+    ],
+    office: [
+      { id: 'desk', w: 1.4, d: 0.7, h: 0.75, y0: 0, anchor: 'back', color: 'wood', sparse: true },
+      { id: 'chair', w: 0.55, d: 0.55, h: 0.9, y0: 0, anchor: 'back', color: 'dark', sparse: true, off: [0, -0.75] },
+      { id: 'shelf', w: 1.2, d: 0.4, h: 1.1, y0: 0, anchor: 'left', color: 'wood', sparse: false },
+      { id: 'cabinet', w: 0.45, d: 0.6, h: 0.7, y0: 0, anchor: 'br', color: 'metal', sparse: false },
+      { id: 'armchair', w: 0.7, d: 0.7, h: 0.8, y0: 0, anchor: 'fr', color: 'accent', sparse: false }
+    ],
+    maid: [
+      { id: 'bed', w: 0.9, d: 2.0, h: 0.5, y0: 0, anchor: 'bl', color: 'fabric', sparse: true },
+      { id: 'cupboard', w: 0.8, d: 0.55, h: 1.1, y0: 0, anchor: 'fr', color: 'wood', sparse: true },
+      { id: 'desk', w: 0.9, d: 0.45, h: 0.75, y0: 0, anchor: 'right', color: 'wood', sparse: false },
+      { id: 'chair', w: 0.45, d: 0.45, h: 0.9, y0: 0, anchor: 'right', color: 'dark', sparse: false, off: [-0.5, 0] },
+      { id: 'rug', w: 1.0, d: 0.6, h: 0.05, y0: 0, anchor: 'center', color: 'accent', sparse: false }
+    ],
+    storage: [
+      { id: 'shelvesBack', w: 1.6, d: 0.45, h: 1.1, y0: 0, anchor: 'back', color: 'metal', sparse: true },
+      { id: 'shelvesLeft', w: 1.2, d: 0.45, h: 1.1, y0: 0, anchor: 'left', color: 'metal', sparse: false },
+      { id: 'shelvesRight', w: 1.2, d: 0.45, h: 1.1, y0: 0, anchor: 'right', color: 'metal', sparse: false },
+      { id: 'crate', w: 0.5, d: 0.5, h: 0.4, y0: 0, anchor: 'fl', color: 'wood', sparse: false }
+    ],
+    laundry: [
+      { id: 'washer', w: 0.6, d: 0.6, h: 0.85, y0: 0, anchor: 'bl', color: 'white', sparse: true },
+      { id: 'dryer', w: 0.6, d: 0.6, h: 0.85, y0: 0, anchor: 'bl', color: 'white', sparse: true, off: [0.65, 0] },
+      { id: 'basket', w: 0.45, d: 0.35, h: 0.4, y0: 0, anchor: 'fr', color: 'accent', sparse: false },
+      { id: 'rack', w: 1.0, d: 0.4, h: 1.0, y0: 0, anchor: 'front', color: 'metal', sparse: false }
+    ]
+  };
+})(globalThis.PC = globalThis.PC || {});
+
+</script>
+<script>/* js/data/sky.js */
+/* Sky and season tables (Designer-owned, F3-T3; A-13), read by PC.sky.compute (F4-T3).
+   keys: hour key-frames, h strictly increasing from 0 to 24, the last equal to the first. Colours sRGB '#RRGGBB';
+   sunI / hemiI are light intensities. Night keys (h < 5 or h > 20): hemiI >= 0.25 so the model stays visible, sunI
+   (the moon) at most a quarter of noon. With this rig a sunlit horizontal face gets a light sum of about 1.0 at
+   noon, 0.5 in the morning, 0.25 in the evening and 0.12 at night.
+   seasons: elevMax = noon sun elevation in degrees; tint / tintAmount blend sunColor, hemiSky and background toward
+   the season, weighted by daylight (A-13); canopy / shrub / ground are vegetation and plot-ground colours; winter has
+   bare trees (canopyVisible false) with snow on shrubs and ground. Summer (tintAmount 0) is the untinted baseline.
+   groundBounce: weight of the season ground in hemiGround at full daylight (snow bounce). */
+(function (PC) {
+  'use strict';
+  PC.data.sky = {
+    keys: [
+      { h: 0, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30 },
+      { h: 4.5, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30 },
+      { h: 6, background: '#E8B08A', sunColor: '#FFB27A', sunI: 0.30, hemiSky: '#B6A6C8', hemiGround: '#5A5046', hemiI: 0.36 },
+      { h: 7.5, background: '#A9CBE6', sunColor: '#FFE2BC', sunI: 0.55, hemiSky: '#C9DCEE', hemiGround: '#7F7564', hemiI: 0.44 },
+      { h: 12, background: '#8EC3EA', sunColor: '#FFF7E8', sunI: 0.70, hemiSky: '#D6E6F5', hemiGround: '#8F8672', hemiI: 0.48 },
+      { h: 16, background: '#9CC5E4', sunColor: '#FFEBCF', sunI: 0.65, hemiSky: '#D2E0EE', hemiGround: '#8A7F69', hemiI: 0.46 },
+      { h: 17, background: '#D8B994', sunColor: '#FFC98A', sunI: 0.60, hemiSky: '#D9C7B8', hemiGround: '#7F6F5C', hemiI: 0.42 },
+      { h: 18, background: '#E59A6E', sunColor: '#FF9A5C', sunI: 0.40, hemiSky: '#A894B8', hemiGround: '#54463E', hemiI: 0.36 },
+      { h: 19.5, background: '#2C3556', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#6E7BA6', hemiGround: '#2A2A38', hemiI: 0.32 },
+      { h: 21, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30 },
+      { h: 24, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30 }
+    ],
+    seasons: {
+      spring: { elevMax: 52, tint: '#F1F7E4', tintAmount: 0.08, canopy: '#6AA442', canopyVisible: true, shrub: '#8CBF5A', ground: '#9DC46F' },
+      summer: { elevMax: 72, tint: '#FFF4DE', tintAmount: 0, canopy: '#4E8A3A', canopyVisible: true, shrub: '#5E9441', ground: '#7FAE55' },
+      autumn: { elevMax: 52, tint: '#F6C58E', tintAmount: 0.15, canopy: '#C8702A', canopyVisible: true, shrub: '#A8692F', ground: '#A59B5C' },
+      winter: { elevMax: 32, tint: '#D3E0F2', tintAmount: 0.20, canopy: '#6F6A5C', canopyVisible: false, shrub: '#DCE4EA', ground: '#EDF1F4' }
+    },
+    groundBounce: 0.25
   };
 })(globalThis.PC = globalThis.PC || {});
 

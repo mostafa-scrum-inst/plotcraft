@@ -12,6 +12,11 @@ const R = collector('F1-T3 plot');
 const base = sessions({ R, shots: SHOTS, noShots });
 const MAIN = VIEWPORTS.filter((v) => v.tag !== '640x360' && (!only || v.tag === only));
 const LAND = VIEWPORTS.find((v) => v.tag === '640x360');
+// A-16 trim (F3-T3 first item, docs/03-tasks/F3-T3/qa-trim.md): sections A-G run at 360x640 (touch) and 1280x800 (mouse)
+// only. Their 768x1024 twin is tests/e2e/plot.spec.mjs (drawing, gesturesAndUnits, ftDrawing, draftsAndGuard run at
+// 768x1024 touch); the same behaviours by touch stay here at 360x640. O, L and N keep 768x1024 (their e2e twins,
+// noFlip and borderLabels, were removed from plot.spec instead; N is the only Fit-view check with a 640x360 run).
+const MAIN_AG = MAIN.filter((v) => v.tag !== '768x1024');
 const FT = 0.3048;
 const near = (a, b, tol = 1e-6) => Math.abs(a - b) <= tol;
 const samePts = (a, b, tol = 1e-6) => a.length === b.length && a.every((p, i) => near(p[0], b[i][0], tol) && near(p[1], b[i][1], tol));
@@ -117,7 +122,7 @@ const count = (arr, v) => arr.filter((x) => x === v).length;
 
 const browser = await launch();
 try {
-  for (const vp of MAIN) {
+  for (const vp of MAIN_AG) {
     const V = vp.tag;
 
     // ============ A. draw and close a 20 x 30 m plot; measurements in m and ft (F1-S1, F1-S2, R4) ============

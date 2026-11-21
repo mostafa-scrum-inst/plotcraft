@@ -317,7 +317,15 @@ async function badDraft(vp) {
 }
 
 try {
-  for (const vp of VPS) { await scaleAndLabels(vp); await tapMode(vp); await keyboardList(vp); await liveAndR5(vp); await clearing(vp); }
+  // A-16 trim (F3-T3 first item, QA; docs/03-tasks/F3-T3/qa-trim.md): a function no longer runs at a viewport where its
+  // twin section in tests/qa/f2-t3-site-rooms.mjs runs with the same input (VPS = 360x640, 640x360, 768x1024, 1280x800).
+  //   scaleAndLabels        all four            (no single QA twin: kept)
+  //   tapMode               768x1024            (twin: QA B at 360x640, 640x360 touch and 1280x800 mouse)
+  //   keyboardList          640x360, 768x1024   (twin: QA C at 360x640, 1280x800)
+  //   liveAndR5, clearing   640x360, 768x1024   (twin: QA D at 360x640, 1280x800)
+  for (const vp of VPS) await scaleAndLabels(vp);
+  await tapMode(VPS[2]);
+  for (const vp of [VPS[1], VPS[2]]) { await keyboardList(vp); await liveAndR5(vp); await clearing(vp); }
   await badDraft(VPS[0]);
 } catch (e) { T.ok(false, 'spec crashed: ' + (e && e.stack || e)); } finally { await browser.close(); }
 process.exit(T.done() ? 1 : 0);

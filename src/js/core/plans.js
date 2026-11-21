@@ -91,8 +91,8 @@
       var r = { id: start.id, x: start.x, y: start.y, w: start.w, h: start.h }, guides = [];
       [['x', 'w', 'W', 'h', dx], ['y', 'h', 'D', 'w', dy]].forEach(function (a) {
         var p = a[0], s = a[1], max = ctx[a[2]] - r[s];
-        // the moving edges' span across the axis: the dragged position on the other axis
-        var v = Math.min(max, Math.max(0, start[p] + a[4])), s0 = p === 'x' ? start.y + dy : start.x + dx, s1 = s0 + r[a[3]];
+        // the moving edges' span across the axis: the clamped position on the other axis (A-15; QA F3-T2 obs 5)
+        var v = Math.min(max, Math.max(0, start[p] + a[4])), s0 = p === 'x' ? Math.min(ctx.D - r.h, Math.max(0, start.y + dy)) : Math.min(ctx.W - r.w, Math.max(0, start.x + dx)), s1 = s0 + r[a[3]];
         var lo = P.snapEdge(v, s0, s1, ctx.cands[p], ctx.grid, 0, max);
         var hi = P.snapEdge(v + r[s], s0, s1, ctx.cands[p], ctx.grid, r[s], ctx[a[2]]);
         var useHi = hi.to === 'edge' ? lo.to !== 'edge' || hi.d < lo.d - 1e-9 : lo.to !== 'edge' && hi.d < lo.d - 1e-9;
