@@ -122,4 +122,19 @@ Scope: worktree /home/user/plotcraft-f4t3, branch `f4t3` at 7993baf. Reviewed ag
 8. **Finding 7 after the fix:** stage-2 slider sweep timing and an identical scatter output.
 9. **Regression:** full run at `--jobs 3`, with 420 s as the target and 600 s as the hard limit.
 
+## Addendum (TL, finding 7), 2026-11-21
+- **Commit:** 74e64ca, merged in b92aec5.
+- **Memo:** `candidates()` is memoised in one entry, keyed on the full `PC.scatter.seedText` string, not the hash. It returns a frozen array of frozen points. The selection only reads it.
+- **Output:** byte-identical over FS's 160-state comparison. The memo test covers:
+  - a footprint % change hits the memo;
+  - a new street edge gives a new key;
+  - the output equals a memo-free load.
+- **Re-run:** I re-ran unit `scatter,sky` in main; it passed in 9.6 s.
+- **Stage-2 sweep:**
+  - sample: 201 ms (worst tick 6.1 ms), against 143 ms with no scatter;
+  - 100 × 100 m: 614 ms (worst tick 13.6 ms), against 507 ms.
+
+  That is close to the pre-F4-T3 cost. **Finding 7 is closed.**
+- **Non-blocking:** the key leaves out `PC.data.vegetation.scale`. That is correct at runtime, because the data is constant. A test that patches the table must use a fresh load (as the memo-free comparison already does).
+
 VERDICT: APPROVED
