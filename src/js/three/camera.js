@@ -19,6 +19,9 @@
       function down(e) {
         if (!api.active()) return;
         if (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 2) return;
+        // QA F4T1-2: preventDefault below cancels the click's focus, so a mouse press focuses the canvas itself
+        // (keys act on the focused canvas, A-12); touch does not, to keep the on-screen keyboard closed.
+        if (e.pointerType === 'mouse' && canvas.focus) canvas.focus({ preventScroll: true });
         if (canvas.setPointerCapture) try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
         pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (pts.size === 1) mode = (e.pointerType === 'mouse' && (e.button === 2 || e.shiftKey)) ? 'pan' : 'orbit';

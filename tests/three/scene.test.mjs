@@ -156,6 +156,23 @@ test('resize: setSize(w, h, false) + aspect follow the canvas; 0 x 0 is skipped;
   assert.equal(E.R().pixelRatio, 2);
 });
 
+test('returning to stage 5 draws exactly one frame; an unchanged ResizeObserver callback draws nothing (QA F4T1-1)', () => {
+  const E = opened(), r0 = E.R().renders, b0 = E.info().builds, [w, h] = [E.canvas.clientWidth, E.canvas.clientHeight];
+  E.PC.view3d.close(); E.raf.flush();
+  // As in the page: the shell enters stage 5 while stage 4's sample strip (49 px) is still shown, hides it after,
+  // and the ResizeObserver reports the settled size after the frame.
+  E.canvas.resize(w, h - 49);
+  E.PC.view3d.open(E.house, E.canvas, () => {});
+  E.canvas.resize(w, h);
+  E.raf.flush(); E.ro.trigger(w, h); E.raf.flush(); E.timer.flush(); E.raf.flush();
+  assert.deepEqual([E.R().renders - r0, E.info().builds - b0, plain(E.R().size)], [1, 0, [w, h, false]]);
+  const calls = E.R().calls.length;
+  E.ro.trigger(E.canvas.clientWidth, E.canvas.clientHeight); E.raf.flush();
+  assert.deepEqual([E.R().renders - r0, E.R().calls.length], [1, calls], 'same size again: no setSize, no frame');
+  E.ro.trigger(400, 300); E.raf.flush();
+  assert.equal(E.R().renders - r0, 2, 'a real size change still draws');
+});
+
 test('near plane follows the orbit radius; far = 20 x house radius', () => {
   const E = opened(), cam = E.info().camera;
   assert.equal(cam.far, 20 * E.house.radius);

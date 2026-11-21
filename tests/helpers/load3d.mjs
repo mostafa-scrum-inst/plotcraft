@@ -32,7 +32,7 @@ export function stubCanvas(w = 360, h = 400) {
     setPointerCapture(id) { this.captured.add(id); }, releasePointerCapture(id) { this.captured.delete(id); },
     hasPointerCapture(id) { return this.captured.has(id); },
     getBoundingClientRect() { return { left: 0, top: 0, width: this.clientWidth, height: this.clientHeight, right: this.clientWidth, bottom: this.clientHeight }; },
-    focus() {}
+    focused: null, focus(o) { this.focused = o || {}; }
   });
   canvas.resize = (nw, nh) => { canvas.clientWidth = parent.clientWidth = nw; canvas.clientHeight = parent.clientHeight = nh; };
   return canvas;

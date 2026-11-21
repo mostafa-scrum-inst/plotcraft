@@ -46,7 +46,9 @@
     S.frame = requestAnimationFrame(frame);
   }
   function invalidate() { S.dirty = true; request(); }
-  function frame() { S.frame = 0; if (!S.dirty || !S.active || S.lost || !visible()) return; S.dirty = false; render(); }
+  // The frame measures the canvas itself (QA F4T1-1): the shell may still be settling its layout when
+  // PC.view3d.open() runs (e.g. stage 4's sample strip), so the size is taken when the frame draws.
+  function frame() { S.frame = 0; if (!S.dirty || !S.active || S.lost || !visible()) return; resize(true); S.dirty = false; render(); }
   function render() {
     var p = S.pose, e = PC.cam.position(p), cam = S.camera, n = PC.cam.near(p);
     cam.position.set(e[0], e[1], e[2]);
@@ -56,17 +58,21 @@
     S.renders++;
   }
   function aspect() { return S.size[0] && S.size[1] ? S.size[0] / S.size[1] : 1; }
-  function resize() {
+  function resize(inFrame) {
     var c = S.canvas;
     if (!c || !S.renderer) return;
     var w = c.clientWidth, h = c.clientHeight;
     if (!w || !h) return;                                        // stage hidden
+    // QA F4T1-1: an unchanged size / pixel ratio (e.g. the ResizeObserver firing when the stage reappears) changes
+    // nothing and draws nothing; PC.view3d.open() requests its own frame. Also avoids setSize clearing the drawing buffer.
+    if (w === S.size[0] && h === S.size[1] && dpr() === S.pr) return;
+    S.pr = dpr();
     S.renderer.setPixelRatio(dpr());
     S.renderer.setSize(w, h, false);
     S.size = [w, h];
     S.camera.aspect = w / h; S.camera.updateProjectionMatrix();
     if (S.house) { S.limits = PC.cam.limits(S.house, aspect()); if (S.pose) S.pose = PC.cam.clamp(S.pose, S.limits); }
-    invalidate();
+    if (!inFrame) invalidate();
   }
 
   function setup(canvas) {
@@ -87,8 +93,8 @@
       if (S.house) { S.builtKey = null; build(S.house); }
       invalidate();
     });
-    if (typeof ResizeObserver === 'function' && canvas.parentElement) new ResizeObserver(resize).observe(canvas.parentElement);
-    else if (typeof addEventListener === 'function') addEventListener('resize', resize);
+    if (typeof ResizeObserver === 'function' && canvas.parentElement) new ResizeObserver(function () { resize(); }).observe(canvas.parentElement);
+    else if (typeof addEventListener === 'function') addEventListener('resize', function () { resize(); });
     if (typeof document !== 'undefined' && document.addEventListener) {
       document.addEventListener('visibilitychange', function () { if (visible()) invalidate(); else cancelFrame(); });
     }
@@ -163,8 +169,8 @@
         setup(canvas);
       }
       S.active = true;
+      if (house.key === S.builtKey) { S.onState('ready'); invalidate(); return { ok: true }; }   // the frame sizes
       resize();
-      if (house.key === S.builtKey) { S.onState('ready'); invalidate(); return { ok: true }; }
       S.onState('building');
       var token = ++S.token;
       S.building = token;

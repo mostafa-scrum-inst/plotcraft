@@ -34,6 +34,15 @@ test('one finger / mouse left drag orbits: right -> theta decreases, down -> phi
   assert.deepEqual(E.pose().target, p1.target);
 });
 
+test('a mouse press focuses the canvas without scrolling (keys work after a click); touch does not (QA F4T1-2)', () => {
+  const E = env();
+  E.ev('pointerdown', { pointerType: 'touch' }); E.ev('pointerup', {});
+  assert.equal(E.canvas.focused, null);
+  E.ev('pointerdown', { pointerId: 2, pointerType: 'mouse' });
+  assert.deepEqual({ ...E.canvas.focused }, { preventScroll: true });
+  E.ev('pointerup', { pointerId: 2, pointerType: 'mouse' });
+});
+
 test('mouse right-drag and Shift+drag pan (target moves, radius / angles unchanged)', () => {
   for (const extra of [{ button: 2 }, { shiftKey: true }]) {
     const E = env(), p0 = E.pose();
