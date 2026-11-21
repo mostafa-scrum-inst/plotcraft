@@ -16,8 +16,8 @@ const ready = (page) => page.waitForFunction(() => { const i = PC.debug.scene();
 const info = (page) => page.evaluate(() => { const i = PC.debug.scene(); return { renders: i.renders, builds: i.builds, size: i.size, active: i.active, frame: i.frame, aspect: i.camera.aspect }; });
 const cam = (page) => page.evaluate(() => PC.debug.cam());
 const scroll = (page) => page.evaluate(() => [window.scrollX, window.scrollY, document.scrollingElement.scrollTop, window.visualViewport ? window.visualViewport.scale : 1]);
-const DISABLED = ['v3-time', 'v3-preset-morning', 'v3-preset-noon', 'v3-preset-evening', 'v3-preset-night', 'v3-season', 'v3-room', 'v3-tour-start', 'v3-tour-pause', 'v3-tour-stop', 'v3-roof'];
-const ENABLED = ['v3-reset', 'v3-panel-toggle', 'v3-tab-view', 'v3-tab-light', 'v3-tab-tour'];
+const DISABLED = ['v3-time', 'v3-preset-morning', 'v3-preset-noon', 'v3-preset-evening', 'v3-preset-night', 'v3-season', 'v3-room', 'v3-tour-start', 'v3-tour-pause', 'v3-tour-stop'];
+const ENABLED = ['v3-reset', 'v3-panel-toggle', 'v3-tab-view', 'v3-tab-light', 'v3-tab-tour', 'v3-roof'];   // Roof enabled since F4-T2
 
 async function phone() {
   const vp = VIEWPORTS[0], tag = vp.tag + ' mock', o = await open(browser, vp, { three: 'mock', init: countRaf }), { page, act, hook, problems } = o;
@@ -37,9 +37,9 @@ async function phone() {
   T.ok(fill.same, `${tag} canvas rectangle = its wrap`);
   T.eq(fill.size, [...fill.client, false], `${tag} setSize(clientWidth, clientHeight, false)`);
   // controls: later tasks disabled, these enabled
-  T.eq(await page.evaluate((L) => L.map((h) => document.querySelector(`[data-pc="${h}"]`).disabled), DISABLED), DISABLED.map(() => true), `${tag} later-task controls disabled (time, presets, season, room, tour, roof)`);
+  T.eq(await page.evaluate((L) => L.map((h) => document.querySelector(`[data-pc="${h}"]`).disabled), DISABLED), DISABLED.map(() => true), `${tag} later-task controls disabled (time, presets, season, room, tour)`);
   T.ok(await page.evaluate(() => [...document.querySelectorAll('[data-pc="v3-tour-speed"] input')].every((i) => i.disabled)), `${tag} tour speed disabled`);
-  T.eq(await page.evaluate((L) => L.map((h) => document.querySelector(`[data-pc="${h}"]`).disabled), ENABLED), ENABLED.map(() => false), `${tag} Reset, panel toggle and tabs enabled`);
+  T.eq(await page.evaluate((L) => L.map((h) => document.querySelector(`[data-pc="${h}"]`).disabled), ENABLED), ENABLED.map(() => false), `${tag} Reset, panel toggle, tabs and Roof (F4-T2) enabled`);
   // Designer (TL F4-T1 condition 1): the disabled controls look disabled (muted set of .pc-btn:disabled: sunk / ink-3)
   T.eq(await page.evaluate(() => {
     const q = (h) => document.querySelector(`[data-pc="${h}"]`), cs = (e, p) => getComputedStyle(e, p), root = cs(document.documentElement);
@@ -76,8 +76,16 @@ async function phone() {
   await page.locator('[data-pc="v3-level"] label:has(> input[value="G"])').tap();
   await ready(page);
   T.eq(await page.evaluate(() => { const w = PC.debug.scene().world; return [w.getObjectByName('level-G').visible, w.getObjectByName('level-1').visible]; }), [true, false], `${tag} Ground hides the First floor`);
+  T.eq(await page.evaluate(() => { const w = PC.debug.scene().world, f = w.getObjectByName('level-1').children.find((c) => c.name === 'furniture'); return [!!f, f && f.parent.visible]; }), [true, false], `${tag} ...and its furniture with it (F4-T2)`);
+  // F4-T2: the Roof switch by touch (shown only with All: a single level hides it)
+  const roofOn = () => page.evaluate(() => [document.querySelector('[data-pc="v3-roof"]').checked, PC.debug.scene().roof, PC.debug.scene().world.getObjectByName('roof').visible]);
+  await page.locator('.pc-switch:has([data-pc="v3-roof"])').tap(); await ready(page);
+  T.eq(await roofOn(), [true, true, false], `${tag} Roof on with Ground selected: switch on, roof still hidden`);
   await page.locator('[data-pc="v3-level"] label:has(> input[value="all"])').tap();
   await ready(page);
+  T.eq(await roofOn(), [true, true, true], `${tag} Roof on + All: the roof is shown`);
+  await page.locator('.pc-switch:has([data-pc="v3-roof"])').tap(); await ready(page);
+  T.eq(await roofOn(), [false, false, false], `${tag} tap again: Roof off`);
   // leaving stops frames; returning keeps the pose
   const pose = await cam(page);
   await act('btn-back'); await settled(page);
@@ -136,6 +144,20 @@ async function desktop() {
   await act('v3-reset'); await ready(page);
   const rs = await page.evaluate(() => { const i = PC.debug.scene(); return [PC.debug.cam(), PC.cam.reset(PC.debug.house(), i.size[0] / i.size[1])]; });
   T.eq(rs[0], rs[1], `${tag} Reset view = the reset pose for this canvas`);
+  // F4-T2: the Roof switch by keyboard (Space toggles the focused switch)
+  await hook('v3-roof').focus(); await page.keyboard.press('Space'); await ready(page);
+  T.eq(await page.evaluate(() => [document.querySelector('[data-pc="v3-roof"]').checked, PC.debug.scene().world.getObjectByName('roof').visible]), [true, true], `${tag} Space on Roof: roof shown`);
+  await page.keyboard.press('Space'); await ready(page);
+  T.eq(await page.evaluate(() => PC.debug.scene().world.getObjectByName('roof').visible), false, `${tag} Space again: hidden`);
+  // F3-S4 last criterion: Q19 on stage 4 -> stage 5 rebuilds with fewer pieces; approvals kept
+  const pieces = () => page.evaluate(() => PC.debug.house().levels.reduce((n, l) => n + l.rooms.reduce((m, r) => m + r.furniture.length, 0), 0));
+  const n0 = await pieces(), b0 = (await info(page)).builds;
+  await act('btn-back'); await settled(page);
+  await page.locator('[data-pc="q-interior-density"] label:has(> input[value="sparse"])').click(); await settled(page);
+  await act('btn-next'); await ready(page);
+  const after = await page.evaluate(() => { const s = PC.store.get(); return [s.stage, Object.values(s.plans).filter((p) => p.approved).length, Object.keys(s.plans).length]; });
+  T.eq(after, [5, 2, 2], `${tag} Q19 Sparse: back on stage 5, approvals still 2 of 2`);
+  T.ok((await info(page)).builds === b0 + 1 && (await pieces()) < n0, `${tag} ...rebuilt once with fewer pieces (${await pieces()} < ${n0})`);
   T.none(problems(), `${tag} no errors`);
   await o.ctx.close();
 }

@@ -2,14 +2,14 @@
    to PC.view3d (three layer) and owns the stage-5 DOM: Building... / unavailable overlays, the level selector
    ("All" + the house's own levels, lowest first; PM round 9 labels), Reset view, the collapsible panel and its tabs.
    Session state only (A-4): level selection and roof toggle survive leaving and returning; the view opens on All
-   with the roof off. Controls of later tasks (time, presets, season, room finder, tour, Roof until F4-T2) are
-   disabled here (TL F4-T1 ruling 3); the Roof state logic is wired. This file never touches three.js (ui layer, A-2). */
+   with the roof off. Controls of later tasks (time, presets, season, room finder, tour) are
+   disabled here (TL F4-T1 ruling 3); the Roof switch is enabled since F4-T2. This file never touches three.js (ui layer, A-2). */
 (function (PC) {
   'use strict';
   var ui = PC.ui = PC.ui || {};
   ui.stages = ui.stages || {};
   var LATER = ['v3-time', 'v3-preset-morning', 'v3-preset-noon', 'v3-preset-evening', 'v3-preset-night', 'v3-season',
-    'v3-room', 'v3-tour-start', 'v3-tour-pause', 'v3-tour-stop', 'v3-roof'];
+    'v3-room', 'v3-tour-start', 'v3-tour-pause', 'v3-tour-stop'];
   var TABS = ['view', 'light', 'tour'];
   var open = false, house = null, level = 'all', levelsKey = '';
 

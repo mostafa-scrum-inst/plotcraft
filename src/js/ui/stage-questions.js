@@ -129,7 +129,9 @@
     binds.push(F.radios({ hook: 'q-pool-size', read: function (s) { return s.ans.pool.size; }, disabled: function (s) { return !s.ans.pool.on; },
       apply: function (v) { commit(function (d) { d.ans.pool.size = v; }); } }));
     binds.push(F.toggle({ hook: 'q-wall', read: function (s) { return s.ans.extras.wall; }, apply: function (on) { commit(function (d) { d.ans.extras.wall = on; }); } }));
-    binds.push(F.radios({ hook: 'q-gate', read: function (s) { return s.ans.extras.gate; }, apply: function (v) { commit(function (d) { d.ans.extras.gate = v; }); } }));
+    binds.push(F.radios({ hook: 'q-gate', read: function (s) { return s.ans.extras.gate; },
+      disabled: function (s) { return !s.ans.extras.wall; },                 // Q7 (PM round 10): no gate without the wall; the value is kept
+      apply: function (v) { commit(function (d) { d.ans.extras.gate = v; }); } }));
     binds.push(F.toggle({ hook: 'q-seating', read: function (s) { return s.ans.extras.seating; }, apply: function (on) { commit(function (d) { d.ans.extras.seating = on; }); } }));
   }
 

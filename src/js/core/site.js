@@ -105,7 +105,7 @@
     var ptsL = state.plot.pts.map(function (p) { var l = frame.w2l(p); return [r9(l[0]), r9(l[1])]; }), n = ptsL.length;
     var site = { edge: edge, frame: frame, ptsL: ptsL, plotArea: Math.abs(G.area(ptsL)), perimeter: G.perimeter(ptsL, true),
       edgeClass: [], edgeAuto: [], setbackOf: [], buildable: null, footprint: null, noFit: false, parking: null, pool: null,
-      veg: null, omitted: [] };
+      veg: null, seating: null, northMarker: null, omitted: [] };
     // Edge classes: front = street edge; back = outward normal within 40 degrees of straight away from the street
     // (automatic). In effect: the architect's override where there is one (F2-S4), else the automatic class.
     var ov = a.edgeOv || {};
@@ -124,6 +124,8 @@
     if (site.footprint) {
       PC.site.parking(site, a.parking);
       PC.site.pool(site, a.pool);
+      PC.site.seating(site, a);
+      PC.site.northMarker(site, a);
     }
     // Vegetation: the asked share, or what is left beside the building, parking and pool.
     var used = (site.footprint ? site.footprint.area : 0) + (site.parking ? site.parking.w * site.parking.d : 0) + (site.pool ? site.pool.w * site.pool.d : 0);
@@ -143,7 +145,8 @@
       if (!state.plot.closed || state.plot.pts.length < PC.C.PLOT.minPts) return null;
       var a = state.ans;
       var key = JSON.stringify([state.plot.pts, PC.frames.streetEdge(state), a.setbacks.front, a.setbacks.back, a.setbacks.side,
-        a.footprintPct, a.vegPct, a.parking.cars, a.parking.covered, a.pool.on, a.pool.size, a.edgeOv || {}]);
+        a.footprintPct, a.vegPct, a.parking.cars, a.parking.covered, a.pool.on, a.pool.size, a.edgeOv || {},
+        a.extras.wall, a.extras.gate, a.extras.seating]);
       for (var i = 0; i < memo.length; i++) if (memo[i].key === key) {
         var hit = memo.splice(i, 1)[0];
         memo.unshift(hit);                               // most recently used first

@@ -63,4 +63,88 @@
     if (tryAll(scan(bb.x0, fp.u - c - sht, fp.u - c - sht), scan(bb.y0, bb.y1 - lng, cv - lng / 2), sht, lng)) return;         // left side yard
     site.omitted.push('pool');
   };
+
+  // ---- F4-T2: gate, path strip, garden seating, north marker (A-9; PM round 10 Q7 / Q8; Designer plan 2) ----
+  function grow(r, k) { return { u: r.u - k, v: r.v - k, w: r.w + 2 * k, d: r.d + 2 * k }; }
+  // Gate centre u on the street edge (L: the edge runs from (0, 0) to (len, 0)), or null: no gate without the wall
+  // (Q7). Left / Centre / Right as seen from the street = 25 / 50 / 75 % of the edge from its low-u end.
+  PC.site.gateU = function (site, extras) {
+    if (!extras.wall) return null;
+    var e = site.ptsL[(site.edge + 1) % site.ptsL.length], k = { left: 0.25, centre: 0.5, right: 0.75 }[extras.gate];
+    return e[0] * (k === undefined ? 0.5 : k);
+  };
+  // The path between the street edge and the entrance (door centre), 2 m wide, spanning the gate when there is one.
+  PC.site.pathStrip = function (site, extras) {
+    var fp = site.footprint, cx = fp.u + fp.w / 2, g = PC.site.gateU(site, extras), h = PC.C.SITE.pathHalf;
+    var a = Math.min(cx, g === null ? cx : g) - h, b = Math.max(cx, g === null ? cx : g) + h, y0 = G.bbox(site.ptsL).y0;
+    return { u: a, v: y0, w: b - a, d: fp.v - y0 };
+  };
+  // What a yard item must stay clear of: footprint + 1 m, parking, pool + clearance, the path strip.
+  function blocked(site, extras) {
+    var out = [grow(site.footprint, 1), PC.site.pathStrip(site, extras)];
+    if (site.parking) out.push(site.parking);
+    if (site.pool) out.push(grow(site.pool, PC.C.POOL_CLEAR));
+    return out;
+  }
+
+  // Seating: a 3 x 3 m pad, back yard first, then the wider side yard, the other side yard, the front yard; in each
+  // yard the 0.5 m position nearest the yard's middle. Inside the plot with C.SITE.edgeClear to the edge (the wall
+  // stands inside it). None -> omitted (warning, PM round 10 Q8). `along`: the benches' axis, parallel to the
+  // nearest facade ('u' in the back / front yard, 'v' beside the building).
+  PC.site.seating = function (site, ans) {
+    if (!ans.extras.seating) return;
+    var Z = PC.C.SITE.seat, k = PC.C.SITE.edgeClear, fp = site.footprint, bb = G.bbox(site.ptsL), no = blocked(site, ans.extras);
+    var cx = fp.u + fp.w / 2, cv = fp.v + fp.d / 2, bk = fp.v + fp.d + 1, rt = fp.u + fp.w + 1, lf = fp.u - 1;
+    function ok(r) { return G.rectInPoly(grow(r, k), site.ptsL) && !no.some(function (x) { return G.rectsOverlap(r, x); }); }
+    function yard(us, vs, along) {
+      for (var j = 0; j < vs.length; j++) for (var i = 0; i < us.length; i++) {
+        var r = { u: us[i], v: vs[j], w: Z, d: Z };
+        if (ok(r)) { site.seating = { u: r.u, v: r.v, w: Z, d: Z, along: along }; return true; }
+      }
+      return false;
+    }
+    var sides = [
+      function () { return yard(scan(rt, bb.x1 - Z, (rt + bb.x1 - Z) / 2), scan(bb.y0, bb.y1 - Z, cv - Z / 2), 'v'); },
+      function () { return yard(scan(bb.x0, lf - Z, (bb.x0 + lf - Z) / 2), scan(bb.y0, bb.y1 - Z, cv - Z / 2), 'v'); }
+    ];
+    if (bb.x1 - rt < lf - bb.x0) sides.reverse();
+    if (yard(scan(bb.x0, bb.x1 - Z, cx - Z / 2), scan(bk, bb.y1 - Z, (bk + bb.y1 - Z) / 2), 'u')) return;
+    if (sides[0]() || sides[1]()) return;
+    if (yard(scan(bb.x0, bb.x1 - Z, cx - Z / 2), scan(bb.y0, fp.v - 1 - Z, (bb.y0 + fp.v - 1 - Z) / 2), 'u')) return;
+    site.omitted.push('seating');
+  };
+
+  // North marker (Designer plan 2): a needle of length L = clamp(0.06 x max bbox side, 1.5, 3). Candidates: the
+  // plot bbox corners front-left, front-right, back-left, back-right, each moved inward along the diagonal in 0.25 m
+  // steps until the needle's circle (radius L / 2) plus the wall and 0.5 m lies inside the plot. The first candidate
+  // whose circle is clear of the yard items wins; none clear -> the first one found (never omitted).
+  PC.site.northMarker = function (site, ans) {
+    var M = PC.C.SITE.marker, bb = G.bbox(site.ptsL), pts = site.ptsL, n = pts.length;
+    var L = Math.min(M.max, Math.max(M.min, M.k * Math.max(bb.x1 - bb.x0, bb.y1 - bb.y0))), r = L / 2, room = r + M.spare + PC.C.SITE.wallT;
+    var no = blocked(site, ans.extras).concat(site.seating ? [site.seating] : []), first = null, diag = Math.hypot(bb.x1 - bb.x0, bb.y1 - bb.y0);
+    function fits(p) {
+      if (!G.pointInPoly(p, pts)) return false;
+      for (var i = 0; i < n; i++) if (G.distPointSeg(p, pts[i], pts[(i + 1) % n]) < room - 1e-9) return false;
+      return true;
+    }
+    function clear(p) {
+      return !no.some(function (x) {
+        var dx = Math.max(x.u - p[0], 0, p[0] - x.u - x.w), dy = Math.max(x.v - p[1], 0, p[1] - x.v - x.d);
+        return dx * dx + dy * dy < r * r;
+      });
+    }
+    var corners = [[bb.x0, bb.y0, 1, 1], [bb.x1, bb.y0, -1, 1], [bb.x0, bb.y1, 1, -1], [bb.x1, bb.y1, -1, -1]];
+    for (var c = 0; c < corners.length; c++) {
+      var k = corners[c], p = null;
+      for (var t = 0; t <= diag; t += M.step) {
+        var q = [k[0] + k[2] * t / Math.SQRT2, k[1] + k[3] * t / Math.SQRT2];
+        if (fits(q)) { p = q; break; }
+      }
+      if (!p) continue;
+      if (!first) first = p;
+      if (clear(p)) { first = p; break; }
+    }
+    if (!first) first = [(bb.x0 + bb.x1) / 2, (bb.y0 + bb.y1) / 2];
+    site.northMarker = { u: first[0], v: first[1], L: L };
+  };
 })(globalThis.PC = globalThis.PC || {});

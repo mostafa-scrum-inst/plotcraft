@@ -87,7 +87,8 @@ Build rules (`build.mjs`, node only, no dependencies):
 | `draft.js` | `PC.draft` | `serialize`, `parse` (migrates older versions, validates, returns `null` on anything unexpected), `validState`, `isEmpty`, `KEY`, `KEYS` (current first) |
 | `sample.js` | `PC.sample` | section 6.2 as a state object |
 | `house.js` | `PC.house` | A-9 house model builder |
-| `furnish.js` | `PC.furnish` | furniture boxes per room from the Designer table |
+| `access.js` | `PC.layout.access` | CD-5 hall access per level (moved out of `layout.js` in F4-T2; same name and signature) |
+| `furnish.js` | `PC.furnish` | furniture boxes per room from the Designer table (`room`, `pose`) |
 | `scatter.js` | `PC.scatter` | seeded vegetation positions |
 | `cam.js` | `PC.cam` | orbit pose maths, clamps, fly-to interpolation (plain arrays) |
 | `sky.js` | `PC.sky` | A-13 time/season model |
@@ -293,20 +294,21 @@ house = {
               rooms: [ { id, name, type, u, v, w, d, area,
                          furniture: [ { kind, u, v, w, d, h, y0, color } ] } ],
               stair: null | { u, v, w, d }, lift: null | { u, v, w, d } } ],   // lowest level first
-  roof: { type: 'flat' | 'pitched' | 'terrace', usable, baseY, stairHead: null | { u, v, w, d } },
+  roof: { type: 'flat' | 'pitched' | 'terrace', usable, baseY,      // usable + pitched -> 'flat'
+          stairHead: null | { u, v, w, d }, liftHead: null | { u, v, w, d } },   // usable roof only
   exterior: 'sand' | ..., interior: { style, density },
   site: { entrance: { u, v, w },                  // door centre on the front wall
           parking: null | { u, v, w, d, cars, covered }, pool: null | { u, v, w, d },
           wall: bool, gate: null | { u, w },      // on v = 0
-          seating: null | { u, v, w, d },
+          seating: null | { u, v, w, d, along: 'u' | 'v' },   // benches parallel to the nearest facade
           trees: [[u, v, s], ...], shrubs: [[u, v, s], ...], vegPct,
-          northMarker: { u, v } }
+          northMarker: { u, v, L } }
 }
 ```
 
 - Furniture: `PC.furnish.room(room, table, density)` places the Designer's pieces (A-11 table schema) against walls/corners/centre with 0.15 m clearance, scales a piece down to 60 % at most to fit, drops a piece that still does not fit or overlaps an earlier one. "Sparse" keeps only pieces flagged `sparse: true`. Every furniture box lies inside its room rectangle (unit-tested for all 10 types at S, M, L and at the 1.5 m minimum side).
 - Vegetation: `PC.scatter.vegetation(site, seed)` with a mulberry32 PRNG seeded from the plot points: candidates on a jittered 1 m grid, inside the plot and 0.7 m from the boundary, outside footprint + 1 m, parking, pool clearance, the gate-to-entrance path strip and the seating pad. A tree counts 6 m2, a shrub 1.5 m2; 60 % of `veg.area` goes to trees. Caps: 120 trees, 200 shrubs. Unit test: covered area is within 20 % (relative) of `veg.area` on the sample and no item is inside an excluded rectangle.
-- Gate: on the street edge at 25 % / 50 % / 75 % of its length (Left / Centre / Right, left as seen from the street), 3 m wide. Entrance: centre of the front wall. Seating: 3 x 3 m pad in the largest free yard rectangle (back first).
+- Gate: on the street edge at 25 % / 50 % / 75 % of its length (Left / Centre / Right, left as seen from the street), 3 m wide. Entrance: centre of the front wall. No gate without the wall (`PC.site.gateU`, PM round 10 Q7). Seating (`PC.site.seating`, F4-T2): 3 x 3 m pad, yards in the order back, wider side, other side, front; in each the position nearest the yard's middle on 0.5 m steps, inside the plot with 0.3 m to the edge, clear of footprint + 1 m, parking, pool + clearance and `PC.site.pathStrip` (2 m wide, street to door, widened to the gate); none fits -> `omitted` gets `'seating'` and validate adds the warning `seating-omitted` (q 17, PM round 10 Q8 text). The site memo key includes `extras`.
 - Tests on the model replace WebGL checks: rooms match the approved plans in position and size, every level present, omitted site items absent, furniture counts sparse < full.
 - **Storey convention (TL, F4-T1 plan review).** Storey k occupies `[baseY, baseY + pitch]`: the slab is its bottom 0.2 m, the floor is at `floorY = baseY + 0.2`, the next slab's underside at `floorY + storeyH` (Q8). The ground floor stands on a 0.2 m plinth; the basement floor is at `−pitch + 0.2` and its ceiling is the ground slab's underside at Y 0; `roof.baseY = (top index + 1) x pitch`.
 - **F4-T2 plan review:** `roof.liftHead: null | { u, v, w, d }` (the lift on a usable roof, drawn as a 1.2 m block); `site.northMarker: { u, v, L }` (Designer needle, `L = clamp(0.06 x max bbox side, 1.5, 3)`, first clear corner front-left / front-right / back-left / back-right, never omitted); trees clear footprint + 1 m + canopy radius (1.55 m at the largest scale), shrubs footprint + 1 m. A separating state for the refusal exists: Q4 vegetation so that footprint + vegetation > 100 (`fp-veg-over`) leaves every plan fresh and stage 3 `valid` but not `reachable`.
@@ -335,6 +337,7 @@ scene
 - Z-fighting offsets: room-tint quads 0.015 m above the slab, `groundCap` 0.01 m above `groundPlot`, `groundOuter` 0.05 m below it. The hall has **no quad**: the slab box's top face carries the hall tint (`BoxBatch.add` `topHex`, A-11), so there is one coplanar layer only (TL, F4-T1 plan review). The camera near plane follows the orbit radius (A-12) so 0.015 m holds at every zoom.
 - F4-T1 shell: stair and lift are plain boxes of their core rectangles, 1.2 m high (wall height) on every level; the lift is not a full-height shaft (it would hide the floors behind it in "All"). Stepped stair optional in F4-T2.
 - Roof on (F4-T2 plan review): the `roof` batch also carries the exterior wall bands of every above-ground level, from `floorY + 1.2` to `baseY + pitch`, so the roof sits on a closed exterior rather than floating over 1.2 m walls. Pitched roof: 30° gable, ridge along the longer side, no overhang, slopes `exteriors.roof`, gable triangles `exteriors.wall`. Boundary wall 1.2 m, gate posts 1.4 m (`trim`), no gate leaf; pool = flush opaque `poolWater` plane at Y 0.03 plus a 0.3 x 0.1 m rim.
+- F4-T2 as built: flat roof = 0.2 m slab + 0.15 m parapet ring, 0.3 m high, 1.0 m when usable or terrace (`parapet`); terrace pergola over the back third (4 posts 0.15 m, 2.4 m, beams 0.1 m every 0.6 m, `roof`); usable roof: stair head 2.4 m and lift overrun 1.2 m over `roof.stairHead` / `roof.liftHead` (`parapet`). Furniture: one "furniture" batch per level group, a box per model piece from `floorY + y0`, colour = the model's Q18 hex. Site batch: wall segments centred 0.1 m inside each plot edge (`addSeg`), the 3 m street gap with two 0.4 x 0.4 x 1.4 m posts; seating = 0.05 m pad (`paving`), 0.9 m table 0.75 m high, two 1.6 x 0.45 x 0.45 m benches 0.9 m either side along `seating.along` (`seating`); north needle = two `addFlat` triangles 0.04 m high, width 0.35 L, N half `northMarker`, S half `poolRim`, corners from `PC.three.needle(house)` (T, doubles; N tip along `(sin N, -cos N)`). Meshes: sample 12, maximum house 18 (before F4-T3 vegetation). Constants in `PC.C.FURNISH`, `PC.C.ROOF`, `PC.C.SITE`.
 - Dollhouse: no ceilings; exterior walls and partitions are 1.2 m high (0.15 m thick) in a storey of `storeyH`, so each floor reads from above and, in "All", lower floors are visible through the open band between wall tops and the slab above. Room type is shown by the floor tint (`PC.data.roomTints`); there are no per-room 3D labels (the selected/toured room name is an HTML caption).
 - Level selector: "All" or a plan level `k` -> levels above `k` hidden. Basement: levels above hidden **and** `groundCap` hidden, so the pit (basement walls are in `level-B`) is seen from above. Roof toggle default off; finder and tour force it off.
 - Renderer: `new THREE.WebGLRenderer({ canvas, antialias: true })`, `setPixelRatio(Math.min(devicePixelRatio, 2))`, `setSize(w, h, false)`, `shadowMap.enabled = true`, `shadowMap.type = THREE.PCFSoftShadowMap`, sun `shadow.mapSize.set(1024, 1024)`, `outputEncoding = THREE.sRGBEncoding`.

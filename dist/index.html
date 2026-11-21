@@ -1800,6 +1800,15 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     // 3D (F4-T1; A-9, A-10, A-12). HOUSE: slab 0.2 m (pitch = Q8 + slab; floor at baseY + slab), dollhouse walls
     // 1.2 m x 0.15 m, entrance door 1.2 m wide, z-offsets of A-10. CAM: angles in degrees, see A-12.
     HOUSE: { slab: 0.2, wallH: 1.2, wallT: 0.15, door: 1.2, tintLift: 0.015, capLift: 0.01, outerDrop: 0.05, outerK: 36 },
+    // F4-T2 (A-9, A-10, A-11; TL plan review, Designer plan). FURNISH: the A-11 placement rule. ROOF: slab, parapets
+    // (0.3 m, 1.0 m when walkable or a terrace), pergola over the back third, 30 degree gable, stair head 2.4 m, lift
+    // overrun 1.2 m. SITE: boundary wall 1.2 x 0.2 m inside the edge, gate 3 m with 0.4 x 1.4 m posts, seating pad
+    // 3 m, north needle L = clamp(0.06 x max bbox side, 1.5, 3) with 0.5 m spare from the wall.
+    FURNISH: { inset: 0.15, overlap: 0.01, scales: [1, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6] },
+    ROOF: { slab: 0.2, parapet: 0.3, parapetHigh: 1.0, parapetT: 0.15, pitchDeg: 30, pergolaH: 2.4, post: 0.15, beam: 0.1,
+      beamStep: 0.6, stairHead: 2.4, liftHead: 1.2 },
+    SITE: { wallH: 1.2, wallT: 0.2, gateW: 3, post: 0.4, postH: 1.4, seat: 3, edgeClear: 0.3, pathHalf: 1,
+      marker: { k: 0.06, min: 1.5, max: 3, spare: 0.5, step: 0.25 } },
     CAM: { fov: 45, nearMin: 0.5, nearK: 0.02, farK: 20, phiMin: 5, phiMax: 85, rMin: 4, rMaxK: 3, rMaxReset: 1.2,
       eyeMin: 1, resetK: 2.2, resetFit: 1.05, resetTheta: 30, resetPhi: 50, keyDeg: 5, keyZoom: 1.1, wheelK: 0.0015 },
     VIEW3D: { maxDpr: 2, shadowMap: 1024, shadowBias: -0.0005, shadowNormalBias: 0.02, sunDist: 2.5, shadowK: 2.5, shadowR: 1.2 },
@@ -2454,7 +2463,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     var ptsL = state.plot.pts.map(function (p) { var l = frame.w2l(p); return [r9(l[0]), r9(l[1])]; }), n = ptsL.length;
     var site = { edge: edge, frame: frame, ptsL: ptsL, plotArea: Math.abs(G.area(ptsL)), perimeter: G.perimeter(ptsL, true),
       edgeClass: [], edgeAuto: [], setbackOf: [], buildable: null, footprint: null, noFit: false, parking: null, pool: null,
-      veg: null, omitted: [] };
+      veg: null, seating: null, northMarker: null, omitted: [] };
     // Edge classes: front = street edge; back = outward normal within 40 degrees of straight away from the street
     // (automatic). In effect: the architect's override where there is one (F2-S4), else the automatic class.
     var ov = a.edgeOv || {};
@@ -2473,6 +2482,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     if (site.footprint) {
       PC.site.parking(site, a.parking);
       PC.site.pool(site, a.pool);
+      PC.site.seating(site, a);
+      PC.site.northMarker(site, a);
     }
     // Vegetation: the asked share, or what is left beside the building, parking and pool.
     var used = (site.footprint ? site.footprint.area : 0) + (site.parking ? site.parking.w * site.parking.d : 0) + (site.pool ? site.pool.w * site.pool.d : 0);
@@ -2492,7 +2503,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       if (!state.plot.closed || state.plot.pts.length < PC.C.PLOT.minPts) return null;
       var a = state.ans;
       var key = JSON.stringify([state.plot.pts, PC.frames.streetEdge(state), a.setbacks.front, a.setbacks.back, a.setbacks.side,
-        a.footprintPct, a.vegPct, a.parking.cars, a.parking.covered, a.pool.on, a.pool.size, a.edgeOv || {}]);
+        a.footprintPct, a.vegPct, a.parking.cars, a.parking.covered, a.pool.on, a.pool.size, a.edgeOv || {},
+        a.extras.wall, a.extras.gate, a.extras.seating]);
       for (var i = 0; i < memo.length; i++) if (memo[i].key === key) {
         var hit = memo.splice(i, 1)[0];
         memo.unshift(hit);                               // most recently used first
@@ -2728,6 +2740,90 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     if (tryAll(scan(fp.u + fp.w + c, bb.x1 - sht, fp.u + fp.w + c), scan(bb.y0, bb.y1 - lng, cv - lng / 2), sht, lng)) return;   // right side yard
     if (tryAll(scan(bb.x0, fp.u - c - sht, fp.u - c - sht), scan(bb.y0, bb.y1 - lng, cv - lng / 2), sht, lng)) return;         // left side yard
     site.omitted.push('pool');
+  };
+
+  // ---- F4-T2: gate, path strip, garden seating, north marker (A-9; PM round 10 Q7 / Q8; Designer plan 2) ----
+  function grow(r, k) { return { u: r.u - k, v: r.v - k, w: r.w + 2 * k, d: r.d + 2 * k }; }
+  // Gate centre u on the street edge (L: the edge runs from (0, 0) to (len, 0)), or null: no gate without the wall
+  // (Q7). Left / Centre / Right as seen from the street = 25 / 50 / 75 % of the edge from its low-u end.
+  PC.site.gateU = function (site, extras) {
+    if (!extras.wall) return null;
+    var e = site.ptsL[(site.edge + 1) % site.ptsL.length], k = { left: 0.25, centre: 0.5, right: 0.75 }[extras.gate];
+    return e[0] * (k === undefined ? 0.5 : k);
+  };
+  // The path between the street edge and the entrance (door centre), 2 m wide, spanning the gate when there is one.
+  PC.site.pathStrip = function (site, extras) {
+    var fp = site.footprint, cx = fp.u + fp.w / 2, g = PC.site.gateU(site, extras), h = PC.C.SITE.pathHalf;
+    var a = Math.min(cx, g === null ? cx : g) - h, b = Math.max(cx, g === null ? cx : g) + h, y0 = G.bbox(site.ptsL).y0;
+    return { u: a, v: y0, w: b - a, d: fp.v - y0 };
+  };
+  // What a yard item must stay clear of: footprint + 1 m, parking, pool + clearance, the path strip.
+  function blocked(site, extras) {
+    var out = [grow(site.footprint, 1), PC.site.pathStrip(site, extras)];
+    if (site.parking) out.push(site.parking);
+    if (site.pool) out.push(grow(site.pool, PC.C.POOL_CLEAR));
+    return out;
+  }
+
+  // Seating: a 3 x 3 m pad, back yard first, then the wider side yard, the other side yard, the front yard; in each
+  // yard the 0.5 m position nearest the yard's middle. Inside the plot with C.SITE.edgeClear to the edge (the wall
+  // stands inside it). None -> omitted (warning, PM round 10 Q8). `along`: the benches' axis, parallel to the
+  // nearest facade ('u' in the back / front yard, 'v' beside the building).
+  PC.site.seating = function (site, ans) {
+    if (!ans.extras.seating) return;
+    var Z = PC.C.SITE.seat, k = PC.C.SITE.edgeClear, fp = site.footprint, bb = G.bbox(site.ptsL), no = blocked(site, ans.extras);
+    var cx = fp.u + fp.w / 2, cv = fp.v + fp.d / 2, bk = fp.v + fp.d + 1, rt = fp.u + fp.w + 1, lf = fp.u - 1;
+    function ok(r) { return G.rectInPoly(grow(r, k), site.ptsL) && !no.some(function (x) { return G.rectsOverlap(r, x); }); }
+    function yard(us, vs, along) {
+      for (var j = 0; j < vs.length; j++) for (var i = 0; i < us.length; i++) {
+        var r = { u: us[i], v: vs[j], w: Z, d: Z };
+        if (ok(r)) { site.seating = { u: r.u, v: r.v, w: Z, d: Z, along: along }; return true; }
+      }
+      return false;
+    }
+    var sides = [
+      function () { return yard(scan(rt, bb.x1 - Z, (rt + bb.x1 - Z) / 2), scan(bb.y0, bb.y1 - Z, cv - Z / 2), 'v'); },
+      function () { return yard(scan(bb.x0, lf - Z, (bb.x0 + lf - Z) / 2), scan(bb.y0, bb.y1 - Z, cv - Z / 2), 'v'); }
+    ];
+    if (bb.x1 - rt < lf - bb.x0) sides.reverse();
+    if (yard(scan(bb.x0, bb.x1 - Z, cx - Z / 2), scan(bk, bb.y1 - Z, (bk + bb.y1 - Z) / 2), 'u')) return;
+    if (sides[0]() || sides[1]()) return;
+    if (yard(scan(bb.x0, bb.x1 - Z, cx - Z / 2), scan(bb.y0, fp.v - 1 - Z, (bb.y0 + fp.v - 1 - Z) / 2), 'u')) return;
+    site.omitted.push('seating');
+  };
+
+  // North marker (Designer plan 2): a needle of length L = clamp(0.06 x max bbox side, 1.5, 3). Candidates: the
+  // plot bbox corners front-left, front-right, back-left, back-right, each moved inward along the diagonal in 0.25 m
+  // steps until the needle's circle (radius L / 2) plus the wall and 0.5 m lies inside the plot. The first candidate
+  // whose circle is clear of the yard items wins; none clear -> the first one found (never omitted).
+  PC.site.northMarker = function (site, ans) {
+    var M = PC.C.SITE.marker, bb = G.bbox(site.ptsL), pts = site.ptsL, n = pts.length;
+    var L = Math.min(M.max, Math.max(M.min, M.k * Math.max(bb.x1 - bb.x0, bb.y1 - bb.y0))), r = L / 2, room = r + M.spare + PC.C.SITE.wallT;
+    var no = blocked(site, ans.extras).concat(site.seating ? [site.seating] : []), first = null, diag = Math.hypot(bb.x1 - bb.x0, bb.y1 - bb.y0);
+    function fits(p) {
+      if (!G.pointInPoly(p, pts)) return false;
+      for (var i = 0; i < n; i++) if (G.distPointSeg(p, pts[i], pts[(i + 1) % n]) < room - 1e-9) return false;
+      return true;
+    }
+    function clear(p) {
+      return !no.some(function (x) {
+        var dx = Math.max(x.u - p[0], 0, p[0] - x.u - x.w), dy = Math.max(x.v - p[1], 0, p[1] - x.v - x.d);
+        return dx * dx + dy * dy < r * r;
+      });
+    }
+    var corners = [[bb.x0, bb.y0, 1, 1], [bb.x1, bb.y0, -1, 1], [bb.x0, bb.y1, 1, -1], [bb.x1, bb.y1, -1, -1]];
+    for (var c = 0; c < corners.length; c++) {
+      var k = corners[c], p = null;
+      for (var t = 0; t <= diag; t += M.step) {
+        var q = [k[0] + k[2] * t / Math.SQRT2, k[1] + k[3] * t / Math.SQRT2];
+        if (fits(q)) { p = q; break; }
+      }
+      if (!p) continue;
+      if (!first) first = p;
+      if (clear(p)) { first = p; break; }
+    }
+    if (!first) first = [(bb.x0 + bb.x1) / 2, (bb.y0 + bb.y1) / 2];
+    site.northMarker = { u: first[0], v: first[1], L: L };
   };
 })(globalThis.PC = globalThis.PC || {});
 
@@ -3042,60 +3138,11 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     return out;
   }
 
-  // CD-5 (PM round 10): ids of the rooms with no way in from the hall or the stair / lift, in room order. Frame P.
-  // A side counts when it is not on the footprint outline; what of it no other room or the core touches (within
-  // adjTol) faces hall. Access: >= HALL_ACCESS.min of hall, or of stair / lift contact. A room without it is reached
-  // through an adjacent reached room that is its pair partner or listed in HALL_ACCESS.hosts for its type; the
-  // rule runs to a fixed point, so chains count. Hall pockets that touch no stair count as hall (known limit).
-  function access(W, D, rooms, c, pairs, types) {
-    var e = K().adjTol, A = PC.C.HALL_ACCESS, blocks = [];
-    rooms.forEach(function (r) { blocks.push({ id: r.id, x: r.x, y: r.y, w: r.w, h: r.h, core: false }); });
-    [c && c.stair, c && c.lift].forEach(function (b) { if (b) blocks.push({ id: '', x: b.x, y: b.y, w: b.w, h: b.h, core: true }); });
-    // sides as [axis, at, from, to]: axis 'x' = a vertical side at x = at spanning y
-    function sides(b) { return [['x', b.x, b.y, b.y + b.h], ['x', b.x + b.w, b.y, b.y + b.h], ['y', b.y, b.x, b.x + b.w], ['y', b.y + b.h, b.x, b.x + b.w]]; }
-    var reached = {};
-    rooms.forEach(function (r) {
-      var hall = 0, touch = 0;
-      sides(r).forEach(function (s) {
-        var edge = s[0] === 'x' ? W : D;
-        if (Math.abs(s[1]) < e || Math.abs(s[1] - edge) < e) return;            // exterior wall
-        var free = [[s[2], s[3]]];
-        blocks.forEach(function (b) {
-          if (!b.core && b.id === r.id) return;
-          sides(b).forEach(function (t) {
-            if (t[0] !== s[0] || Math.abs(t[1] - s[1]) >= e) return;
-            var lo = Math.max(s[2], t[2]), hi = Math.min(s[3], t[3]);
-            if (hi - lo <= 1e-9) return;
-            if (b.core) touch += hi - lo;
-            free = free.reduce(function (out, f) {
-              if (t[3] <= f[0] || t[2] >= f[1]) out.push(f);
-              else { if (t[2] > f[0]) out.push([f[0], t[2]]); if (t[3] < f[1]) out.push([t[3], f[1]]); }
-              return out;
-            }, []);
-          });
-        });
-        free.forEach(function (f) { hall += f[1] - f[0]; });
-      });
-      reached[r.id] = hall >= A.min - 1e-9 || touch >= A.min - 1e-9;
-    });
-    var paired = function (a, b) { return (pairs || []).some(function (p) { return (p[0] === a && p[1] === b) || (p[0] === b && p[1] === a); }); };
-    for (var changed = true; changed;) {
-      changed = false;
-      rooms.forEach(function (r) {
-        if (reached[r.id]) return;
-        var hosts = A.hosts[types[r.id]] || [];
-        if (rooms.some(function (n) { return n.id !== r.id && reached[n.id] && adjacent(r, n) && (paired(r.id, n.id) || hosts.indexOf(types[n.id]) >= 0); })) {
-          reached[r.id] = true; changed = true;
-        }
-      });
-    }
-    return rooms.filter(function (r) { return !reached[r.id]; }).map(function (r) { return r.id; });
-  }
+
 
   PC.layout = {
     core: core,
     adjacent: adjacent,
-    access: access,
     check: check,
     overlaps: overlaps,
     // input: { W, D, rooms: [{ id, area }], pairs: [[a, b]], stairs, stairPos, lift } ->
@@ -3139,6 +3186,63 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       out.ok = true; out.rooms = rooms; out.unmet = unmetOf(rooms);
       return out;
     }
+  };
+})(globalThis.PC = globalThis.PC || {});
+
+</script>
+<script>/* js/core/access.js */
+/* PC.layout.access (CD-5, PM round 10): which rooms of a drawn plan have no way in from the hall or the stairs.
+   Pure, frame P. Moved out of layout.js (TL F4-T2 Step 0 review, note 3); the name stays PC.layout.access. */
+(function (PC) {
+  'use strict';
+  // CD-5 (PM round 10): ids of the rooms with no way in from the hall or the stair / lift, in room order. Frame P.
+  // A side counts when it is not on the footprint outline; what of it no other room or the core touches (within
+  // adjTol) faces hall. Access: >= HALL_ACCESS.min of hall, or of stair / lift contact. A room without it is reached
+  // through an adjacent reached room that is its pair partner or listed in HALL_ACCESS.hosts for its type; the
+  // rule runs to a fixed point, so chains count. Hall pockets that touch no stair count as hall (known limit).
+  PC.layout.access = function access(W, D, rooms, c, pairs, types) {
+    var e = PC.C.LAYOUT.adjTol, A = PC.C.HALL_ACCESS, blocks = [];
+    rooms.forEach(function (r) { blocks.push({ id: r.id, x: r.x, y: r.y, w: r.w, h: r.h, core: false }); });
+    [c && c.stair, c && c.lift].forEach(function (b) { if (b) blocks.push({ id: '', x: b.x, y: b.y, w: b.w, h: b.h, core: true }); });
+    // sides as [axis, at, from, to]: axis 'x' = a vertical side at x = at spanning y
+    function sides(b) { return [['x', b.x, b.y, b.y + b.h], ['x', b.x + b.w, b.y, b.y + b.h], ['y', b.y, b.x, b.x + b.w], ['y', b.y + b.h, b.x, b.x + b.w]]; }
+    var reached = {};
+    rooms.forEach(function (r) {
+      var hall = 0, touch = 0;
+      sides(r).forEach(function (s) {
+        var edge = s[0] === 'x' ? W : D;
+        if (Math.abs(s[1]) < e || Math.abs(s[1] - edge) < e) return;            // exterior wall
+        var free = [[s[2], s[3]]];
+        blocks.forEach(function (b) {
+          if (!b.core && b.id === r.id) return;
+          sides(b).forEach(function (t) {
+            if (t[0] !== s[0] || Math.abs(t[1] - s[1]) >= e) return;
+            var lo = Math.max(s[2], t[2]), hi = Math.min(s[3], t[3]);
+            if (hi - lo <= 1e-9) return;
+            if (b.core) touch += hi - lo;
+            free = free.reduce(function (out, f) {
+              if (t[3] <= f[0] || t[2] >= f[1]) out.push(f);
+              else { if (t[2] > f[0]) out.push([f[0], t[2]]); if (t[3] < f[1]) out.push([t[3], f[1]]); }
+              return out;
+            }, []);
+          });
+        });
+        free.forEach(function (f) { hall += f[1] - f[0]; });
+      });
+      reached[r.id] = hall >= A.min - 1e-9 || touch >= A.min - 1e-9;
+    });
+    var paired = function (a, b) { return (pairs || []).some(function (p) { return (p[0] === a && p[1] === b) || (p[0] === b && p[1] === a); }); };
+    for (var changed = true; changed;) {
+      changed = false;
+      rooms.forEach(function (r) {
+        if (reached[r.id]) return;
+        var hosts = A.hosts[types[r.id]] || [];
+        if (rooms.some(function (n) { return n.id !== r.id && reached[n.id] && PC.layout.adjacent(r, n) && (paired(r.id, n.id) || hosts.indexOf(types[n.id]) >= 0); })) {
+          reached[r.id] = true; changed = true;
+        }
+      });
+    }
+    return rooms.filter(function (r) { return !reached[r.id]; }).map(function (r) { return r.id; });
   };
 })(globalThis.PC = globalThis.PC || {});
 
@@ -3370,7 +3474,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       proportion: 'The building is limited to {dims} ({a}, {p} % of the plot): on this narrow plot it may be at most 3 times as long as it is wide. Smaller setbacks along its long sides would allow a larger building.' },
     'veg-reduced':     { kind: 'warn', q: 4, text: 'Vegetation was reduced to what fits: {a} ({p} %).' },
     'parking-omitted': { kind: 'warn', q: 15, text: 'Parking does not fit between the building and the street: it is left out of the 3D scene. Try fewer cars, a lower footprint % or a larger front setback (it moves the building back from the street).' },
-    'pool-omitted':    { kind: 'warn', q: 16, text: 'The pool with its {c} clearance does not fit behind or beside the building: it is left out of the 3D scene. Try a smaller pool, a lower footprint % or a larger back setback (it moves the building toward the street).' }
+    'pool-omitted':    { kind: 'warn', q: 16, text: 'The pool with its {c} clearance does not fit behind or beside the building: it is left out of the 3D scene. Try a smaller pool, a lower footprint % or a larger back setback (it moves the building toward the street).' },
+    'seating-omitted': { kind: 'warn', q: 17, text: 'Garden seating does not fit in the yard: it is left out of the 3D scene. Try a lower footprint %, fewer cars or a smaller pool.' }
   };
   // What helps when a level needs more than the footprint offers: raising the footprint % only helps while the
   // plot is not already the limit.
@@ -3423,6 +3528,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     if (fp && site.veg.reduced) add('veg-reduced', { a: U.fmtArea(site.veg.area, unit), p: pct(site.veg.pct) });
     if (site.omitted.indexOf('parking') >= 0) add('parking-omitted');
     if (site.omitted.indexOf('pool') >= 0) add('pool-omitted', { c: U.fmtLen(PC.C.POOL_CLEAR, unit) });
+    if (site.omitted.indexOf('seating') >= 0) add('seating-omitted');
     out.summary = { plotArea: site.plotArea, buildableArea: site.buildable.area, footprintArea: fp ? fp.area : 0,
       footprintPct: fp ? fp.pct : 0, vegArea: site.veg.area, vegPct: site.veg.pct, levels: levels };
     return out;
@@ -3835,14 +3941,76 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 })(globalThis.PC = globalThis.PC || {});
 
 </script>
+<script>/* js/core/furnish.js */
+/* PC.furnish.room(room, table, density): the Designer's furniture pieces of one room (A-11 placement rule), pure.
+   room: { x, y, w, h } in frame P (front = low y, back = high y, left = low x seen from the street); table:
+   PC.data.furniture[type]; density 'full' | 'sparse' (only `sparse: true` pieces, same order).
+   -> [{ kind, x, y, w, d, h, y0, color }] in frame P: x, y = the piece's low corner, w along x, d along y (the
+   footprint as placed, scale included), color = the PC.data.interiors key (the house model resolves the hex).
+   Rule: inner rectangle = room inset by C.FURNISH.inset; orientation (back / front / corners: w along x; left /
+   right: w along y; center: w along the longer side, x on ties); flush with the anchor walls (centred along an edge
+   wall), then the offset (center pieces: along their own w / d axes, turning with them); scale 1.00 -> 0.60 (size
+   and offset; h and y0 never): the first scale inside (1e-9) and overlapping no placed piece by more than the
+   overlap tolerance on both axes (1e-9 slack: exactly 0.01 m is allowed) wins; none -> the piece is dropped. */
+(function (PC) {
+  'use strict';
+  var E = 1e-9;
+
+  // The piece at scale s in a W x D room (room-local): { l, r, f, b } (left, right, front, back edges).
+  function pose(p, s, W, D) {
+    var F = PC.C.FURNISH, x0 = F.inset, x1 = W - F.inset, y0 = F.inset, y1 = D - F.inset, fx, fy, alongX = true;
+    if (p.anchor === 'left' || p.anchor === 'right') { fx = p.d * s; fy = p.w * s; }
+    else if (p.anchor === 'center') { alongX = W >= D; fx = (alongX ? p.w : p.d) * s; fy = (alongX ? p.d : p.w) * s; }
+    else { fx = p.w * s; fy = p.d * s; }
+    var cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, k = p.anchor;
+    if (k === 'back' || k === 'bl' || k === 'br') cy = y1 - fy / 2;
+    if (k === 'front' || k === 'fl' || k === 'fr') cy = y0 + fy / 2;
+    if (k === 'left' || k === 'bl' || k === 'fl') cx = x0 + fx / 2;
+    if (k === 'right' || k === 'br' || k === 'fr') cx = x1 - fx / 2;
+    var a = p.off ? p.off[0] : 0, b = p.off ? p.off[1] : 0;
+    if (k === 'center' && !alongX) { cy += a * s; cx -= b * s; } else { cx += a * s; cy += b * s; }
+    return { l: cx - fx / 2, r: cx + fx / 2, f: cy - fy / 2, b: cy + fy / 2 };
+  }
+  function inside(q, W, D) {
+    var i = PC.C.FURNISH.inset;
+    return q.l >= i - E && q.r <= W - i + E && q.f >= i - E && q.b <= D - i + E;
+  }
+  function clash(q, o) {
+    var t = PC.C.FURNISH.overlap + E;
+    return Math.min(q.r, o.r) - Math.max(q.l, o.l) > t && Math.min(q.b, o.b) - Math.max(q.f, o.f) > t;
+  }
+
+  PC.furnish = {
+    pose: pose,
+    room: function (room, table, density) {
+      var W = room.w, D = room.h, placed = [], out = [];
+      (table || []).forEach(function (p) {
+        if (density === 'sparse' && !p.sparse) return;
+        var S = PC.C.FURNISH.scales;
+        for (var i = 0; i < S.length; i++) {
+          var q = pose(p, S[i], W, D);
+          if (!inside(q, W, D) || placed.some(function (o) { return clash(q, o); })) continue;
+          placed.push(q);
+          out.push({ kind: p.id, x: room.x + q.l, y: room.y + q.f, w: q.r - q.l, d: q.b - q.f, h: p.h, y0: p.y0, color: p.color });
+          return;
+        }
+      });
+      return out;
+    }
+  };
+})(globalThis.PC = globalThis.PC || {});
+
+</script>
 <script>/* js/core/house.js */
 /* PC.house.build(state): the house model (A-9), the only hand-off from 2D to 3D. Pure.
    Reads the APPROVED plans (frame P) and PC.layout.core only; never generates or syncs. Returns null unless stage 3
    is reachable and valid (CTO H3; TL F4-T1 plan review, item 2).
    Frames: P -> L is u = fp.u + x, v = fp.v + y; the 3D layer maps L -> T with PC.frames.l2t (street at +Z).
    Storey k occupies [baseY, baseY + pitch]: slab = the bottom PC.C.HOUSE.slab, floor at baseY + slab, the next
-   slab's underside at floor + storeyH (Q8). F4-T1 fills levels / rooms / core / roof descriptor / site rectangles;
-   furniture, gate, seating, north marker (F4-T2) and vegetation (F4-T3) stay empty. */
+   slab's underside at floor + storeyH (Q8). F4-T1: levels / rooms / core / roof descriptor / site rectangles.
+   F4-T2: furniture per room (PC.furnish, A-11; colour = the resolved Q18 hex, so Q18 changes colours and the key,
+   never the boxes), roof.stairHead / liftHead on a usable roof, site.gate (only with the wall, Q7), seating and the
+   north marker (site-outdoor.js). Vegetation (F4-T3) stays empty. */
 (function (PC) {
   'use strict';
   var INDEX = { B: -1, G: 0, 1: 1, 2: 2 };
@@ -3867,13 +4035,18 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       var core = PC.layout.core(fp.w, fp.d, L.stairsExist(state), a.stairPos, L.liftExists(state));
       var names = L.roomNames(state), types = {};
       a.rooms.forEach(function (r) { types[r.id] = r.type; });
-      var storeyH = a.ceilingH, pitch = storeyH + H.slab;
+      var storeyH = a.ceilingH, pitch = storeyH + H.slab, style = PC.data.interiors[a.interior.style];
+      // A usable roof is never pitched (validation switches it to flat); the model applies the same rule.
+      var roofType = a.usableRoof && a.roofType === 'pitched' ? 'flat' : a.roofType, gu = PC.site.gateU(site, a.extras);
       var levels = L.ids(state).map(function (id) {
         var index = INDEX[id];
         return {
           id: id, name: L.name(id), index: index, baseY: index * pitch,
           rooms: state.plans[id].rooms.map(function (r) {
-            return { id: r.id, name: names[r.id], type: types[r.id], u: fp.u + r.x, v: fp.v + r.y, w: r.w, d: r.h, area: r.w * r.h, furniture: [] };
+            var pieces = PC.furnish.room(r, PC.data.furniture[types[r.id]], a.interior.density).map(function (q) {
+              return { kind: q.kind, u: fp.u + q.x, v: fp.v + q.y, w: q.w, d: q.d, h: q.h, y0: q.y0, color: style[q.color] };
+            });
+            return { id: r.id, name: names[r.id], type: types[r.id], u: fp.u + r.x, v: fp.v + r.y, w: r.w, d: r.h, area: r.w * r.h, furniture: pieces };
           }),
           stair: rect(fp, core.stair), lift: rect(fp, core.lift)
         };
@@ -3888,14 +4061,15 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
         footprint: { u: fp.u, v: fp.v, w: fp.w, d: fp.d },
         storeyH: storeyH, pitch: pitch,
         levels: levels,
-        roof: { type: a.roofType, usable: !!a.usableRoof, baseY: (top + 1) * pitch, stairHead: null },
+        roof: { type: roofType, usable: !!a.usableRoof, baseY: (top + 1) * pitch,
+          stairHead: a.usableRoof ? rect(fp, core.stair) : null, liftHead: a.usableRoof ? rect(fp, core.lift) : null },
         exterior: a.exterior, interior: { style: a.interior.style, density: a.interior.density },
         site: {
           entrance: { u: fp.u + fp.w / 2, v: fp.v, w: H.door },
           parking: copy(site.parking), pool: copy(site.pool),
-          wall: !!a.extras.wall, gate: null, seating: null,
+          wall: !!a.extras.wall, gate: gu === null ? null : { u: gu, w: PC.C.SITE.gateW }, seating: copy(site.seating),
           trees: [], shrubs: [], vegPct: site.veg ? site.veg.pct : 0,
-          northMarker: null
+          northMarker: copy(site.northMarker)
         }
       };
       house.key = hash(JSON.stringify(house));
@@ -4227,7 +4401,12 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
      background does not (A-10).
    - BoxBatch: hand-written merge of boxes and up-facing quads into ONE Mesh with per-vertex colours (A-11).
      add(cx, cy, cz, sx, sy, sz, hex[, topHex]) in frame T (centre and full sizes); topHex colours the top face only
-     (the slab's hall tint, TL F4-T1 ruling 6). addQuad(cx, y, cz, sx, sz, hex): horizontal, facing up. */
+     (the slab's hall tint, TL F4-T1 ruling 6). addQuad(cx, y, cz, sx, sz, hex): horizontal, facing up.
+     F4-T2 (TL plan review Q12, required item 3), flat-shaded polygons with outward winding (each face's normal points
+     away from the solid's centre): addPrism(cx, cz, sx, sz, y0, rise, alongX, hex, gableHex) a gable over the
+     rectangle (ridge along X or Z, two slopes in hex, two triangles in gableHex, the base face down);
+     addSeg(x0, z0, x1, z1, thick, y0, y1, hex) an oriented box along a segment; addFlat(pts, y0, y1, hex) a convex
+     XZ polygon extruded from y0 to y1. userData.items lists [kind, vertex count] in the order added. */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
@@ -4248,7 +4427,56 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   var FACES = [[0, 1, 1, 2], [0, -1, 2, 1], [1, 1, 2, 0], [1, -1, 0, 2], [2, 1, 0, 1], [2, -1, 1, 0]];
   var CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
 
-  function BoxBatch() { this.pos = []; this.nor = []; this.rgb = []; this.idx = []; this.boxes = 0; this.quads = 0; this.cache = {}; }
+  function BoxBatch() {
+    this.pos = []; this.nor = []; this.rgb = []; this.idx = []; this.cache = {}; this.items = [];
+    this.boxes = 0; this.quads = 0; this.prisms = 0; this.segs = 0; this.flats = 0;
+  }
+  function sub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+  function cross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+  function dot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+  function mid(ps) { var c = [0, 0, 0]; ps.forEach(function (p) { c[0] += p[0] / ps.length; c[1] += p[1] / ps.length; c[2] += p[2] / ps.length; }); return c; }
+  // One flat convex polygon (3+ points), wound so that its normal points away from `inner` (a point inside the solid).
+  BoxBatch.prototype.poly = function (ps, rgb, inner) {
+    var n = cross(sub(ps[1], ps[0]), sub(ps[2], ps[0])), l = Math.sqrt(dot(n, n)) || 1;
+    n = [n[0] / l, n[1] / l, n[2] / l];
+    if (dot(n, sub(mid(ps), inner)) < 0) { ps = ps.slice().reverse(); n = [-n[0], -n[1], -n[2]]; }
+    var base = this.pos.length / 3, self = this;
+    ps.forEach(function (p) { self.pos.push(p[0], p[1], p[2]); self.nor.push(n[0], n[1], n[2]); self.rgb.push(rgb[0], rgb[1], rgb[2]); });
+    for (var i = 1; i < ps.length - 1; i++) this.idx.push(base, base + i, base + i + 1);
+    return ps.length;
+  };
+  // Side walls, top and bottom of a prism over the XZ outline `ring` (convex) from y0 to y1.
+  BoxBatch.prototype.solid = function (ring, y0, y1, rgb) {
+    var lo = ring.map(function (p) { return [p[0], y0, p[1]]; }), hi = ring.map(function (p) { return [p[0], y1, p[1]]; });
+    var inner = mid(lo.concat(hi)), v = this.poly(hi, rgb, inner) + this.poly(lo, rgb, inner);
+    for (var i = 0; i < ring.length; i++) { var j = (i + 1) % ring.length; v += this.poly([lo[i], lo[j], hi[j], hi[i]], rgb, inner); }
+    return v;
+  };
+  BoxBatch.prototype.addSeg = function (x0, z0, x1, z1, thick, y0, y1, hex) {
+    var dx = x1 - x0, dz = z1 - z0, l = Math.hypot(dx, dz) || 1, px = -dz / l * thick / 2, pz = dx / l * thick / 2;
+    this.items.push(['seg', this.solid([[x0 + px, z0 + pz], [x1 + px, z1 + pz], [x1 - px, z1 - pz], [x0 - px, z0 - pz]], y0, y1, this.color(hex))]);
+    this.segs++;
+  };
+  BoxBatch.prototype.addFlat = function (pts, y0, y1, hex) {
+    this.items.push(['flat', this.solid(pts, y0, y1, this.color(hex))]);
+    this.flats++;
+  };
+  BoxBatch.prototype.addPrism = function (cx, cz, sx, sz, y0, rise, alongX, hex, gableHex) {
+    var hx = sx / 2, hz = sz / 2, y1 = y0 + rise, s = this.color(hex), g = this.color(gableHex || hex), v = 0;
+    var b = [[cx - hx, y0, cz - hz], [cx + hx, y0, cz - hz], [cx + hx, y0, cz + hz], [cx - hx, y0, cz + hz]];
+    var r0 = alongX ? [cx - hx, y1, cz] : [cx, y1, cz - hz], r1 = alongX ? [cx + hx, y1, cz] : [cx, y1, cz + hz];
+    var inner = [cx, y0 + rise / 3, cz];
+    if (alongX) {
+      v += this.poly([b[0], b[1], r1, r0], s, inner) + this.poly([b[3], b[2], r1, r0], s, inner);
+      v += this.poly([b[0], b[3], r0], g, inner) + this.poly([b[1], b[2], r1], g, inner);
+    } else {
+      v += this.poly([b[0], b[3], r1, r0], s, inner) + this.poly([b[1], b[2], r1, r0], s, inner);
+      v += this.poly([b[0], b[1], r0], g, inner) + this.poly([b[3], b[2], r1], g, inner);
+    }
+    v += this.poly(b, s, inner);
+    this.items.push(['prism', v]);
+    this.prisms++;
+  };
   BoxBatch.prototype.color = function (hex) {
     var c = this.cache[hex];
     if (!c) { var k = three.col(hex); c = this.cache[hex] = [k.r, k.g, k.b]; }
@@ -4267,13 +4495,13 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   BoxBatch.prototype.add = function (cx, cy, cz, sx, sy, sz, hex, topHex) {
     var c = [cx, cy, cz], h = [sx / 2, sy / 2, sz / 2], side = this.color(hex), top = topHex ? this.color(topHex) : side;
     for (var i = 0; i < 6; i++) this.face(c, h, FACES[i], i === 2 ? top : side);
-    this.boxes++;
+    this.boxes++; this.items.push(['box', 24]);
   };
   BoxBatch.prototype.addQuad = function (cx, y, cz, sx, sz, hex) {
     this.face([cx, y, cz], [sx / 2, 0, sz / 2], FACES[2], this.color(hex));
-    this.quads++;
+    this.quads++; this.items.push(['quad', 4]);
   };
-  BoxBatch.prototype.count = function () { return this.boxes + this.quads; };
+  BoxBatch.prototype.count = function () { return this.items.length; };
   // One Mesh, or null when nothing was added.
   BoxBatch.prototype.build = function (material, name) {
     if (!this.idx.length) return null;
@@ -4286,6 +4514,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     m.name = name || '';
     m.castShadow = true; m.receiveShadow = true;
     m.userData.boxes = this.boxes; m.userData.quads = this.quads;
+    m.userData.prisms = this.prisms; m.userData.segs = this.segs; m.userData.flats = this.flats; m.userData.items = this.items.slice();
     return m;
   };
   three.BoxBatch = BoxBatch;
@@ -4298,7 +4527,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
    groundCap (plane over the footprint, 0.01 m up; hidden for the basement view). Per level a group "level-<id>"
    (userData.index) with "slab" (slab box whose top face is the hall tint + one tint quad per room at 0.015 m) and
    "walls" (exterior walls with the entrance gap on the ground front wall, merged partitions along room edges, stair
-   and lift as plain 1.2 m boxes, basement pit walls up to ground level). Empty "roof" and "site" groups (F4-T2).
+   and lift as plain 1.2 m boxes, basement pit walls up to ground level). Empty "roof" and "site" groups, filled by
+   build-roof.js / build-site.js; build-interior.js adds each level's "furniture" batch (F4-T2).
    L -> T: X = u - cu, Z = -(v - cv) (PC.frames.l2t). Colours: Q10 exteriors, room tints mixed with the Q18 wood
    (one sRGB lerp), stair / lift unmixed (H4, F3-T3 outcome section 7). */
 (function (PC) {
@@ -4413,6 +4643,188 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     });
     group('roof', world);
     group('site', world);
+    return made;
+  };
+})(globalThis.PC = globalThis.PC || {});
+
+</script>
+<script>/* js/three/build-roof.js */
+/* PC.three.buildRoof(house, world, mats): the one roof batch "roofBatch" in the "roof" group (A-10, F4-T2 plan 5;
+   TL plan review Q10, required item 2; Designer plan 4). Shown only with the Roof switch on and "All" (scene.js).
+   - Exterior wall bands of every above-ground level, from floorY + 1.2 up to baseY + pitch (exteriors.wall), so
+     Roof on is a closed exterior and the roof does not float over the 1.2 m dollhouse walls.
+   - Flat: 0.2 m slab (roof) + parapet ring 0.3 m x 0.15 m (parapet); 1.0 m when the roof is usable.
+   - Terrace: slab + 1.0 m parapet + a pergola over the back third: 4 posts 0.15 m, 2.4 m high, 0.1 m beams every
+     0.6 m along the region's longer side (roof).
+   - Pitched: a 30 degree gable over the footprint (BoxBatch.addPrism), ridge along the longer side, no overhang,
+     slopes in roof, gable triangles in wall. Never usable (the model switches a usable pitched roof to flat).
+   - Usable: stair head 2.4 m and lift overrun 1.2 m blocks (parapet) over roof.stairHead / roof.liftHead. */
+(function (PC) {
+  'use strict';
+  var three = PC.three = PC.three || {};
+
+  three.buildRoof = function (house, world, mats) {
+    var H = PC.C.HOUSE, R = PC.C.ROOF, fp = house.footprint, roof = house.roof, E = PC.data.exteriors[house.exterior];
+    var cu = house.center[0], cv = house.center[1], b = new three.BoxBatch(), t = H.wallT;
+    var X = function (u) { return u - cu; }, Z = function (v) { return -(v - cv); };
+    function box(u0, u1, v0, v1, y0, y1, hex) { b.add((X(u0) + X(u1)) / 2, (y0 + y1) / 2, (Z(v0) + Z(v1)) / 2, u1 - u0, y1 - y0, v1 - v0, hex); }
+    var u0 = fp.u, u1 = fp.u + fp.w, v0 = fp.v, v1 = fp.v + fp.d;
+    // a ring of four walls of thickness k just inside the footprint outline, from y0 to y1
+    function ring(k, y0, y1, hex) {
+      box(u0, u1, v0, v0 + k, y0, y1, hex); box(u0, u1, v1 - k, v1, y0, y1, hex);
+      box(u0, u0 + k, v0 + k, v1 - k, y0, y1, hex); box(u1 - k, u1, v0 + k, v1 - k, y0, y1, hex);
+    }
+    house.levels.forEach(function (lv) {
+      if (lv.index >= 0) ring(t, lv.baseY + H.slab + H.wallH, lv.baseY + house.pitch, E.wall);
+    });
+    var y = roof.baseY;
+    if (roof.type === 'pitched') {
+      var alongX = fp.w >= fp.d, rise = Math.tan(R.pitchDeg * Math.PI / 180) * Math.min(fp.w, fp.d) / 2;
+      b.addPrism(X(u0 + fp.w / 2), Z(v0 + fp.d / 2), fp.w, fp.d, y, rise, alongX, E.roof, E.wall);
+    } else {
+      var top = y + R.slab, high = roof.usable || roof.type === 'terrace', p = R.parapetT;
+      box(u0, u1, v0, v1, y, top, E.roof);
+      ring(p, top, top + (high ? R.parapetHigh : R.parapet), E.parapet);
+      if (roof.type === 'terrace') {
+        // pergola over the back third, inside the parapet
+        var a0 = u0 + p, a1 = u1 - p, b0 = v0 + fp.d * 2 / 3, b1 = v1 - p, k = R.post, ph = top + R.pergolaH;
+        [[a0, b0], [a1 - k, b0], [a0, b1 - k], [a1 - k, b1 - k]].forEach(function (c) { box(c[0], c[0] + k, c[1], c[1] + k, top, ph, E.roof); });
+        var longU = a1 - a0 >= b1 - b0, w = R.beam, from = (longU ? b0 : a0) + w / 2, to = (longU ? b1 : a1) - w / 2, s;
+        for (s = from; s <= to + 1e-9; s += R.beamStep) {
+          if (longU) box(a0, a1, s - w / 2, s + w / 2, ph - w, ph, E.roof);
+          else box(s - w / 2, s + w / 2, b0, b1, ph - w, ph, E.roof);
+        }
+      }
+      [[roof.stairHead, R.stairHead], [roof.liftHead, R.liftHead]].forEach(function (h) {
+        if (h[0]) box(h[0].u, h[0].u + h[0].w, h[0].v, h[0].v + h[0].d, top, top + h[1], E.parapet);
+      });
+    }
+    var g = world.getObjectByName('roof'), m = b.build(mats.batch, 'roofBatch');
+    if (!m) return [];
+    g.add(m);
+    return [m];
+  };
+})(globalThis.PC = globalThis.PC || {});
+
+</script>
+<script>/* js/three/build-interior.js */
+/* PC.three.buildInterior(house, world, mats): one "furniture" batch per level group (A-10, F4-T2 plan 6), from the
+   model's pieces (PC.furnish via PC.house.build): a box per piece from floorY + y0 to floorY + y0 + h, its colour the
+   model's resolved Q18 hex (through PC.three.col in the batch). A level without pieces gets no mesh. Cast + receive. */
+(function (PC) {
+  'use strict';
+  var three = PC.three = PC.three || {};
+
+  three.buildInterior = function (house, world, mats) {
+    var H = PC.C.HOUSE, cu = house.center[0], cv = house.center[1], made = [];
+    house.levels.forEach(function (lv) {
+      var b = new three.BoxBatch(), floorY = lv.baseY + H.slab;
+      lv.rooms.forEach(function (r) {
+        r.furniture.forEach(function (p) {
+          b.add(p.u + p.w / 2 - cu, floorY + p.y0 + p.h / 2, -(p.v + p.d / 2 - cv), p.w, p.h, p.d, p.color);
+        });
+      });
+      var m = b.build(mats.batch, 'furniture');
+      if (m) { world.getObjectByName('level-' + lv.id).add(m); made.push(m); }
+    });
+    return made;
+  };
+})(globalThis.PC = globalThis.PC || {});
+
+</script>
+<script>/* js/three/build-site.js */
+/* PC.three.buildSite(house, world, mats): the "site" group (A-10, F4-T2 plan 7; TL plan review required item 3;
+   Designer plan 2-4). Vegetation stays for F4-T3. Items the model leaves out (site.omitted) are null there and absent.
+   - "siteBatch" (one mesh): parking pads 0.02 m per car (paving); covered: a 0.1 m canopy with its top at 2.4 m on 4
+     posts 0.1 m (carCanopy); pool rim 0.3 m wide, 0.1 m high, outside the water (poolRim); boundary wall 1.2 x 0.2 m
+     along every plot edge, centred 0.1 m inside it (BoxBatch.addSeg), with the 3 m gate gap on the street edge and
+     two 0.4 x 0.4 x 1.4 m posts beside it (trim; no leaf; no gate without the wall); seating: a 3 x 3 x 0.05 m pad
+     (paving), a 0.9 x 0.9 x 0.75 m table and two 1.6 x 0.45 x 0.45 m benches 0.9 m either side (seating), parallel
+     to the nearest facade; entrance step 1.2 x 0.6 x 0.15 m in front of the door (trim); north needle: two flat
+     triangles 0.04 m high (BoxBatch.addFlat), the N half in northMarker, the S half in poolRim, length L.
+   - "poolWater": a flush opaque PlaneGeometry over exactly the pool rectangle at Y 0.03 (rotated -PI/2 about X). */
+(function (PC) {
+  'use strict';
+  var three = PC.three = PC.three || {};
+
+  // The north needle's corners in T (X, Z), doubles: the N tip points along the A-13 north vector (sin N, -cos N).
+  three.needle = function (house) {
+    var nm = house.site.northMarker;
+    if (!nm) return null;
+    var r = house.northDeg * Math.PI / 180, nu = Math.sin(r), nv = Math.cos(r), L = nm.L, w = 0.175 * L, c = house.center;
+    var T = function (du, dv) { return [nm.u + du - c[0], -(nm.v + dv - c[1])]; };
+    return { tipN: T(nu * L / 2, nv * L / 2), tipS: T(-nu * L / 2, -nv * L / 2), east: T(nv * w, -nu * w), west: T(-nv * w, nu * w), L: L };
+  };
+
+  three.buildSite = function (house, world, mats) {
+    var C = PC.C.SITE, SC = PC.data.siteColors, E = PC.data.exteriors[house.exterior], S = house.site;
+    var cu = house.center[0], cv = house.center[1], b = new three.BoxBatch(), g = world.getObjectByName('site'), made = [];
+    var X = function (u) { return u - cu; }, Z = function (v) { return -(v - cv); };
+    function box(u0, u1, v0, v1, y0, y1, hex) { b.add((X(u0) + X(u1)) / 2, (y0 + y1) / 2, (Z(v0) + Z(v1)) / 2, u1 - u0, y1 - y0, v1 - v0, hex); }
+
+    var p = S.parking;
+    if (p) {
+      var P = PC.C.PARKING;
+      for (var i = 0; i < p.cars; i++) box(p.u + i * P.w, p.u + (i + 1) * P.w, p.v, p.v + p.d, 0, 0.02, SC.paving);
+      if (p.covered) {
+        var k = 0.1, top = 2.4;
+        box(p.u, p.u + p.w, p.v, p.v + p.d, top - 0.1, top, SC.carCanopy);
+        [[p.u, p.v], [p.u + p.w - k, p.v], [p.u, p.v + p.d - k], [p.u + p.w - k, p.v + p.d - k]].forEach(function (c) {
+          box(c[0], c[0] + k, c[1], c[1] + k, 0.02, top - 0.1, SC.carCanopy);
+        });
+      }
+    }
+    var q = S.pool;
+    if (q) {
+      var rw = 0.3, rh = 0.1;
+      box(q.u - rw, q.u + q.w + rw, q.v - rw, q.v, 0, rh, SC.poolRim); box(q.u - rw, q.u + q.w + rw, q.v + q.d, q.v + q.d + rw, 0, rh, SC.poolRim);
+      box(q.u - rw, q.u, q.v, q.v + q.d, 0, rh, SC.poolRim); box(q.u + q.w, q.u + q.w + rw, q.v, q.v + q.d, 0, rh, SC.poolRim);
+    }
+    if (S.wall) {
+      var pts = house.plot.pts, n = pts.length, h = C.wallT / 2;
+      for (var e = 0; e < n; e++) {
+        var a = pts[e], c2 = pts[(e + 1) % n], du = c2[0] - a[0], dv = c2[1] - a[1], l = Math.hypot(du, dv) || 1;
+        var iu = -dv / l * h, iv = du / l * h;                                   // inward (counter-clockwise outline)
+        var street = Math.abs(a[0]) < 1e-9 && Math.abs(a[1]) < 1e-9 && Math.abs(c2[1]) < 1e-9 && c2[0] > 0;
+        var spans = [[0, l]];
+        if (street && S.gate) {
+          var g0 = S.gate.u - S.gate.w / 2, g1 = S.gate.u + S.gate.w / 2;
+          spans = [[0, g0], [g1, l]];
+          box(g0 - C.post, g0, 0, C.post, 0, C.postH, E.trim); box(g1, g1 + C.post, 0, C.post, 0, C.postH, E.trim);
+        }
+        spans.forEach(function (s) {
+          if (s[1] - s[0] < 1e-6) return;
+          var p0 = [a[0] + du / l * s[0] + iu, a[1] + dv / l * s[0] + iv], p1 = [a[0] + du / l * s[1] + iu, a[1] + dv / l * s[1] + iv];
+          b.addSeg(X(p0[0]), Z(p0[1]), X(p1[0]), Z(p1[1]), C.wallT, 0, C.wallH, SC.boundaryWall);
+        });
+      }
+    }
+    var st = S.seating;
+    if (st) {
+      var mu = st.u + st.w / 2, mv = st.v + st.d / 2, pad = 0.05;
+      box(st.u, st.u + st.w, st.v, st.v + st.d, 0, pad, SC.paving);
+      box(mu - 0.45, mu + 0.45, mv - 0.45, mv + 0.45, pad, pad + 0.75, SC.seating);
+      [-0.9, 0.9].forEach(function (o) {
+        if (st.along === 'u') box(mu - 0.8, mu + 0.8, mv + o - 0.225, mv + o + 0.225, pad, pad + 0.45, SC.seating);
+        else box(mu + o - 0.225, mu + o + 0.225, mv - 0.8, mv + 0.8, pad, pad + 0.45, SC.seating);
+      });
+    }
+    var en = S.entrance;
+    box(en.u - 0.6, en.u + 0.6, en.v - 0.6, en.v, 0, 0.15, E.trim);
+    var nd = three.needle(house);
+    if (nd) {
+      b.addFlat([nd.tipN, nd.east, nd.west], 0, 0.04, SC.northMarker);
+      b.addFlat([nd.tipS, nd.west, nd.east], 0, 0.04, SC.poolRim);
+    }
+    var m = b.build(mats.batch, 'siteBatch');
+    if (m) { g.add(m); made.push(m); }
+    if (q) {
+      var water = new THREE.Mesh(new THREE.PlaneGeometry(q.w, q.d), mats.poolWater);
+      water.name = 'poolWater'; water.rotation.x = -Math.PI / 2;
+      water.position.set(X(q.u + q.w / 2), 0.03, Z(q.v + q.d / 2));
+      water.receiveShadow = true; water.castShadow = false;
+      g.add(water); made.push(water);
+    }
     return made;
   };
 })(globalThis.PC = globalThis.PC || {});
@@ -4639,9 +5051,11 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     S.mats = {
       batch: new THREE.MeshLambertMaterial({ vertexColors: true }),
       ground: new THREE.MeshLambertMaterial({ color: three.col(SC.ground) }),
-      groundOuter: new THREE.MeshLambertMaterial({ color: three.col(SC.groundOuter) })
+      groundOuter: new THREE.MeshLambertMaterial({ color: three.col(SC.groundOuter) }),
+      poolWater: new THREE.MeshLambertMaterial({ color: three.col(SC.poolWater) })
     };
-    S.meshes = three.buildShell(house, S.world, S.mats);
+    S.meshes = three.buildShell(house, S.world, S.mats).concat(three.buildInterior(house, S.world, S.mats),
+      three.buildRoof(house, S.world, S.mats), three.buildSite(house, S.world, S.mats));
     var keep = S.house && S.pose && S.house.radius === house.radius && S.house.center[0] === house.center[0] && S.house.center[1] === house.center[1];
     S.house = house; S.builtKey = house.key; S.builds++;
     S.limits = PC.cam.limits(house, aspect());
@@ -6623,7 +7037,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     binds.push(F.radios({ hook: 'q-pool-size', read: function (s) { return s.ans.pool.size; }, disabled: function (s) { return !s.ans.pool.on; },
       apply: function (v) { commit(function (d) { d.ans.pool.size = v; }); } }));
     binds.push(F.toggle({ hook: 'q-wall', read: function (s) { return s.ans.extras.wall; }, apply: function (on) { commit(function (d) { d.ans.extras.wall = on; }); } }));
-    binds.push(F.radios({ hook: 'q-gate', read: function (s) { return s.ans.extras.gate; }, apply: function (v) { commit(function (d) { d.ans.extras.gate = v; }); } }));
+    binds.push(F.radios({ hook: 'q-gate', read: function (s) { return s.ans.extras.gate; },
+      disabled: function (s) { return !s.ans.extras.wall; },                 // Q7 (PM round 10): no gate without the wall; the value is kept
+      apply: function (v) { commit(function (d) { d.ans.extras.gate = v; }); } }));
     binds.push(F.toggle({ hook: 'q-seating', read: function (s) { return s.ans.extras.seating; }, apply: function (on) { commit(function (d) { d.ans.extras.seating = on; }); } }));
   }
 
@@ -7184,14 +7600,14 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
    to PC.view3d (three layer) and owns the stage-5 DOM: Building... / unavailable overlays, the level selector
    ("All" + the house's own levels, lowest first; PM round 9 labels), Reset view, the collapsible panel and its tabs.
    Session state only (A-4): level selection and roof toggle survive leaving and returning; the view opens on All
-   with the roof off. Controls of later tasks (time, presets, season, room finder, tour, Roof until F4-T2) are
-   disabled here (TL F4-T1 ruling 3); the Roof state logic is wired. This file never touches three.js (ui layer, A-2). */
+   with the roof off. Controls of later tasks (time, presets, season, room finder, tour) are
+   disabled here (TL F4-T1 ruling 3); the Roof switch is enabled since F4-T2. This file never touches three.js (ui layer, A-2). */
 (function (PC) {
   'use strict';
   var ui = PC.ui = PC.ui || {};
   ui.stages = ui.stages || {};
   var LATER = ['v3-time', 'v3-preset-morning', 'v3-preset-noon', 'v3-preset-evening', 'v3-preset-night', 'v3-season',
-    'v3-room', 'v3-tour-start', 'v3-tour-pause', 'v3-tour-stop', 'v3-roof'];
+    'v3-room', 'v3-tour-start', 'v3-tour-pause', 'v3-tour-stop'];
   var TABS = ['view', 'light', 'tour'];
   var open = false, house = null, level = 'all', levelsKey = '';
 

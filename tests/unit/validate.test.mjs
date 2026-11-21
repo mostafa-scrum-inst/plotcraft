@@ -103,7 +103,7 @@ test('summary numbers', () => {
 
 test('rule table: every code has a kind and a text; results are cached only for frozen (store) states', () => {
   for (const [code, r] of Object.entries(V.RULES)) { assert.ok(r.kind === 'block' || r.kind === 'warn', code); assert.ok(r.text.length > 10, code); }
-  assert.deepEqual(Object.keys(V.RULES).length, 11);
+  assert.deepEqual(Object.keys(V.RULES).length, 12);   // F4-T2: seating-omitted (PM round 10 Q8)
   const s = sample(); V(s); s.ans.floors = 3; assert.deepEqual(codes(V(s).blocking), ['floor-empty'], 'a plain object mutated in place is re-evaluated');
   PC.store.init(sample()); const a = V(PC.store.get()); assert.equal(V(PC.store.get()), a, 'same store state: same result object');
 });
