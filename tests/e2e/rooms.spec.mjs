@@ -260,7 +260,7 @@ try {
   // where their twins in tests/qa/f2-t3-site-rooms.mjs run with the same input; they keep 640x360 and 768x1024 here.
   //   addAndEdit      (twin: QA G add form at 360x640, 640x360, 1280x800; QA H / I rows, master, pairs at 360x640, 1280x800)
   //   stairsAndLevels (twin: QA J stairs / lift / single-level note and QA K level removal, both at 360x640 and 1280x800)
-  //   fixAndR5        (twin: QA L conflicts and Fix at 360x640, 1280x800; R5 on a room change: QA J / f3-t2-editor 9)
+  //   fixAndR5        (twin: QA L conflicts and Fix at 360x640, 1280x800; R5 on a room change: QA J / r5.spec rooms() at 360x640, 1280x800)
   for (const vp of [VPS[1], VPS[2]]) { await addAndEdit(vp); await stairsAndLevels(vp); await fixAndR5(vp); }
   await keyboard(VPS[2]);
 } catch (e) { T.ok(false, 'spec crashed: ' + (e && e.stack || e)); } finally { await browser.close(); }
