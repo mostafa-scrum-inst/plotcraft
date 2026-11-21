@@ -17,7 +17,8 @@
       proportion: 'The building is limited to {dims} ({a}, {p} % of the plot): on this narrow plot it may be at most 3 times as long as it is wide. Smaller setbacks along its long sides would allow a larger building.' },
     'veg-reduced':     { kind: 'warn', q: 4, text: 'Vegetation was reduced to what fits: {a} ({p} %).' },
     'parking-omitted': { kind: 'warn', q: 15, text: 'Parking does not fit between the building and the street: it is left out of the 3D scene. Try fewer cars, a lower footprint % or a larger front setback (it moves the building back from the street).' },
-    'pool-omitted':    { kind: 'warn', q: 16, text: 'The pool with its {c} clearance does not fit behind or beside the building: it is left out of the 3D scene. Try a smaller pool, a lower footprint % or a larger back setback (it moves the building toward the street).' }
+    'pool-omitted':    { kind: 'warn', q: 16, text: 'The pool with its {c} clearance does not fit behind or beside the building: it is left out of the 3D scene. Try a smaller pool, a lower footprint % or a larger back setback (it moves the building toward the street).' },
+    'seating-omitted': { kind: 'warn', q: 17, text: 'Garden seating does not fit in the yard: it is left out of the 3D scene. Try a lower footprint %, fewer cars or a smaller pool.' }
   };
   // What helps when a level needs more than the footprint offers: raising the footprint % only helps while the
   // plot is not already the limit.
@@ -70,6 +71,7 @@
     if (fp && site.veg.reduced) add('veg-reduced', { a: U.fmtArea(site.veg.area, unit), p: pct(site.veg.pct) });
     if (site.omitted.indexOf('parking') >= 0) add('parking-omitted');
     if (site.omitted.indexOf('pool') >= 0) add('pool-omitted', { c: U.fmtLen(PC.C.POOL_CLEAR, unit) });
+    if (site.omitted.indexOf('seating') >= 0) add('seating-omitted');
     out.summary = { plotArea: site.plotArea, buildableArea: site.buildable.area, footprintArea: fp ? fp.area : 0,
       footprintPct: fp ? fp.pct : 0, vegArea: site.veg.area, vegPct: site.veg.pct, levels: levels };
     return out;

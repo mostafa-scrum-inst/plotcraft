@@ -84,6 +84,20 @@ async function access(vp) {
   await k.end('access + undo');
 }
 
+// TL Step 0 review note 1: a dedicated check that a floor-tab switch hides Undo (edit on Ground, First and back).
+async function tabSwitch(vp) {
+  const k = await kit(vp), { page, act, tag } = k;
+  await act('btn-sample'); await act('btn-next'); await act('btn-next'); await settled(page);
+  const before = (await k.state()).plans.G, c = await k.centre('r4'), m = await k.scale();
+  await k.G.drag(c, [c[0], c[1] + 1.0 * m]); await settled(page);
+  T.ok(JSON.stringify((await k.state()).plans.G) !== JSON.stringify(before) && await k.undoShown(), `${tag} Ground edited: Undo shown`);
+  await k.tab('First floor'); await settled(page);
+  T.eq([await k.level(), await k.undoShown()], ['1', false], `${tag} First floor: no Undo`);
+  await k.tab('Ground floor'); await settled(page);
+  T.eq([await k.level(), await k.undoShown()], ['G', false], `${tag} back on Ground: Undo stays hidden (dropped by the switch)`);
+  await k.end('tab switch');
+}
+
 async function lowFill(vp) {
   const k = await kit(vp), { page, act, tag } = k;
   await act('btn-sample');
@@ -97,5 +111,6 @@ async function lowFill(vp) {
 
 try {
   for (const vp of VPS) { await access(vp); await lowFill(vp); }
+  await tabSwitch(VPS[0]);
 } catch (e) { T.ok(false, 'spec crashed: ' + (e && e.stack || e)); } finally { await browser.close(); }
 process.exit(T.done() ? 1 : 0);

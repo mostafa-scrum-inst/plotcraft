@@ -5,7 +5,12 @@
      background does not (A-10).
    - BoxBatch: hand-written merge of boxes and up-facing quads into ONE Mesh with per-vertex colours (A-11).
      add(cx, cy, cz, sx, sy, sz, hex[, topHex]) in frame T (centre and full sizes); topHex colours the top face only
-     (the slab's hall tint, TL F4-T1 ruling 6). addQuad(cx, y, cz, sx, sz, hex): horizontal, facing up. */
+     (the slab's hall tint, TL F4-T1 ruling 6). addQuad(cx, y, cz, sx, sz, hex): horizontal, facing up.
+     F4-T2 (TL plan review Q12, required item 3), flat-shaded polygons with outward winding (each face's normal points
+     away from the solid's centre): addPrism(cx, cz, sx, sz, y0, rise, alongX, hex, gableHex) a gable over the
+     rectangle (ridge along X or Z, two slopes in hex, two triangles in gableHex, the base face down);
+     addSeg(x0, z0, x1, z1, thick, y0, y1, hex) an oriented box along a segment; addFlat(pts, y0, y1, hex) a convex
+     XZ polygon extruded from y0 to y1. userData.items lists [kind, vertex count] in the order added. */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
@@ -26,7 +31,56 @@
   var FACES = [[0, 1, 1, 2], [0, -1, 2, 1], [1, 1, 2, 0], [1, -1, 0, 2], [2, 1, 0, 1], [2, -1, 1, 0]];
   var CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
 
-  function BoxBatch() { this.pos = []; this.nor = []; this.rgb = []; this.idx = []; this.boxes = 0; this.quads = 0; this.cache = {}; }
+  function BoxBatch() {
+    this.pos = []; this.nor = []; this.rgb = []; this.idx = []; this.cache = {}; this.items = [];
+    this.boxes = 0; this.quads = 0; this.prisms = 0; this.segs = 0; this.flats = 0;
+  }
+  function sub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+  function cross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+  function dot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+  function mid(ps) { var c = [0, 0, 0]; ps.forEach(function (p) { c[0] += p[0] / ps.length; c[1] += p[1] / ps.length; c[2] += p[2] / ps.length; }); return c; }
+  // One flat convex polygon (3+ points), wound so that its normal points away from `inner` (a point inside the solid).
+  BoxBatch.prototype.poly = function (ps, rgb, inner) {
+    var n = cross(sub(ps[1], ps[0]), sub(ps[2], ps[0])), l = Math.sqrt(dot(n, n)) || 1;
+    n = [n[0] / l, n[1] / l, n[2] / l];
+    if (dot(n, sub(mid(ps), inner)) < 0) { ps = ps.slice().reverse(); n = [-n[0], -n[1], -n[2]]; }
+    var base = this.pos.length / 3, self = this;
+    ps.forEach(function (p) { self.pos.push(p[0], p[1], p[2]); self.nor.push(n[0], n[1], n[2]); self.rgb.push(rgb[0], rgb[1], rgb[2]); });
+    for (var i = 1; i < ps.length - 1; i++) this.idx.push(base, base + i, base + i + 1);
+    return ps.length;
+  };
+  // Side walls, top and bottom of a prism over the XZ outline `ring` (convex) from y0 to y1.
+  BoxBatch.prototype.solid = function (ring, y0, y1, rgb) {
+    var lo = ring.map(function (p) { return [p[0], y0, p[1]]; }), hi = ring.map(function (p) { return [p[0], y1, p[1]]; });
+    var inner = mid(lo.concat(hi)), v = this.poly(hi, rgb, inner) + this.poly(lo, rgb, inner);
+    for (var i = 0; i < ring.length; i++) { var j = (i + 1) % ring.length; v += this.poly([lo[i], lo[j], hi[j], hi[i]], rgb, inner); }
+    return v;
+  };
+  BoxBatch.prototype.addSeg = function (x0, z0, x1, z1, thick, y0, y1, hex) {
+    var dx = x1 - x0, dz = z1 - z0, l = Math.hypot(dx, dz) || 1, px = -dz / l * thick / 2, pz = dx / l * thick / 2;
+    this.items.push(['seg', this.solid([[x0 + px, z0 + pz], [x1 + px, z1 + pz], [x1 - px, z1 - pz], [x0 - px, z0 - pz]], y0, y1, this.color(hex))]);
+    this.segs++;
+  };
+  BoxBatch.prototype.addFlat = function (pts, y0, y1, hex) {
+    this.items.push(['flat', this.solid(pts, y0, y1, this.color(hex))]);
+    this.flats++;
+  };
+  BoxBatch.prototype.addPrism = function (cx, cz, sx, sz, y0, rise, alongX, hex, gableHex) {
+    var hx = sx / 2, hz = sz / 2, y1 = y0 + rise, s = this.color(hex), g = this.color(gableHex || hex), v = 0;
+    var b = [[cx - hx, y0, cz - hz], [cx + hx, y0, cz - hz], [cx + hx, y0, cz + hz], [cx - hx, y0, cz + hz]];
+    var r0 = alongX ? [cx - hx, y1, cz] : [cx, y1, cz - hz], r1 = alongX ? [cx + hx, y1, cz] : [cx, y1, cz + hz];
+    var inner = [cx, y0 + rise / 3, cz];
+    if (alongX) {
+      v += this.poly([b[0], b[1], r1, r0], s, inner) + this.poly([b[3], b[2], r1, r0], s, inner);
+      v += this.poly([b[0], b[3], r0], g, inner) + this.poly([b[1], b[2], r1], g, inner);
+    } else {
+      v += this.poly([b[0], b[3], r1, r0], s, inner) + this.poly([b[1], b[2], r1, r0], s, inner);
+      v += this.poly([b[0], b[1], r0], g, inner) + this.poly([b[3], b[2], r1], g, inner);
+    }
+    v += this.poly(b, s, inner);
+    this.items.push(['prism', v]);
+    this.prisms++;
+  };
   BoxBatch.prototype.color = function (hex) {
     var c = this.cache[hex];
     if (!c) { var k = three.col(hex); c = this.cache[hex] = [k.r, k.g, k.b]; }
@@ -45,13 +99,13 @@
   BoxBatch.prototype.add = function (cx, cy, cz, sx, sy, sz, hex, topHex) {
     var c = [cx, cy, cz], h = [sx / 2, sy / 2, sz / 2], side = this.color(hex), top = topHex ? this.color(topHex) : side;
     for (var i = 0; i < 6; i++) this.face(c, h, FACES[i], i === 2 ? top : side);
-    this.boxes++;
+    this.boxes++; this.items.push(['box', 24]);
   };
   BoxBatch.prototype.addQuad = function (cx, y, cz, sx, sz, hex) {
     this.face([cx, y, cz], [sx / 2, 0, sz / 2], FACES[2], this.color(hex));
-    this.quads++;
+    this.quads++; this.items.push(['quad', 4]);
   };
-  BoxBatch.prototype.count = function () { return this.boxes + this.quads; };
+  BoxBatch.prototype.count = function () { return this.items.length; };
   // One Mesh, or null when nothing was added.
   BoxBatch.prototype.build = function (material, name) {
     if (!this.idx.length) return null;
@@ -64,6 +118,7 @@
     m.name = name || '';
     m.castShadow = true; m.receiveShadow = true;
     m.userData.boxes = this.boxes; m.userData.quads = this.quads;
+    m.userData.prisms = this.prisms; m.userData.segs = this.segs; m.userData.flats = this.flats; m.userData.items = this.items.slice();
     return m;
   };
   three.BoxBatch = BoxBatch;

@@ -3,7 +3,8 @@
    groundCap (plane over the footprint, 0.01 m up; hidden for the basement view). Per level a group "level-<id>"
    (userData.index) with "slab" (slab box whose top face is the hall tint + one tint quad per room at 0.015 m) and
    "walls" (exterior walls with the entrance gap on the ground front wall, merged partitions along room edges, stair
-   and lift as plain 1.2 m boxes, basement pit walls up to ground level). Empty "roof" and "site" groups (F4-T2).
+   and lift as plain 1.2 m boxes, basement pit walls up to ground level). Empty "roof" and "site" groups, filled by
+   build-roof.js / build-site.js; build-interior.js adds each level's "furniture" batch (F4-T2).
    L -> T: X = u - cu, Z = -(v - cv) (PC.frames.l2t). Colours: Q10 exteriors, room tints mixed with the Q18 wood
    (one sRGB lerp), stair / lift unmixed (H4, F3-T3 outcome section 7). */
 (function (PC) {

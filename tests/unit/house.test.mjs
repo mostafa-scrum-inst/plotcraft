@@ -24,18 +24,20 @@ test('sample: 2 levels x 7 rooms, rooms = plan rectangles + footprint origin, st
       const p = s.plans[l.id].rooms.find((x) => x.id === r.id);
       assert.deepEqual([r.u, r.v, r.w, r.d], [fp.u + p.x, fp.v + p.y, p.w, p.h], r.id);
       assert.equal(r.name, names[r.id]); assert.equal(r.type, s.ans.rooms.find((x) => x.id === r.id).type);
-      assert.deepEqual(plain(r.furniture), []);
+      assert.ok(r.furniture.length > 0, r.id + ' furnished (F4-T2)');
     }
     const c = PC.layout.core(fp.w, fp.d, true, s.ans.stairPos, false).stair;
     assert.deepEqual(plain(l.stair), { u: fp.u + c.x, v: fp.v + c.y, w: c.w, d: c.h });
     assert.equal(l.lift, null);
   }
   assert.deepEqual(plain(h.levels[0].stair), plain(h.levels[1].stair));
-  assert.deepEqual(plain(h.roof), { type: 'flat', usable: false, baseY: 6.4, stairHead: null });
+  assert.deepEqual(plain(h.roof), { type: 'flat', usable: false, baseY: 6.4, stairHead: null, liftHead: null });
   assert.equal(h.exterior, 'sand'); assert.deepEqual(plain(h.interior), { style: 'modern', density: 'full' });
   assert.deepEqual(plain(h.site.entrance), { u: fp.u + fp.w / 2, v: fp.v, w: PC.C.HOUSE.door });
   assert.ok(h.site.parking && h.site.pool, 'sample has parking and pool rectangles');
-  assert.deepEqual([plain(h.site.trees), plain(h.site.shrubs), h.site.gate, h.site.seating], [[], [], null, null]);
+  const site = PC.site.analyse(s), len = site.ptsL[(site.edge + 1) % site.ptsL.length][0];
+  assert.deepEqual([plain(h.site.trees), plain(h.site.shrubs), plain(h.site.gate)], [[], [], { u: len / 2, w: 3 }], 'F4-T2: gate Centre on the street edge');
+  assert.ok(h.site.seating && h.site.northMarker, 'F4-T2: the sample seating fits (PM round 10 Q8), north marker present');
   assert.equal(h.northDeg, PC.frames.northL(s));
   assert.ok(h.radius > 0 && h.plot.pts.length === 5);
 });
@@ -90,7 +92,7 @@ test('basement, maximum house, roof base', () => {
   const m = maxHouse(PC), h = PC.house.build(m);
   assert.deepEqual(plain(h.levels.map((l) => [l.id, l.index, l.baseY])), [['B', -1, -h.pitch], ['G', 0, 0], ['1', 1, h.pitch], ['2', 2, 2 * h.pitch]]);
   assert.equal(h.roof.baseY, 3 * h.pitch);
-  assert.ok(h.levels.every((l) => l.rooms.length === 8 && l.lift && l.stair));
+  assert.ok(h.levels.every((l) => l.rooms.length === 10 && l.lift && l.stair), "CD-4: 10 rooms per level");
 });
 
 test('key: stable for the same state; changed by Q10, Q18, an edit; not by the unit or sampleClean', () => {

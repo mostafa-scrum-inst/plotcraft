@@ -51,6 +51,15 @@
     // 3D (F4-T1; A-9, A-10, A-12). HOUSE: slab 0.2 m (pitch = Q8 + slab; floor at baseY + slab), dollhouse walls
     // 1.2 m x 0.15 m, entrance door 1.2 m wide, z-offsets of A-10. CAM: angles in degrees, see A-12.
     HOUSE: { slab: 0.2, wallH: 1.2, wallT: 0.15, door: 1.2, tintLift: 0.015, capLift: 0.01, outerDrop: 0.05, outerK: 36 },
+    // F4-T2 (A-9, A-10, A-11; TL plan review, Designer plan). FURNISH: the A-11 placement rule. ROOF: slab, parapets
+    // (0.3 m, 1.0 m when walkable or a terrace), pergola over the back third, 30 degree gable, stair head 2.4 m, lift
+    // overrun 1.2 m. SITE: boundary wall 1.2 x 0.2 m inside the edge, gate 3 m with 0.4 x 1.4 m posts, seating pad
+    // 3 m, north needle L = clamp(0.06 x max bbox side, 1.5, 3) with 0.5 m spare from the wall.
+    FURNISH: { inset: 0.15, overlap: 0.01, scales: [1, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6] },
+    ROOF: { slab: 0.2, parapet: 0.3, parapetHigh: 1.0, parapetT: 0.15, pitchDeg: 30, pergolaH: 2.4, post: 0.15, beam: 0.1,
+      beamStep: 0.6, stairHead: 2.4, liftHead: 1.2 },
+    SITE: { wallH: 1.2, wallT: 0.2, gateW: 3, post: 0.4, postH: 1.4, seat: 3, edgeClear: 0.3, pathHalf: 1,
+      marker: { k: 0.06, min: 1.5, max: 3, spare: 0.5, step: 0.25 } },
     CAM: { fov: 45, nearMin: 0.5, nearK: 0.02, farK: 20, phiMin: 5, phiMax: 85, rMin: 4, rMaxK: 3, rMaxReset: 1.2,
       eyeMin: 1, resetK: 2.2, resetFit: 1.05, resetTheta: 30, resetPhi: 50, keyDeg: 5, keyZoom: 1.1, wheelK: 0.0015 },
     VIEW3D: { maxDpr: 2, shadowMap: 1024, shadowBias: -0.0005, shadowNormalBias: 0.02, sunDist: 2.5, shadowK: 2.5, shadowR: 1.2 },

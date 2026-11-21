@@ -81,10 +81,10 @@ test('close() then reopen with the same house inside the yield: exactly one buil
   assert.deepEqual([E.info().builds, E.R().renders], [1, 1]);
 });
 
-test('scene graph names, sample = 7 meshes, one shadow light with a 1024 map, lights from the noon table', () => {
+test('scene graph names, sample = 12 meshes (F4-T2: + 2 furniture, roofBatch, siteBatch, poolWater), one shadow light with a 1024 map, lights from the noon table', () => {
   const E = opened(), n = names(E), i = E.info();
-  for (const k of ['world', 'ground', 'groundOuter', 'groundPlot', 'groundCap', 'level-G', 'level-1', 'slab', 'walls', 'roof', 'site', 'hemi', 'sun']) assert.ok(n.includes(k), k);
-  assert.equal(i.meshCount, 7);
+  for (const k of ['world', 'ground', 'groundOuter', 'groundPlot', 'groundCap', 'level-G', 'level-1', 'slab', 'walls', 'furniture', 'roof', 'roofBatch', 'site', 'siteBatch', 'poolWater', 'hemi', 'sun']) assert.ok(n.includes(k), k);
+  assert.equal(i.meshCount, 12);
   let shadow = 0; i.scene.traverse((x) => { if (x.name === 'sun' || x.name === 'hemi') { if (x.castShadow) shadow++; } });
   assert.equal(shadow, 1);
   const sun = i.scene.getObjectByName('sun');
@@ -104,9 +104,9 @@ test('scene graph names, sample = 7 meshes, one shadow light with a 1024 map, li
   assert.ok(Math.abs(Math.asin(s[1]) - 72 * Math.PI / 180) < 1e-12);
 });
 
-test('G6 maximum house (3 floors + basement, 8 rooms, lift): no mock exception, <= 40 meshes (11 in F4-T1)', () => {
+test('G6 maximum house (3 floors + basement, 10 rooms, lift): no mock exception, <= 40 meshes (18 since F4-T2; 11 in F4-T1)', () => {
   const E = opened({ state: (PC) => maxHouse(PC), dpr: 3 });
-  assert.equal(E.info().meshCount, 11);
+  assert.equal(E.info().meshCount, 18);
   assert.ok(E.info().meshCount <= 40);
   assert.equal(E.R().renders, 1);
   assert.equal(E.R().pixelRatio, 2);
@@ -196,12 +196,12 @@ test('context loss: preventDefault, no frames; restore rebuilds (old resources d
   const renders = E.R().renders;
   E.canvas.dispatch('webglcontextrestored');
   assert.deepEqual([E.info().lost, E.info().builds, E.info().restores], [false, 2, 1]);
-  assert.equal(geos.length, 7);
+  assert.equal(geos.length, 12);
   assert.ok(geos.every((g) => g.disposed === 1), 'every first-build geometry disposed exactly once');
-  assert.ok(mats.length === 3 && mats.every((m) => m.disposed === 1), 'and every material');
+  assert.ok(mats.length === 4 && mats.every((m) => m.disposed === 1), 'and every material (F4-T2: + poolWater)');
   E.raf.flush();
   assert.equal(E.R().renders, renders + 1);
-  assert.equal(E.info().meshCount, 7);
+  assert.equal(E.info().meshCount, 12);
 });
 
 test('rebuild for a new key (Q10 changed) disposes everything of the first build exactly once; same key does not rebuild', () => {

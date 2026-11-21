@@ -135,9 +135,11 @@
     S.mats = {
       batch: new THREE.MeshLambertMaterial({ vertexColors: true }),
       ground: new THREE.MeshLambertMaterial({ color: three.col(SC.ground) }),
-      groundOuter: new THREE.MeshLambertMaterial({ color: three.col(SC.groundOuter) })
+      groundOuter: new THREE.MeshLambertMaterial({ color: three.col(SC.groundOuter) }),
+      poolWater: new THREE.MeshLambertMaterial({ color: three.col(SC.poolWater) })
     };
-    S.meshes = three.buildShell(house, S.world, S.mats);
+    S.meshes = three.buildShell(house, S.world, S.mats).concat(three.buildInterior(house, S.world, S.mats),
+      three.buildRoof(house, S.world, S.mats), three.buildSite(house, S.world, S.mats));
     var keep = S.house && S.pose && S.house.radius === house.radius && S.house.center[0] === house.center[0] && S.house.center[1] === house.center[1];
     S.house = house; S.builtKey = house.key; S.builds++;
     S.limits = PC.cam.limits(house, aspect());
