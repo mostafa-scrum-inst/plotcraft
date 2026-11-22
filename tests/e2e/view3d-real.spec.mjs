@@ -385,6 +385,30 @@ async function detailReal(page, tag) {
   T.eq(r.tinted, [true, true], `${tag} F6-T1b instanceColor on canopies and shrubs (real r128)`);
   T.ok(r.pairs >= 2 && r.ok >= Math.ceil(r.pairs / 2), `${tag} F6-T1b glass decals darker than the wall beside them in ${r.ok} of ${r.pairs} visible pairs`);
   console.log(`  [record] ${tag} F6-T1b: blobs ${r.summer} / ${r.winter} px, glass pairs ${r.ok} / ${r.pairs}`);
+  // F6-T1c R2: the deck draws over the slab top without depth fighting, at Reset and at rMax. Inside the deck (inset
+  // past the bands), the frame with the deck hidden shows the slab top in exteriors.slab; with the deck shown at most
+  // 2 % of those pixels may still read the same (a z-fight shows the slab through)
+  const deckAt = (far) => page.evaluate(async (far) => {
+    const V = PC.view3d; if (far) V.flyTo(Object.assign({}, V.pose(), { radius: V.limits().rMax }), 1);
+    await new Promise((res) => { const w = () => (!V.flying() && !PC.debug.scene().frame ? res() : requestAnimationFrame(w)); w(); });
+    const i = PC.debug.scene(), gl = i.renderer.getContext(), W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, h = i.house, fp = h.footprint, R = PC.C.ROOF;
+    const d = i.world.getObjectByName('roofDeck'), k = R.parapetT + PC.C.CONTACT.deckW + 0.3, y = h.roof.baseY + R.slab, cu = h.center[0], cv = h.center[1];
+    const grab = () => { i.renderNow(); const b = new Uint8Array(W * H * 4); gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, b); return b; };
+    const a = grab(); d.visible = false; const b = grab(); d.visible = true;
+    const P = [[fp.u + k, fp.v + k], [fp.u + fp.w - k, fp.v + k], [fp.u + fp.w - k, fp.v + fp.d - k], [fp.u + k, fp.v + fp.d - k]].map((q) => { const n = new THREE.Vector3(q[0] - cu, y, -(q[1] - cv)).project(i.camera); return [(n.x + 1) / 2 * W, (n.y + 1) / 2 * H]; });
+    const inside = (x, yy) => { let c = false; for (let m = 0, n = 3; m < 4; n = m++) { const [xi, yi] = P[m], [xj, yj] = P[n]; if ((yi > yy) !== (yj > yy) && x < (xj - xi) * (yy - yi) / (yj - yi) + xi) c = !c; } return c; };
+    let n = 0, same = 0;
+    for (let yy = 0; yy < H; yy += 2) for (let x = 0; x < W; x += 2) {
+      if (!inside(x + 0.5, yy + 0.5)) continue;
+      const o = (yy * W + x) * 4; n++;
+      if (Math.abs(a[o] - b[o]) + Math.abs(a[o + 1] - b[o + 1]) + Math.abs(a[o + 2] - b[o + 2]) <= 6) same++;
+    }
+    if (far) V.resetView();
+    return { n, same };
+  }, far);
+  const near = await deckAt(false), far = await deckAt(true);
+  await ready(page);
+  T.ok(near.n > 200 && far.n > 50 && near.same <= 0.02 * near.n && far.same <= 0.02 * far.n, `${tag} F6-T1c roofDeck draws over the slab top: ${near.n - near.same} / ${near.n} deck pixels change at Reset, ${far.n - far.same} / ${far.n} at rMax (<= 2 % unchanged: no z-fight)`);
 }
 
 async function maxBudget(page, tag) {
@@ -422,7 +446,7 @@ async function liteSmoke(vp) {
   await act('btn-sample'); await act('btn-skip3d');
   await ready(page);
   const r = await page.evaluate(() => { const i = PC.debug.scene(), sun = i.scene.getObjectByName('sun'); return [i.tier.name, i.scene.fog, sun.shadow.mapSize.x, i.renderer.getPixelRatio(), i.textures.map((t) => t.image.width)]; });
-  T.eq(r, ['lite', null, 1024, 1.5, [256, 256, 256, 64]], `${tag}: tier lite, no fog, map 1024, pixel ratio 1.5, colour textures 256 (+ the 64 px blob, F6-T1b)`);
+  T.eq(r, ['lite', null, 1024, 1.5, [256, 256, 256, 64, 256]], `${tag}: tier lite, no fog, map 1024, pixel ratio 1.5, colour textures 256 (+ the 64 px blob, F6-T1b; + membrane on the flat sample, F6-T1c)`);
   const s = await sample(page);
   notBlank(s, s.sky, `${tag} not blank`);
   T.none(problems(), `${tag} no page errors, console errors or THREE. warnings`);

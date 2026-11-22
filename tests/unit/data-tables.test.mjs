@@ -24,7 +24,7 @@ const lab = (h) => {
 const dE = (a, b) => { const p = lab(a), q = lab(b); return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]); };
 const hue = (h) => { const [, a, b] = lab(h); return Math.atan2(b, a) * 180 / Math.PI; };
 
-const EXT_KEYS = ['wall', 'wallInner', 'slab', 'roof', 'trim', 'parapet', 'frame', 'door'];   // F6-T1b: + frame, door (Designer A2 / Q-D3)
+const EXT_KEYS = ['wall', 'wallInner', 'slab', 'roof', 'trim', 'parapet', 'frame', 'door', 'coping'];   // F6-T1b: + frame, door (Designer A2 / Q-D3); F6-T1c: + coping (R1)
 const INT_KEYS = ['fabric', 'wood', 'accent', 'white', 'metal', 'dark', 'floorMix'];
 const SITE_KEYS = ['ground', 'groundOuter', 'paving', 'poolWater', 'poolRim', 'boundaryWall', 'gate', 'carCanopy', 'seating', 'trunk', 'northMarker', 'highlight', 'asphalt', 'glassTop', 'glassBottom'];   // F6-T1a: + asphalt; F6-T1b: + glassTop, glassBottom
 const KEY_KEYS = ['h', 'background', 'sunColor', 'sunI', 'hemiSky', 'hemiGround', 'hemiI', 'skyMid', 'skyZenith', 'exposure'];   // F6-T1a: the dome rows + exposure

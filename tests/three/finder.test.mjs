@@ -192,13 +192,13 @@ test('one highlight geometry per pick, the old one disposed exactly once; close(
   const disposed = () => made.map((m) => E.mock.raw(E.mock.raw(m).geometry).disposed);
   assert.deepEqual(disposed(), [1, 1, 1, 0]);
   assert.equal(E.info().highlightsMade, 4);
-  assert.equal(E.info().meshCount, 21, 'sample 20 (F6-T1a: + sky, paving, northNeedle; F6-T1b: + groundRing, blobs) + highlight');
+  assert.equal(E.info().meshCount, 22, 'sample 21 (F6-T1a: + sky, paving, northNeedle; F6-T1b: + groundRing, blobs; F6-T1c: + roofDeck) + highlight');
   const hm = E.mock.raw(E.mock.raw(made[3]).material);
   assert.deepEqual([hm.__kind, hm.toneMapped, hm.fog, hm.vertexColors], ['MeshBasicMaterial', false, false, true], 'F6-T1a / TL Q-T2: the highlight is unlit, not tone-mapped, not fogged');
   let cleared = 0; V(E).setOnSelect((x) => { if (x === null) cleared++; });
   V(E).close();
   assert.deepEqual(disposed(), [1, 1, 1, 1]);
-  assert.deepEqual([E.info().selected, E.info().highlight, V(E).flying(), cleared, E.info().meshCount], [null, null, false, 1, 20]);
+  assert.deepEqual([E.info().selected, E.info().highlight, V(E).flying(), cleared, E.info().meshCount], [null, null, false, 1, 21]);
   assert.equal(E.world.getObjectByName('highlight'), undefined);
   // reopening (same house: no rebuild) neither resumes the flight nor brings the highlight back
   const p = pose(E);

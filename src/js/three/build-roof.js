@@ -15,7 +15,15 @@
    glass quad 0.01 m out with the glassTop -> glassBottom gradient, a 0.06 m reveal band at 0.02 m in frame x 0.65,
    4 frame bars (0.06 m profile, 0.05 m proud, exteriors.frame), a mullion at mid-width from 1.2 m, and a sill
    0.04 m thick, 0.08 m proud under the bottom bar (exteriors.trim); the door: a 0.04 m leaf in exteriors.door at the
-   outer plane with top and side bars in frame. Shown with the rest of roofBatch (exterior mode). */
+   outer plane with top and side bars in frame. Shown with the rest of roofBatch (exterior mode).
+   F6-T1c (plan 1-3, Designer R1-R3, TL plan review): flat / terrace roofs
+   - R1: the slab box dripOut proud on every side in exteriors.slab; a coping ring (4 boxes, copingT, copingOver past
+     both parapet faces, exteriors.coping) on every parapet ring, and a cap copingOver wider on each head;
+   - R3: 'deckBand' face-up strips bandLift over the deck: deckW inside the parapet (x deckK at it -> x 1), headW
+     around each head (x headK -> x 1), clipped to the deck;
+   - R2: "roofDeck", one face-up quad inside the parapet deckLift over the slab top (world UVs in metres,
+     mats.deck: membrane, or the paving map on terrace / usable roofs), receives, does not cast.
+   The decals stay the last roofBatch items. */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
@@ -68,7 +76,7 @@
     house.levels.forEach(function (lv) {
       if (lv.index >= 0) ring(t, lv.baseY + H.slab + H.wallH, lv.baseY + house.pitch, E.wall);
     });
-    var y = roof.baseY, tm = null;
+    var y = roof.baseY, tm = null, deck = null;
     if (roof.type === 'pitched') {
       var alongX = fp.w >= fp.d, rise = Math.tan(R.pitchDeg * Math.PI / 180) * Math.min(fp.w, fp.d) / 2;
       b.addPrism(X(u0 + fp.w / 2), Z(v0 + fp.d / 2), fp.w, fp.d, y, rise, alongX, E.roof, E.wall, 'rest');
@@ -76,9 +84,15 @@
       tl.addPrism(X(u0 + fp.w / 2), Z(v0 + fp.d / 2), fp.w, fp.d, y, rise, alongX, E.roof, E.wall, 'slopes');
       tm = tl.build(mats.tiles, 'roofTiles');
     } else {
-      var top = y + R.slab, high = roof.usable || roof.type === 'terrace', p = R.parapetT;
-      box(u0, u1, v0, v1, y, top, E.roof);
-      ring(p, top, top + (high ? R.parapetHigh : R.parapet), E.parapet);
+      var top = y + R.slab, high = roof.usable || roof.type === 'terrace', p = R.parapetT, dr = R.dripOut, co = R.copingOver;
+      var pTop = top + (high ? R.parapetHigh : R.parapet);
+      box(u0 - dr, u1 + dr, v0 - dr, v1 + dr, y, top, E.slab);   // R1 drip edge
+      ring(p, top, pTop, E.parapet);
+      // R1 coping: the parapet ring's footprint widened by copingOver on both faces
+      box(u0 - co, u1 + co, v0 - co, v0 + p + co, pTop, pTop + R.copingT, E.coping);
+      box(u0 - co, u1 + co, v1 - p - co, v1 + co, pTop, pTop + R.copingT, E.coping);
+      box(u0 - co, u0 + p + co, v0 + p + co, v1 - p - co, pTop, pTop + R.copingT, E.coping);
+      box(u1 - p - co, u1 + co, v0 + p + co, v1 - p - co, pTop, pTop + R.copingT, E.coping);
       if (roof.type === 'terrace') {
         // pergola over the back third, inside the parapet
         var a0 = u0 + p, a1 = u1 - p, b0 = v0 + fp.d * 2 / 3, b1 = v1 - p, k = R.post, ph = top + R.pergolaH;
@@ -89,14 +103,43 @@
           else box(s - w / 2, s + w / 2, b0, b1, ph - w, ph, E.roof);
         }
       }
-      [[roof.stairHead, R.stairHead], [roof.liftHead, R.liftHead]].forEach(function (h) {
-        if (h[0]) box(h[0].u, h[0].u + h[0].w, h[0].v, h[0].v + h[0].d, top, top + h[1], E.parapet);
+      var heads = [[roof.stairHead, R.stairHead], [roof.liftHead, R.liftHead]].filter(function (h) { return h[0]; });
+      heads.forEach(function (h) {
+        var r = h[0];
+        box(r.u, r.u + r.w, r.v, r.v + r.d, top, top + h[1], E.parapet);
+        box(r.u - co, r.u + r.w + co, r.v - co, r.v + r.d + co, top + h[1], top + h[1] + R.copingT, E.coping);
       });
+      // R3 bands on the deck rectangle D (inside the parapet), corners [u, v] with their factor
+      var C = PC.C.CONTACT, D = [u0 + p, u1 - p, v0 + p, v1 - p], yb = top + R.deckLift + C.bandLift;
+      var clamp = function (q) { return [Math.min(D[1], Math.max(D[0], q[0])), Math.min(D[3], Math.max(D[2], q[1]))]; };
+      function band(q, ks) {   // q: 4 [u, v] corners, ks: 4 factors
+        q = q.map(clamp);
+        var ar = (q[1][0] - q[0][0]) * (q[2][1] - q[0][1]) - (q[2][0] - q[0][0]) * (q[1][1] - q[0][1]);
+        var ar2 = (q[2][0] - q[0][0]) * (q[3][1] - q[0][1]) - (q[3][0] - q[0][0]) * (q[2][1] - q[0][1]);
+        if (Math.abs(ar) + Math.abs(ar2) < 1e-6) return;
+        b.addUpQuad(q.map(function (c) { return [X(c[0]), Z(c[1])]; }), yb, ks.map(function (k) { return b.shade(E.roof, k); }), 'deckBand');
+      }
+      // mitred bands of width w from the edge of rectangle [a0, a1] x [c0, c1]: inward (sg -1, the parapet) or
+      // outward (sg +1, around a head); x k at the edge, x 1 at the far side
+      function bands(a0, a1, c0, c1, w, sg, k) {
+        var A0 = a0 - sg * w, A1 = a1 + sg * w, C0 = c0 - sg * w, C1 = c1 + sg * w, kk = [k, k, 1, 1];
+        band([[a0, c0], [a1, c0], [A1, C0], [A0, C0]], kk);
+        band([[a1, c0], [a1, c1], [A1, C1], [A1, C0]], kk);
+        band([[a1, c1], [a0, c1], [A0, C1], [A1, C1]], kk);
+        band([[a0, c1], [a0, c0], [A0, C0], [A0, C1]], kk);
+      }
+      bands(D[0], D[1], D[2], D[3], C.deckW, -1, C.deckK);
+      heads.forEach(function (h) { var r = h[0]; bands(r.u, r.u + r.w, r.v, r.v + r.d, C.headW, 1, C.headK); });
+      // R2 the deck quad
+      var dk = new three.BoxBatch({ uv: true }), w1 = [1, 1, 1];
+      dk.addUpQuad([[X(D[0]), Z(D[2])], [X(D[1]), Z(D[2])], [X(D[1]), Z(D[3])], [X(D[0]), Z(D[3])]], top + R.deckLift, [w1, w1, w1, w1], 'deck');
+      if (mats.deck) { deck = dk.build(mats.deck, 'roofDeck'); deck.castShadow = false; deck.receiveShadow = true; }
     }
     openings(house, b);
     var g = world.getObjectByName('roof'), m = b.build(mats.batch, 'roofBatch'), out = [];
     if (m) { g.add(m); out.push(m); }
     if (tm) { g.add(tm); out.push(tm); }
+    if (deck) { g.add(deck); out.push(deck); }
     return out;
   };
 })(globalThis.PC = globalThis.PC || {});

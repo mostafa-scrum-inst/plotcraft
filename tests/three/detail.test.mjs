@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { opened, close } from '../helpers/scene3d.mjs';
-import { maxHouse } from '../helpers/houses.mjs';
+import { maxHouse, sampleApproved } from '../helpers/houses.mjs';
 import { rgbOf, sameRgb, itemsOf } from '../helpers/batch.mjs';
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -189,5 +189,81 @@ test('per-instance colour: canopies and shrubs tinted within the table value ran
     }
     assert.ok(new Set(c.map((x) => x[1].toFixed(4))).size > 1 || c.length < 2, 'varies');
     assert.deepEqual(JSON.stringify(c), JSON.stringify(B.mock.raw(B.world.getObjectByName(name)).colors), 'same on rebuild');
+  }
+});
+
+// ---- F6-T1c roof detail (plan 1-3, Designer R1-R3, TL plan review) -------------------------------------------------
+const roofCase = (f) => opened(f ? (PC) => sampleApproved(PC, f) : null);
+
+test('F6-T1c R1: coping on every parapet ring (4 boxes) and head (1 box each), copingT thick, copingOver past both faces, in exteriors.coping; the drip-edge slab dripOut proud in slab; the decals stay last', () => {
+  for (const [name, f] of [['flat', null], ['usable', (d) => { d.ans.usableRoof = true; }], ['terrace', (d) => { d.ans.roofType = 'terrace'; }]]) {
+    const E = roofCase(f), PC = E.PC, R = PC.C.ROOF, h = E.house, fp = h.footprint, X = PC.data.exteriors[h.exterior], it = E.items('roofBatch');
+    const top = h.roof.baseY + R.slab, high = h.roof.usable || h.roof.type === 'terrace', pTop = top + (high ? R.parapetHigh : R.parapet);
+    const cop = it.filter((x) => x.kind === 'box' && sameRgb(x.side, rgbOf(PC, X.coping)));
+    const heads = [h.roof.stairHead, h.roof.liftHead].filter(Boolean);
+    assert.equal(cop.length, 4 + heads.length, `${name}: coping boxes`);
+    const ring = cop.filter((x) => close(x.y0, pTop) && close(x.y1, pTop + R.copingT));
+    assert.equal(ring.length, 4, name + ' ring on the parapet top');
+    const xs = [Math.min(...ring.map((x) => x.x0)), Math.max(...ring.map((x) => x.x1))], zs = [Math.min(...ring.map((x) => x.z0)), Math.max(...ring.map((x) => x.z1))];
+    assert.ok(close(xs[1] - xs[0], fp.w + 2 * R.copingOver) && close(zs[1] - zs[0], fp.d + 2 * R.copingOver), name + ' copingOver outside');
+    const front = ring.find((x) => close(x.z1, E.Z(fp.v) + R.copingOver));
+    assert.ok(front && close(front.z1 - front.z0, R.parapetT + 2 * R.copingOver), name + ' copingOver inside too');
+    heads.forEach((r) => assert.ok(cop.some((x) => close(x.x1 - x.x0, r.w + 2 * R.copingOver) && close(x.z1 - x.z0, r.d + 2 * R.copingOver) && close(x.y1 - x.y0, R.copingT)), name + ' head cap'));
+    const slab = it.filter((x) => x.kind === 'box' && close(x.y0, h.roof.baseY) && close(x.y1, top));
+    assert.ok(slab.length === 1 && sameRgb(slab[0].side, rgbOf(PC, X.slab)) && close(slab[0].x0, E.X(fp.u) - R.dripOut) && close(slab[0].z1, E.Z(fp.v) + R.dripOut), name + ' drip edge');
+    const firstDecal = it.findIndex((x) => x.kind === 'glass');
+    assert.ok(firstDecal > 0 && it.slice(0, firstDecal).every((x) => x.kind !== 'reveal') && it.slice(firstDecal).every((x) => ['glass', 'reveal', 'box'].includes(x.kind)), name + ' decals last');
+  }
+  const P = roofCase((d) => { d.ans.roofType = 'pitched'; }), it = P.items('roofBatch');
+  assert.ok(!it.some((x) => sameRgb(x.side, rgbOf(P.PC, P.PC.data.exteriors[P.house.exterior].coping))) && P.mesh('roofDeck') === null && !it.some((x) => x.kind === 'deckBand'), 'pitched: no coping, deck or band');
+});
+
+test('F6-T1c R3: deckBand strips 0.005 m over the slab top, deckW inside the parapet x deckK -> x 1; headW around each head x headK -> x 1, clipped to the deck', () => {
+  const corner = (pos) => (PC) => { const st = maxHouse(PC, { stairPos: pos }); st.ans.roofType = 'flat'; st.ans.usableRoof = true; return st; };   // heads flush with a footprint corner: their bands clip to the deck
+  for (const [name, E] of [['flat', roofCase(null)], ['usable', roofCase((d) => { d.ans.usableRoof = true; })], ['max fl', opened(corner('fl'))], ['max br', opened(corner('br'))]]) {
+    const PC = E.PC, R = PC.C.ROOF, C = PC.C.CONTACT, h = E.house, fp = h.footprint, X = PC.data.exteriors[h.exterior], m = E.mesh('roofBatch');
+    const bands = itemsOf(E.mock, m).filter((x) => x.kind === 'deckBand'), y = h.roof.baseY + R.slab + 0.005, roofC = rgbOf(PC, X.roof);
+    const heads = [h.roof.stairHead, h.roof.liftHead].filter(Boolean);
+    assert.ok(bands.length >= 4 && bands.length <= 4 + 4 * heads.length, `${name}: ${bands.length} strips`);
+    const D = [E.X(fp.u + R.parapetT), E.X(fp.u + fp.w - R.parapetT), E.Z(fp.v + fp.d - R.parapetT), E.Z(fp.v + R.parapetT)];
+    bands.forEach((q, k) => {
+      assert.ok(close(q.y0, y) && close(q.y1, y), 'height');
+      for (let i = q.first; i < q.first + 4; i++) {
+        const v = vertIn(E, m, i);
+        assert.ok(v.p[0] >= D[0] - 1e-4 && v.p[0] <= D[1] + 1e-4 && v.p[2] >= D[2] - 1e-4 && v.p[2] <= D[3] + 1e-4, 'on the deck');
+        assert.ok(v.n[1] > 0.999, 'face up');
+        const ks = k < 4 ? [C.deckK, 1] : [C.headK, 1];
+        assert.ok(ks.some((kk) => sameRgb(v.c, scaled(roofC, kk))), 'band colour');
+      }
+    });
+    // the parapet bands: the edge on the parapet's inner face is x deckK, the far edge deckW in is x 1
+    for (const q of bands.slice(0, 4)) for (let i = q.first; i < q.first + 4; i++) {
+      const v = vertIn(E, m, i), edge = Math.min(v.p[0] - D[0], D[1] - v.p[0], v.p[2] - D[2], D[3] - v.p[2]);
+      assert.ok(close(edge, 0, 1e-4) ? sameRgb(v.c, scaled(roofC, C.deckK)) : close(edge, C.deckW, 1e-4) && sameRgb(v.c, roofC), 'deckW band, x deckK at the parapet');
+    }
+  }
+});
+
+test('F6-T1c R2: roofDeck = one face-up quad inside the parapet deckLift over the slab top, world UVs in metres, Lambert in exteriors.roof, receives without casting; membrane on flat, the paving texture object on usable / terrace', () => {
+  for (const [name, f, want] of [['flat', null, 'membrane'], ['usable', (d) => { d.ans.usableRoof = true; }, 'paving'], ['terrace', (d) => { d.ans.roofType = 'terrace'; }, 'paving']]) {
+    const E = roofCase(f), PC = E.PC, R = PC.C.ROOF, h = E.house, fp = h.footprint, d = E.mesh('roofDeck'), raw = E.mock.raw;
+    assert.ok(d && d.parent.name === 'roof', name);
+    assert.deepEqual([d.castShadow, d.receiveShadow, raw(d.material).__kind, raw(d.material).vertexColors], [false, true, 'MeshLambertMaterial', false], name);
+    const c = raw(raw(d.material).color);
+    assert.ok(sameRgb([c.r, c.g, c.b], rgbOf(PC, PC.data.exteriors[h.exterior].roof)), name + ' roof colour');
+    const it = itemsOf(E.mock, d);
+    assert.equal(it.length, 1); assert.equal(it[0].kind, 'deck');
+    const q = it[0], y = h.roof.baseY + R.slab + R.deckLift;
+    assert.ok(close(q.y0, y) && close(q.y1, y) && close(q.x0, E.X(fp.u + R.parapetT)) && close(q.x1, E.X(fp.u + fp.w - R.parapetT)) && close(q.z1, E.Z(fp.v + R.parapetT)), name + ' inside the parapet');
+    const g = raw(raw(d).geometry), uv = g.attrs.uv.array, pos = g.attrs.position.array;
+    for (let i = 1; i < 4; i++) {
+      const du = Math.hypot(uv[2 * i] - uv[0], uv[2 * i + 1] - uv[1]), dp = Math.hypot(pos[3 * i] - pos[0], pos[3 * i + 2] - pos[2]);
+      assert.ok(close(du, dp, 1e-4), name + ' UVs in metres');
+    }
+    const map = raw(raw(d.material).map), paving = raw(raw(E.mesh('paving').material).map);
+    if (want === 'paving') assert.equal(map, paving, name + ': the same paving texture object');
+    else assert.equal(map.image.data, PC.texgen.get('membrane', 512).data, name + ': membrane');
+    assert.equal(E.info().textures.length, want === 'paving' ? 4 : 5, name + ' textures');
+    E.PC.view3d.setRoof(false); assert.equal(d.parent.visible, false, 'Roof off hides it');
   }
 });

@@ -7,7 +7,9 @@
    - tiles (B4, pitched roofTiles): rows x perRow per tile, staggered by half a tile; a lineW px shadow line at the
      bottom of each row at `line`, 1 px joints at `joint`, per-tile +-tile.
    - meadow (B8, groundOuter): low-frequency octaves.
-   - blob (C5, T1b): radial alpha (1 - r)^power. */
+   - blob (C5, T1b): radial alpha (1 - r)^power.
+   - membrane (R2, T1c, roofDeck on flat roofs): tileM / sheetW sheets per tile with a 1 px seam at `seam`, mottle
+     octaves, speckle +-speckle. */
 (function (PC) {
   'use strict';
   PC.data.textures = {
@@ -15,6 +17,8 @@
     paving: { tileM: 2.4, base: 0.92, slabs: 4, joint: -0.28, slab: 0.05, speckle: 0.03 },
     tiles: { tileM: 1.5, base: 0.9, rows: 5, perRow: 6, lineW: 2, line: -0.30, joint: -0.15, tile: 0.06 },
     meadow: { tileM: 12, base: 0.9, noise: [[3, 0.045], [12, 0.025]] },   // F6-T1a shots: 0.08 read as camouflage patches
+    // F6-T1c R2 (Designer): the flat roof deck membrane: sheets sheetW m wide along v with a seam, mottle, speckle
+    membrane: { tileM: 4, base: 0.9, sheetW: 1.0, seam: -0.12, mottle: [[2, 0.05], [8, 0.025]], speckle: 0.03 },
     blob: { power: 1.5 }
   };
 })(globalThis.PC = globalThis.PC || {});
