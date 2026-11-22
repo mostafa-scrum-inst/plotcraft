@@ -165,3 +165,11 @@ If the runs are still over: QA measures f1-t1-layout 640x360 next, and any furth
 - The runner enforces the solo step, with no other browser jobs.
 - Every QA_FULL report records the solo number. Above 380 ms, the TL reviews before anything more is added to the build.
 - The 800 ms guard never counts as meeting the budget.
+
+## Addendum: Reset camera tilt, `CAM.resetPhi` 50° → about 62° (TL)
+- **Not in T1a.** The gate runs on 20c9238 with resetPhi at 50°.
+- **A candidate for T1b**, as its own first commit, if the PM agrees (asked). If it goes in:
+  - the T1b impl-notes carry an A-16 reader list: Reset fit and rMax (which feed fog near), the tour overview stops, the F5 goldens, QA's Reset checks and the finder;
+  - the fog-near and dome-clip tests run at the narrowest aspect;
+  - the Designer signs off portrait and phone Reset shots.
+- **Winter meadow stays green:** T1b, data only, with the fog and seam tests green.
