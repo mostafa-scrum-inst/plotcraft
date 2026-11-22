@@ -209,3 +209,12 @@ If the runs are still over: QA measures f1-t1-layout 640x360 next, and any furth
   - 452 checks moved, all 456 held in the release rows.
 - **Accepted as the merge gate.** After FS merges 97b812f and re-times the durations, one quiet confirm run of ≤ 420 s on f6t1 is enough.
 - **Margin:** about 7 s, and the T1c tests may add at most +5 s. The next feature after T1c that adds tests brings its own buy-back.
+
+## Addendum: post-merge timing (TL)
+- **Results:**
+  - quiet confirm default run: 411.2 s;
+  - QA_FULL=1: 475.6 s green, after a 477.2 s run that failed the loaded-build guard at 897 ms;
+  - C-4.8 solo: 159 ms.
+- **Ruling 1: the loaded-build regression guard goes from 800 ms to 1200 ms** (3 × budget), best of 3. The C-4.8 budget remains the 400 ms solo step. The CTO was informed.
+- **Ruling 2: QA moves at least 30 s of QA_FULL-only work into the release step before the T1c gate.** It moves duplicated viewport passes only. The release NOTE line goes from 260 s to 280 s, and the 300 s limit stays.
+- CTO accepts the 1200 ms guard. If it trips, the solo step is rerun before the trip is called noise.
