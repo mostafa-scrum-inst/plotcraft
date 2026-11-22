@@ -368,3 +368,22 @@ Probe: sample house, Reset pose, 1280x800 on real r128, every caster off vs on, 
   - Readers: QA f3-t3-data and the unit data-tables test.
 - **groundOuter follows the season (`meadowColor`).**
   - Readers: the look test, and any QA row that held groundOuter constant across seasons.
+
+## T1b-6. Gate (f6t1 after QA 2aae57d merged, durations re-timed)
+
+| run | result | time | line |
+|---|---|---|---|
+| default, `--write-durations` | all green | 417.3 s | ≤ 420 s |
+| default, re-timed table | all green | 422.0 s | over by 2 s (load average about 8.8 from the QA / Designer runs beside it) |
+| default, re-timed table, quiet machine | all green | 418.2 s | ≤ 420 s |
+| `QA_FULL=1 --write-durations` | all green | 464.1 s | ≤ 480 s |
+| release step (`--only leak-max`) | 6 / 6 | 193.3 s | ≤ 300 s, NOTE above 260 s |
+
+- C-4.8 solo: 139 ms, best of 3 (139, 171, 161) against the ≤ 400 ms budget. The build alone, to 'ready', takes 17 ms.
+- Maximum house on real r128: 26 / 25 draw calls and 19 422 / 17 356 triangles (Roof on / off), 26 meshes.
+- The default run sits about 13 s above T1a (405 / 401 s) and 2–3 s under its 420 s line, so the margin is thin. The largest files are the long QA suites: f1-t3 83 s, f2-t3 77 s, f1-t1 72 s.
+
+## T1b-7. Not committed
+
+- `docs/03-tasks/F6-T1/verify/retune.mjs`: the Designer's file, untracked.
+- The QA shot and metrics files rewritten by test runs: restored after every run.
