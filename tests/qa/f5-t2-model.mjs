@@ -4,7 +4,8 @@
 //      plan-order ties; caption ids / levels; 5 houses (sample, one room, basement house, low 2.4 m ceilings, maximum).
 //   E  eyes and looks = mine (1e-6; a central room only by distance / height / street side), eye floor 5.33 m read from
 //      PC.data.vegetation (required item 2), every eye >= it; consecutive points >= 0.5 m apart (nudge).
-//   T  times: overview legs 4 s, room legs 3.5 s; sample 53.5 s (30-90 s), maximum 144.5 s; speed factors.
+//   T  times (version-aware, T.usePace(PC.C.TOUR)): F5-T2 overview legs 4 s, sample 53.5 s, maximum 144.5 s; F5-T3a 4.5 s,
+//      54.5 s, 145.5 s; room legs 3.5 s; speed factors.
 //   C  fromEyeLook = mine (1e-9) and round-trips with PC.cam.position; PC.cam.clamp leaves every stop pose unchanged
 //      (required item 3); the plan is deterministic.
 // Run: node tests/qa/f5-t2-model.mjs [--no-shots]
@@ -15,6 +16,7 @@ import * as T from './f5-t2-ref.mjs';
 
 const R = collector('F5-T2 model');
 const { PC } = H.loadPC3();
+const PACEV = T.usePace(PC.C.TOUR);   // version-aware pacing (F5-T2 or F5-T3a), QA literals
 const t0 = Date.now();
 const cut = (a, n = 8) => a.slice(0, n).concat(a.length > n ? [`... ${a.length} in all`] : []);
 const HAS = !!(PC.tourplan && typeof PC.tourplan.build === 'function');
@@ -74,7 +76,7 @@ R.note(`nearest-neighbour walk matched with anchor ${VAR ? VAR.join(' / ') : 'no
       if (s.eye[1] < EYE_FLOOR - 1e-9) g.push(`${tag} ${k}: eye Y ${s.eye[1].toFixed(2)} below the floor ${EYE_FLOOR.toFixed(2)}`);
       if (i && (T.dist(s.eye, p.stops[i - 1].eye) < T.NUDGE - 1e-9 || T.dist(s.look, p.stops[i - 1].look) < T.NUDGE - 1e-9)) g.push(`${tag} stops ${i - 1}-${i}: points closer than 0.5 m`); }); }
   const low = plans.find((b) => /low/.test(b.tag)); if (low && low.p && !low.p.stops.some((s) => s.kind === 'room' && s.level === 'G' && Math.abs(s.eye[1] - EYE_FLOOR) < 1e-9)) g.push('low ceilings: no ground eye lifted to the floor');
-  R.check(`E ${n} stops: eye / look = mine (look at floorY + 0.5; eye 0.6 max(w, d) + 2 m out at max(baseY, 0) + storeyH + 2.5, basement 1.5 m in at storeyH + 4); eye floor = (canopyY0 + canopyH) x scale[1] + 0.5 from the table`, cut(f));
+  R.check(`E ${n} stops: eye / look = mine (look at floorY + 0.5; eye 0.6 max(w, d) + 2 m out at max(baseY, 0) + storeyH + 2.5, basement 1.5 m in at storeyH + ${T.PACE.bUp}); eye floor = (canopyY0 + canopyH) x scale[1] + 0.5 from the table`, cut(f));
   R.check(`E every stop eye >= the eye floor ${EYE_FLOOR.toFixed(2)} m (2.4 m ceilings: ground eyes lifted onto it); consecutive eyes and looks >= 0.5 m apart`, cut(g)); }
 
 // ================= T. times =================
@@ -83,11 +85,12 @@ R.note(`nearest-neighbour walk matched with anchor ${VAR ? VAR.join(' / ') : 'no
     p.stops.forEach((s, i) => { if (Math.abs(s.t - m.stops[i].t) > 1e-9) f.push(`${tag} stop ${i}: t ${s.t}, expected ${m.stops[i].t}`); });
     if (Math.abs(p.duration - m.duration) > 1e-9) f.push(`${tag}: duration ${p.duration}, expected ${m.duration}`); }
   const sd = plans[0].p && plans[0].p.duration, mx = plans.find((b) => /maximum/.test(b.tag));
-  if (!(Math.abs(sd - 53.5) < 1e-9)) f.push(`sample ${sd} s (53.5)`); if (!(sd >= 30 && sd <= 90)) f.push(`sample ${sd} s outside 30-90 s (F5-S2)`);
-  if (mx && mx.p && Math.abs(mx.p.duration - 144.5) > 1e-9) f.push(`maximum ${mx.p.duration} s (144.5)`);
-  const one = plans.find((b) => /one room/.test(b.tag)); if (one && one.p && (one.p.stops.length !== 3 || one.p.duration !== 8)) f.push(`one room: ${one.p.stops.length} stops, ${one.p.duration} s (overview -> room -> overview, 8 s)`);
+  if (!PACEV) f.push(`PC.C.TOUR overviewLeg ${PC.C.TOUR.overviewLeg} / bEyeUp ${PC.C.TOUR.bEyeUp}: no approved pacing (QA pacing table not updated)`);
+  if (!(Math.abs(sd - T.PACE.sample) < 1e-9)) f.push(`sample ${sd} s (${T.PACE.sample})`); if (!(sd >= 30 && sd <= 90)) f.push(`sample ${sd} s outside 30-90 s (F5-S2)`);
+  if (mx && mx.p && Math.abs(mx.p.duration - T.PACE.max) > 1e-9) f.push(`maximum ${mx.p.duration} s (${T.PACE.max})`);
+  const one = plans.find((b) => /one room/.test(b.tag)); if (one && one.p && (one.p.stops.length !== 3 || one.p.duration !== T.PACE.one)) f.push(`one room: ${one.p.stops.length} stops, ${one.p.duration} s (overview -> room -> overview, ${T.PACE.one} s)`);
   const sp = PC.C.TOUR && (PC.C.TOUR.speed || PC.C.TOUR.speeds); if (sp) { for (const [k, v] of Object.entries(T.SPEED)) if (Math.abs(sp[k] - v) > 1e-9) f.push(`speed ${k} ${sp[k]}, expected ${v}`); } else R.note(`T speed factors not found under PC.C.TOUR (${PC.C.TOUR ? Object.keys(PC.C.TOUR) : 'no TOUR'}); judged in the page`);
-  R.check('T stop times: overview legs 4 s, room legs 3.5 s; sample 53.5 s (inside 30-90 s), maximum 144.5 s, one room 8 s; speed factors 0.6 / 1 / 1.8', cut(f)); }
+  R.check(`T stop times (${T.PACE_NAME} pacing): overview legs ${T.PACE.over} s, room legs 3.5 s; sample ${T.PACE.sample} s (inside 30-90 s), maximum ${T.PACE.max} s, one room ${T.PACE.one} s; speed factors 0.6 / 1 / 1.8`, cut(f)); }
 
 // ================= C. fromEyeLook, clamp at stops, determinism =================
 { const f = [], g = [];

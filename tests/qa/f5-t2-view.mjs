@@ -27,6 +27,7 @@ const R = collector('F5-T2 view');
 const noShots = process.argv.includes('--no-shots'), shots = join(ROOT, 'tests/qa/shots/F5-T2');
 const ONLY = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7).split(',').filter(Boolean);
 const { PC } = H.loadPC3();
+T.usePace(PC.C.TOUR);   // version-aware pacing (QA literals per version)
 const HAS = !!(PC.three && PC.three.tour && PC.tourplan && PC.tourplan.build);
 if (!HAS) { R.note('skipped: PC.three.tour / PC.tourplan absent (F5-T2 not merged)'); process.exit(R.done() ? 0 : 1); }
 if (!noShots) mkdirSync(shots, { recursive: true });
