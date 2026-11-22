@@ -15,6 +15,7 @@
      in-plane axes e1 = the horizontal tangent (X for horizontal faces) and e2 = n x e1, so a texture with
      repeat = 1 / tileM tiles at real scale across merged boxes; rows run along e1 (the eaves on a slope).
      addPrism(..., part) builds 'slopes' (the two roof slopes only, for roofTiles) or 'rest' (gables and base) or both.
+     F6-T1b: addQuadV(cx, cy, cz, axis, sign, w, h, top, bot, kind) a vertical quad with a top and a bottom colour.
    - texture(kind, size, renderer): a DataTexture from the PC.texgen pixel cache with the explicit r128 settings of C-3.4
      (colour kinds sRGB, blob linear); repeat = 1 / PC.data.textures[kind].tileM.
    - skyDome(radius): the F6-T1a sky geometry, a latitude-longitude sphere (24 x 12, rings every 15 degrees from -90
@@ -118,6 +119,24 @@
   BoxBatch.prototype.addQuad = function (cx, y, cz, sx, sz, hex) {
     this.face([cx, y, cz], [sx / 2, 0, sz / 2], FACES[2], this.color(hex));
     this.quads++; this.items.push(['quad', 4]);
+  };
+  // F6-T1b (plan 6.1 / 6.2): a vertical quad facing +-X (axis 0) or +-Z (axis 2), centre (cx, cy, cz), w along the
+  // wall, h tall, the top two vertices in `top`, the bottom two in `bot` (each a hex or a linear [r, g, b]): the
+  // glass gradient, the reveal band, the wall-base skirt. kind names the item ('glass', 'reveal', 'skirt').
+  BoxBatch.prototype.rgbOf = function (c) { return typeof c === 'string' ? this.color(c) : c; };
+  BoxBatch.prototype.shade = function (hex, k) { var c = this.color(hex); return [c[0] * k, c[1] * k, c[2] * k]; };
+  BoxBatch.prototype.addQuadV = function (cx, cy, cz, axis, sign, w, h, top, bot, kind) {
+    var t = this.rgbOf(top), b = this.rgbOf(bot), base = this.pos.length / 3, n = [0, 0, 0], self = this;
+    n[axis] = sign;
+    // corners counter-clockwise seen from outside: along = the horizontal in-plane axis with along x up = n
+    var al = axis === 0 ? [0, 0, -sign] : [sign, 0, 0];
+    [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(function (k) {
+      var p = [cx + al[0] * k[0] * w / 2, cy + k[1] * h / 2, cz + al[2] * k[0] * w / 2], c = k[1] > 0 ? t : b;
+      self.pos.push(p[0], p[1], p[2]); self.nor.push(n[0], n[1], n[2]); self.rgb.push(c[0], c[1], c[2]);
+      if (self.uv) { var B = basis(n); self.uv.push(dot(p, B[0]), dot(p, B[1])); }
+    });
+    this.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    this.quads++; this.items.push([kind || 'quadV', 4]);
   };
   BoxBatch.prototype.count = function () { return this.items.length; };
   // One Mesh, or null when nothing was added.

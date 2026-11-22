@@ -6,7 +6,9 @@
    slab's underside at floor + storeyH (Q8). F4-T1: levels / rooms / core / roof descriptor / site rectangles.
    F4-T2: furniture per room (PC.furnish, A-11; colour = the resolved Q18 hex, so Q18 changes colours and the key,
    never the boxes), roof.stairHead / liftHead on a usable roof, site.gate (only with the wall, Q7), seating and the
-   north marker (site-outdoor.js). Vegetation (F4-T3) stays empty. */
+   north marker (site-outdoor.js). Vegetation (F4-T3) stays empty.
+   F6-T1b (plan 6.1, Designer A2, TL Q-T9): house v 2 gains `openings` (PC.house.openings, computed before the key so
+   the key covers it): glazed openings (kind 'glazed'), small ones, stair slots and the front door on the exterior walls, in L. */
 (function (PC) {
   'use strict';
   var INDEX = { B: -1, G: 0, 1: 1, 2: 2 };
@@ -19,8 +21,56 @@
   }
   function rect(fp, r) { return r ? { u: fp.u + r.x, v: fp.v + r.y, w: r.w, d: r.h } : null; }
 
+  // F6-T1b openings (Designer plan A2 / D-A2). Sizes in PC.C.OPEN. Runs = the room edges on each footprint side of an
+  // above-ground level (rooms never overlap, so a room edge is already clipped by the partitions); the stair rectangle
+  // on a side gives one slot; the lift none. Habitable rooms get n = max(1, floor((run - endClear) / pitch)) panes
+  // evenly spaced endClear clear of each run end, none on a run shorter than the pane + 2 x endClear; service rooms
+  // one small pane on a run longer than smallMin. The ground front gets the door at site.entrance; openings closer
+  // than doorClear to its frame are dropped. Heads are clamped to storeyH - headGap.
+  var HAB = { living: 1, dining: 1, majlis: 1, bedroom: 1, office: 1, kitchen: 1 }, SVC = { bathroom: 1, laundry: 1, maid: 1, storage: 1 };
+  var SIDES = ['front', 'back', 'left', 'right'], EPS = 1e-6;
+  function openings(house) {
+    var O = PC.C.OPEN, fp = house.footprint, sH = house.storeyH, out = [];
+    var at = { front: ['v', fp.v], back: ['v', fp.v + fp.d], left: ['u', fp.u], right: ['u', fp.u + fp.w] };
+    // the run [a, b] (along u for front / back, along v for left / right) of rectangle r on side s, or null
+    function run(r, s) {
+      var ax = at[s][0], c = at[s][1], lo = ax === 'v' ? r.v : r.u, hi = ax === 'v' ? r.v + r.d : r.u + r.w;
+      if (Math.abs(lo - c) > EPS && Math.abs(hi - c) > EPS) return null;
+      return ax === 'v' ? [r.u, r.u + r.w] : [r.v, r.v + r.d];
+    }
+    function put(list, lv, s, c, w, kind, sill, h) {
+      var head = Math.min(sill + h, sH - O.headGap);
+      if (head - sill > 0.05) list.push({ level: lv.id, side: s, a: c - w / 2, b: c + w / 2, kind: kind, sill: sill, head: head });
+    }
+    house.levels.forEach(function (lv) {
+      if (lv.index < 0) return;
+      SIDES.forEach(function (s) {
+        var list = [];
+        lv.rooms.forEach(function (r) {
+          var q = run(r, s); if (!q) return;
+          var L = q[1] - q[0];
+          if (HAB[r.type] && L >= O.win.w + 2 * O.endClear) {
+            var n = Math.max(1, Math.floor((L - O.endClear) / O.pitch)), span = L - 2 * O.endClear;
+            for (var i = 0; i < n; i++) put(list, lv, s, q[0] + O.endClear + span * (i + 0.5) / n, O.win.w, 'glazed', O.win.sill, O.win.h);
+          } else if (SVC[r.type] && L > O.smallMin) put(list, lv, s, (q[0] + q[1]) / 2, O.small.w, 'small', O.small.sill, O.small.h);
+        });
+        var sq = lv.stair && run(lv.stair, s);
+        if (sq && sq[1] - sq[0] >= O.slot.w) put(list, lv, s, (sq[0] + sq[1]) / 2, O.slot.w, 'slot', O.slot.sill, O.slot.h);
+        if (lv.index === 0 && s === 'front') {
+          var e = house.site.entrance, da = e.u - O.door.w / 2, db = e.u + O.door.w / 2;
+          list = list.filter(function (o) { return o.b + O.doorClear <= da || o.a - O.doorClear >= db; });
+          put(list, lv, s, e.u, O.door.w, 'door', 0, O.door.h);
+        }
+        list.sort(function (p, q) { return p.a - q.a; });
+        out.push.apply(out, list);
+      });
+    });
+    return out;
+  }
+
   PC.house = {
     hash: hash,
+    openings: openings,
     build: function (state) {
       var st = PC.stages.status(state);
       if (!st[3].reachable || !st[3].valid) return null;
@@ -50,7 +100,7 @@
       var top = levels[levels.length - 1].index;
       var copy = function (o) { return o ? JSON.parse(JSON.stringify(o)) : null; };
       var house = {
-        v: 1, key: '',
+        v: 2, key: '',
         center: [cu, cv], radius: radius,
         plot: { pts: site.ptsL.map(function (p) { return [p[0], p[1]]; }), area: site.plotArea },
         northDeg: PC.frames.northL(state),
@@ -69,6 +119,7 @@
           northMarker: copy(site.northMarker)
         }
       };
+      house.openings = openings(house);
       house.key = hash(JSON.stringify(house));
       return house;
     }

@@ -52,6 +52,14 @@
     // 3D (F4-T1; A-9, A-10, A-12). HOUSE: slab 0.2 m (pitch = Q8 + slab; floor at baseY + slab), dollhouse walls
     // 1.2 m x 0.15 m, entrance door 1.2 m wide, z-offsets of A-10. CAM: angles in degrees, see A-12.
     HOUSE: { slab: 0.2, wallH: 1.2, wallT: 0.15, door: 1.2, tintLift: 0.015, capLift: 0.01, outerDrop: 0.05, outerK: 36 },
+    // F6-T1b openings (Designer plan A2, plan 6.1): pane 1.2 x 1.4 (sill 0.9, head 2.3), small 0.6 x 0.6 (sill 1.6),
+    // stair slot 0.6 x 1.6 (sill 0.5), door 1.0 x 2.2; endClear from run ends / partitions, pitch per pane,
+    // smallMin run for a small pane, doorClear from the door frame, heads <= storeyH - headGap.
+    OPEN: { win: { w: 1.2, h: 1.4, sill: 0.9 }, small: { w: 0.6, h: 0.6, sill: 1.6 }, slot: { w: 0.6, h: 1.6, sill: 0.5 },
+      door: { w: 1.0, h: 2.2 }, endClear: 0.6, pitch: 2.6, smallMin: 1.2, doorClear: 0.6, headGap: 0.3,
+      // the decals (Q-D1): glass / reveal band offsets out of the wall plane, frame profile and proud depth, sill
+      decal: { glass: 0.01, reveal: 0.06, revealD: 0.02, revealK: 0.65, frame: 0.06, proud: 0.05, mullionMin: 1.2,
+        sillT: 0.04, sillOut: 0.08, sillOver: 0.02, leaf: 0.04 } },
     // F4-T2 (A-9, A-10, A-11; TL plan review, Designer plan). FURNISH: the A-11 placement rule. ROOF: slab, parapets
     // (0.3 m, 1.0 m when walkable or a terrace), pergola over the back third, 30 degree gable, stair head 2.4 m, lift
     // overrun 1.2 m. SITE: boundary wall 1.2 x 0.2 m inside the edge, gate 3 m with 0.4 x 1.4 m posts, seating pad

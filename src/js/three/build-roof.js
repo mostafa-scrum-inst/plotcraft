@@ -9,10 +9,50 @@
      slopes in roof, gable triangles in wall. Never usable (the model switches a usable pitched roof to flat).
    - Usable: stair head 2.4 m and lift overrun 1.2 m blocks (parapet) over roof.stairHead / roof.liftHead.
    F6-T1a (plan 5.4): a pitched roof's two slopes go into "roofTiles" (mats.tiles, the tile map on world UVs, rows
-   along the eaves); its gables and base stay in roofBatch. */
+   along the eaves); its gables and base stay in roofBatch.
+   F6-T1b (plan 6.1, Designer A2 + Q-D1 / Q-D3): house.openings as proud decals, appended after the boxes above (new
+   item kinds 'glass', 'reveal'; frames, sills and the door leaf are boxes): per glazed / small / slot opening the
+   glass quad 0.01 m out with the glassTop -> glassBottom gradient, a 0.06 m reveal band at 0.02 m in frame x 0.65,
+   4 frame bars (0.06 m profile, 0.05 m proud, exteriors.frame), a mullion at mid-width from 1.2 m, and a sill
+   0.04 m thick, 0.08 m proud under the bottom bar (exteriors.trim); the door: a 0.04 m leaf in exteriors.door at the
+   outer plane with top and side bars in frame. Shown with the rest of roofBatch (exterior mode). */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
+
+  function openings(house, b) {
+    var O = PC.C.OPEN.decal, fp = house.footprint, E = PC.data.exteriors[house.exterior], SC = PC.data.siteColors;
+    var cu = house.center[0], cv = house.center[1], byId = {};
+    house.levels.forEach(function (lv) { byId[lv.id] = lv; });
+    // side -> [normal axis (0 X / 2 Z), outward sign, the wall plane in T]
+    var P = { front: [2, 1, -(fp.v - cv)], back: [2, -1, -(fp.v + fp.d - cv)], left: [0, -1, fp.u - cu], right: [0, 1, fp.u + fp.w - cu] };
+    var reveal = b.shade(E.frame, O.revealK);
+    (house.openings || []).forEach(function (o) {
+      var p = P[o.side], ax = p[0], sg = p[1], y0 = byId[o.level].baseY + PC.C.HOUSE.slab, ys = y0 + o.sill, yh = y0 + o.head;
+      var mid = (o.a + o.b) / 2, along = ax === 2 ? mid - cu : -(mid - cv), w = o.b - o.a, h = yh - ys;
+      // a point at distance d out of the wall plane at the along-wall coordinate t, height y
+      function at(t, d) { return ax === 2 ? [t, p[2] + sg * d] : [p[2] + sg * d, t]; }
+      function bar(t, y, bw, bh, depth, hex) {   // a box bw along the wall, bh tall, from the plane to depth out
+        var c = at(t, depth / 2); b.add(c[0], y, c[1], ax === 2 ? bw : depth, bh, ax === 2 ? depth : bw, hex);
+      }
+      function quad(t, y, qw, qh, d, top, bot, kind) { var c = at(t, d); b.addQuadV(c[0], y, c[1], ax, sg, qw, qh, top, bot, kind); }
+      var f = O.frame, hw = w / 2;
+      if (o.kind === 'door') {
+        bar(along, ys + h / 2, w, h, O.leaf, E.door);
+        bar(along, yh + f / 2, w + 2 * f, f, O.proud, E.frame);
+        bar(along - hw - f / 2, ys + h / 2, f, h, O.proud, E.frame); bar(along + hw + f / 2, ys + h / 2, f, h, O.proud, E.frame);
+        return;
+      }
+      quad(along, ys + h / 2, w, h, O.glass, SC.glassTop, SC.glassBottom, 'glass');
+      var r = O.reveal;   // the reveal band just inside the opening: top, bottom, then the two sides
+      quad(along, yh - r / 2, w, r, O.revealD, reveal, reveal, 'reveal'); quad(along, ys + r / 2, w, r, O.revealD, reveal, reveal, 'reveal');
+      quad(along - hw + r / 2, ys + h / 2, r, h - 2 * r, O.revealD, reveal, reveal, 'reveal'); quad(along + hw - r / 2, ys + h / 2, r, h - 2 * r, O.revealD, reveal, reveal, 'reveal');
+      bar(along, yh + f / 2, w + 2 * f, f, O.proud, E.frame); bar(along, ys - f / 2, w + 2 * f, f, O.proud, E.frame);
+      bar(along - hw - f / 2, ys + h / 2, f, h, O.proud, E.frame); bar(along + hw + f / 2, ys + h / 2, f, h, O.proud, E.frame);
+      if (w >= O.mullionMin - 1e-9) bar(along, ys + h / 2, f, h, O.proud, E.frame);
+      bar(along, ys - f - O.sillT / 2, w + 2 * f + 2 * O.sillOver, O.sillT, O.sillOut, E.trim);
+    });
+  }
 
   three.buildRoof = function (house, world, mats) {
     var H = PC.C.HOUSE, R = PC.C.ROOF, fp = house.footprint, roof = house.roof, E = PC.data.exteriors[house.exterior];
@@ -53,6 +93,7 @@
         if (h[0]) box(h[0].u, h[0].u + h[0].w, h[0].v, h[0].v + h[0].d, top, top + h[1], E.parapet);
       });
     }
+    openings(house, b);
     var g = world.getObjectByName('roof'), m = b.build(mats.batch, 'roofBatch'), out = [];
     if (m) { g.add(m); out.push(m); }
     if (tm) { g.add(tm); out.push(tm); }

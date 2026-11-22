@@ -1841,6 +1841,14 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     // 3D (F4-T1; A-9, A-10, A-12). HOUSE: slab 0.2 m (pitch = Q8 + slab; floor at baseY + slab), dollhouse walls
     // 1.2 m x 0.15 m, entrance door 1.2 m wide, z-offsets of A-10. CAM: angles in degrees, see A-12.
     HOUSE: { slab: 0.2, wallH: 1.2, wallT: 0.15, door: 1.2, tintLift: 0.015, capLift: 0.01, outerDrop: 0.05, outerK: 36 },
+    // F6-T1b openings (Designer plan A2, plan 6.1): pane 1.2 x 1.4 (sill 0.9, head 2.3), small 0.6 x 0.6 (sill 1.6),
+    // stair slot 0.6 x 1.6 (sill 0.5), door 1.0 x 2.2; endClear from run ends / partitions, pitch per pane,
+    // smallMin run for a small pane, doorClear from the door frame, heads <= storeyH - headGap.
+    OPEN: { win: { w: 1.2, h: 1.4, sill: 0.9 }, small: { w: 0.6, h: 0.6, sill: 1.6 }, slot: { w: 0.6, h: 1.6, sill: 0.5 },
+      door: { w: 1.0, h: 2.2 }, endClear: 0.6, pitch: 2.6, smallMin: 1.2, doorClear: 0.6, headGap: 0.3,
+      // the decals (Q-D1): glass / reveal band offsets out of the wall plane, frame profile and proud depth, sill
+      decal: { glass: 0.01, reveal: 0.06, revealD: 0.02, revealK: 0.65, frame: 0.06, proud: 0.05, mullionMin: 1.2,
+        sillT: 0.04, sillOut: 0.08, sillOver: 0.02, leaf: 0.04 } },
     // F4-T2 (A-9, A-10, A-11; TL plan review, Designer plan). FURNISH: the A-11 placement rule. ROOF: slab, parapets
     // (0.3 m, 1.0 m when walkable or a terrace), pergola over the back third, 30 degree gable, stair head 2.4 m, lift
     // overrun 1.2 m. SITE: boundary wall 1.2 x 0.2 m inside the edge, gate 3 m with 0.4 x 1.4 m posts, seating pad
@@ -4080,7 +4088,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
    slab's underside at floor + storeyH (Q8). F4-T1: levels / rooms / core / roof descriptor / site rectangles.
    F4-T2: furniture per room (PC.furnish, A-11; colour = the resolved Q18 hex, so Q18 changes colours and the key,
    never the boxes), roof.stairHead / liftHead on a usable roof, site.gate (only with the wall, Q7), seating and the
-   north marker (site-outdoor.js). Vegetation (F4-T3) stays empty. */
+   north marker (site-outdoor.js). Vegetation (F4-T3) stays empty.
+   F6-T1b (plan 6.1, Designer A2, TL Q-T9): house v 2 gains `openings` (PC.house.openings, computed before the key so
+   the key covers it): glazed openings (kind 'glazed'), small ones, stair slots and the front door on the exterior walls, in L. */
 (function (PC) {
   'use strict';
   var INDEX = { B: -1, G: 0, 1: 1, 2: 2 };
@@ -4093,8 +4103,56 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   }
   function rect(fp, r) { return r ? { u: fp.u + r.x, v: fp.v + r.y, w: r.w, d: r.h } : null; }
 
+  // F6-T1b openings (Designer plan A2 / D-A2). Sizes in PC.C.OPEN. Runs = the room edges on each footprint side of an
+  // above-ground level (rooms never overlap, so a room edge is already clipped by the partitions); the stair rectangle
+  // on a side gives one slot; the lift none. Habitable rooms get n = max(1, floor((run - endClear) / pitch)) panes
+  // evenly spaced endClear clear of each run end, none on a run shorter than the pane + 2 x endClear; service rooms
+  // one small pane on a run longer than smallMin. The ground front gets the door at site.entrance; openings closer
+  // than doorClear to its frame are dropped. Heads are clamped to storeyH - headGap.
+  var HAB = { living: 1, dining: 1, majlis: 1, bedroom: 1, office: 1, kitchen: 1 }, SVC = { bathroom: 1, laundry: 1, maid: 1, storage: 1 };
+  var SIDES = ['front', 'back', 'left', 'right'], EPS = 1e-6;
+  function openings(house) {
+    var O = PC.C.OPEN, fp = house.footprint, sH = house.storeyH, out = [];
+    var at = { front: ['v', fp.v], back: ['v', fp.v + fp.d], left: ['u', fp.u], right: ['u', fp.u + fp.w] };
+    // the run [a, b] (along u for front / back, along v for left / right) of rectangle r on side s, or null
+    function run(r, s) {
+      var ax = at[s][0], c = at[s][1], lo = ax === 'v' ? r.v : r.u, hi = ax === 'v' ? r.v + r.d : r.u + r.w;
+      if (Math.abs(lo - c) > EPS && Math.abs(hi - c) > EPS) return null;
+      return ax === 'v' ? [r.u, r.u + r.w] : [r.v, r.v + r.d];
+    }
+    function put(list, lv, s, c, w, kind, sill, h) {
+      var head = Math.min(sill + h, sH - O.headGap);
+      if (head - sill > 0.05) list.push({ level: lv.id, side: s, a: c - w / 2, b: c + w / 2, kind: kind, sill: sill, head: head });
+    }
+    house.levels.forEach(function (lv) {
+      if (lv.index < 0) return;
+      SIDES.forEach(function (s) {
+        var list = [];
+        lv.rooms.forEach(function (r) {
+          var q = run(r, s); if (!q) return;
+          var L = q[1] - q[0];
+          if (HAB[r.type] && L >= O.win.w + 2 * O.endClear) {
+            var n = Math.max(1, Math.floor((L - O.endClear) / O.pitch)), span = L - 2 * O.endClear;
+            for (var i = 0; i < n; i++) put(list, lv, s, q[0] + O.endClear + span * (i + 0.5) / n, O.win.w, 'glazed', O.win.sill, O.win.h);
+          } else if (SVC[r.type] && L > O.smallMin) put(list, lv, s, (q[0] + q[1]) / 2, O.small.w, 'small', O.small.sill, O.small.h);
+        });
+        var sq = lv.stair && run(lv.stair, s);
+        if (sq && sq[1] - sq[0] >= O.slot.w) put(list, lv, s, (sq[0] + sq[1]) / 2, O.slot.w, 'slot', O.slot.sill, O.slot.h);
+        if (lv.index === 0 && s === 'front') {
+          var e = house.site.entrance, da = e.u - O.door.w / 2, db = e.u + O.door.w / 2;
+          list = list.filter(function (o) { return o.b + O.doorClear <= da || o.a - O.doorClear >= db; });
+          put(list, lv, s, e.u, O.door.w, 'door', 0, O.door.h);
+        }
+        list.sort(function (p, q) { return p.a - q.a; });
+        out.push.apply(out, list);
+      });
+    });
+    return out;
+  }
+
   PC.house = {
     hash: hash,
+    openings: openings,
     build: function (state) {
       var st = PC.stages.status(state);
       if (!st[3].reachable || !st[3].valid) return null;
@@ -4124,7 +4182,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       var top = levels[levels.length - 1].index;
       var copy = function (o) { return o ? JSON.parse(JSON.stringify(o)) : null; };
       var house = {
-        v: 1, key: '',
+        v: 2, key: '',
         center: [cu, cv], radius: radius,
         plot: { pts: site.ptsL.map(function (p) { return [p[0], p[1]]; }), area: site.plotArea },
         northDeg: PC.frames.northL(state),
@@ -4143,6 +4201,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
           northMarker: copy(site.northMarker)
         }
       };
+      house.openings = openings(house);
       house.key = hash(JSON.stringify(house));
       return house;
     }
@@ -4778,7 +4837,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
    light sum about 1.0): extra lights or higher intensities wash out the pastels.
    - exteriors (Q10): wall = exterior walls; wallInner = partitions and any walls around stair / lift; slab = slab
      edges and basement pit walls; roof = roof slab, gable, pergola; trim = entrance step, door reveal, gate posts;
-     parapet = parapets and the stair head. wall / trim equal the stage-2 Q10 swatches (41-stage-questions.css).
+     parapet = parapets and the stair head; F6-T1b (Designer A2 / Q-D3): frame = pane and door frames, door = the
+     door leaf. siteColors.glassTop / glassBottom: the opaque glass gradient (head -> sill). wall / trim equal the stage-2 Q10 swatches (41-stage-questions.css).
    - interiors (Q18): furniture colour keys of PC.data.furniture; floorMix (0-0.3, the only number) mixes the style's
      wood into every room and hall floor: floor = mix(roomTints[type or 'hall'], wood, floorMix). Stair and lift are
      not mixed. fabric / wood / accent / metal / dark equal the stage-4 hint chips (43-stage-interior.css).
@@ -4796,10 +4856,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 (function (PC) {
   'use strict';
   PC.data.exteriors = {
-    sand: { wall: '#D9C7A3', wallInner: '#F3EDE0', slab: '#A89F8E', roof: '#9C7E5E', trim: '#B89F78', parapet: '#B49A72' },
-    white: { wall: '#F2F0EA', wallInner: '#F8F7F3', slab: '#B3B5B1', roof: '#7F878C', trim: '#C9CCC8', parapet: '#E3E0C9' },
-    terracotta: { wall: '#C4704F', wallInner: '#F4E9DE', slab: '#A3958A', roof: '#6E3A2A', trim: '#8F4A32', parapet: '#995744' },
-    grey: { wall: '#9BA1A6', wallInner: '#EEF0F0', slab: '#8D9398', roof: '#454B51', trim: '#5F676E', parapet: '#72787D' }
+    sand: { wall: '#D9C7A3', wallInner: '#F3EDE0', slab: '#A89F8E', roof: '#9C7E5E', trim: '#B89F78', parapet: '#B49A72', frame: '#5A5048', door: '#6B4A32' },
+    white: { wall: '#F2F0EA', wallInner: '#F8F7F3', slab: '#B3B5B1', roof: '#7F878C', trim: '#C9CCC8', parapet: '#E3E0C9', frame: '#3A3F44', door: '#4E5A63' },
+    terracotta: { wall: '#C4704F', wallInner: '#F4E9DE', slab: '#A3958A', roof: '#6E3A2A', trim: '#8F4A32', parapet: '#995744', frame: '#E8E2D6', door: '#4A3426' },
+    grey: { wall: '#9BA1A6', wallInner: '#EEF0F0', slab: '#8D9398', roof: '#454B51', trim: '#5F676E', parapet: '#72787D', frame: '#1F2428', door: '#2E3439' }
   };
   PC.data.interiors = {
     modern: { fabric: '#3B4652', wood: '#4E3D33', accent: '#C8742F', white: '#F2F1EC', metal: '#8A9299', dark: '#23292F', floorMix: 0.10 },
@@ -4814,7 +4874,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   PC.data.siteColors = {
     ground: '#668748', groundOuter: '#727E58', paving: '#C1B4A1', poolWater: '#398BB5', poolRim: '#F1E3C1',
     boundaryWall: '#B5A990', gate: '#3B4652', carCanopy: '#838D93', seating: '#7E664C', trunk: '#5B4636',
-    northMarker: '#16212B', highlight: '#C2410C', asphalt: '#5D6063'
+    northMarker: '#16212B', highlight: '#C2410C', asphalt: '#5D6063',
+    glassTop: '#9FB6C6', glassBottom: '#34495A'
   };
   PC.data.vegetation = {
     tree: { trunkR: 0.12, trunkH: 2.6, canopyR: 1.35, canopyY0: 1.4, canopyH: 2.8, trunkSeg: 6, canopySeg: 8 },
@@ -5001,6 +5062,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
      in-plane axes e1 = the horizontal tangent (X for horizontal faces) and e2 = n x e1, so a texture with
      repeat = 1 / tileM tiles at real scale across merged boxes; rows run along e1 (the eaves on a slope).
      addPrism(..., part) builds 'slopes' (the two roof slopes only, for roofTiles) or 'rest' (gables and base) or both.
+     F6-T1b: addQuadV(cx, cy, cz, axis, sign, w, h, top, bot, kind) a vertical quad with a top and a bottom colour.
    - texture(kind, size, renderer): a DataTexture from the PC.texgen pixel cache with the explicit r128 settings of C-3.4
      (colour kinds sRGB, blob linear); repeat = 1 / PC.data.textures[kind].tileM.
    - skyDome(radius): the F6-T1a sky geometry, a latitude-longitude sphere (24 x 12, rings every 15 degrees from -90
@@ -5104,6 +5166,24 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   BoxBatch.prototype.addQuad = function (cx, y, cz, sx, sz, hex) {
     this.face([cx, y, cz], [sx / 2, 0, sz / 2], FACES[2], this.color(hex));
     this.quads++; this.items.push(['quad', 4]);
+  };
+  // F6-T1b (plan 6.1 / 6.2): a vertical quad facing +-X (axis 0) or +-Z (axis 2), centre (cx, cy, cz), w along the
+  // wall, h tall, the top two vertices in `top`, the bottom two in `bot` (each a hex or a linear [r, g, b]): the
+  // glass gradient, the reveal band, the wall-base skirt. kind names the item ('glass', 'reveal', 'skirt').
+  BoxBatch.prototype.rgbOf = function (c) { return typeof c === 'string' ? this.color(c) : c; };
+  BoxBatch.prototype.shade = function (hex, k) { var c = this.color(hex); return [c[0] * k, c[1] * k, c[2] * k]; };
+  BoxBatch.prototype.addQuadV = function (cx, cy, cz, axis, sign, w, h, top, bot, kind) {
+    var t = this.rgbOf(top), b = this.rgbOf(bot), base = this.pos.length / 3, n = [0, 0, 0], self = this;
+    n[axis] = sign;
+    // corners counter-clockwise seen from outside: along = the horizontal in-plane axis with along x up = n
+    var al = axis === 0 ? [0, 0, -sign] : [sign, 0, 0];
+    [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(function (k) {
+      var p = [cx + al[0] * k[0] * w / 2, cy + k[1] * h / 2, cz + al[2] * k[0] * w / 2], c = k[1] > 0 ? t : b;
+      self.pos.push(p[0], p[1], p[2]); self.nor.push(n[0], n[1], n[2]); self.rgb.push(c[0], c[1], c[2]);
+      if (self.uv) { var B = basis(n); self.uv.push(dot(p, B[0]), dot(p, B[1])); }
+    });
+    this.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    this.quads++; this.items.push([kind || 'quadV', 4]);
   };
   BoxBatch.prototype.count = function () { return this.items.length; };
   // One Mesh, or null when nothing was added.
@@ -5363,10 +5443,50 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
      slopes in roof, gable triangles in wall. Never usable (the model switches a usable pitched roof to flat).
    - Usable: stair head 2.4 m and lift overrun 1.2 m blocks (parapet) over roof.stairHead / roof.liftHead.
    F6-T1a (plan 5.4): a pitched roof's two slopes go into "roofTiles" (mats.tiles, the tile map on world UVs, rows
-   along the eaves); its gables and base stay in roofBatch. */
+   along the eaves); its gables and base stay in roofBatch.
+   F6-T1b (plan 6.1, Designer A2 + Q-D1 / Q-D3): house.openings as proud decals, appended after the boxes above (new
+   item kinds 'glass', 'reveal'; frames, sills and the door leaf are boxes): per glazed / small / slot opening the
+   glass quad 0.01 m out with the glassTop -> glassBottom gradient, a 0.06 m reveal band at 0.02 m in frame x 0.65,
+   4 frame bars (0.06 m profile, 0.05 m proud, exteriors.frame), a mullion at mid-width from 1.2 m, and a sill
+   0.04 m thick, 0.08 m proud under the bottom bar (exteriors.trim); the door: a 0.04 m leaf in exteriors.door at the
+   outer plane with top and side bars in frame. Shown with the rest of roofBatch (exterior mode). */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
+
+  function openings(house, b) {
+    var O = PC.C.OPEN.decal, fp = house.footprint, E = PC.data.exteriors[house.exterior], SC = PC.data.siteColors;
+    var cu = house.center[0], cv = house.center[1], byId = {};
+    house.levels.forEach(function (lv) { byId[lv.id] = lv; });
+    // side -> [normal axis (0 X / 2 Z), outward sign, the wall plane in T]
+    var P = { front: [2, 1, -(fp.v - cv)], back: [2, -1, -(fp.v + fp.d - cv)], left: [0, -1, fp.u - cu], right: [0, 1, fp.u + fp.w - cu] };
+    var reveal = b.shade(E.frame, O.revealK);
+    (house.openings || []).forEach(function (o) {
+      var p = P[o.side], ax = p[0], sg = p[1], y0 = byId[o.level].baseY + PC.C.HOUSE.slab, ys = y0 + o.sill, yh = y0 + o.head;
+      var mid = (o.a + o.b) / 2, along = ax === 2 ? mid - cu : -(mid - cv), w = o.b - o.a, h = yh - ys;
+      // a point at distance d out of the wall plane at the along-wall coordinate t, height y
+      function at(t, d) { return ax === 2 ? [t, p[2] + sg * d] : [p[2] + sg * d, t]; }
+      function bar(t, y, bw, bh, depth, hex) {   // a box bw along the wall, bh tall, from the plane to depth out
+        var c = at(t, depth / 2); b.add(c[0], y, c[1], ax === 2 ? bw : depth, bh, ax === 2 ? depth : bw, hex);
+      }
+      function quad(t, y, qw, qh, d, top, bot, kind) { var c = at(t, d); b.addQuadV(c[0], y, c[1], ax, sg, qw, qh, top, bot, kind); }
+      var f = O.frame, hw = w / 2;
+      if (o.kind === 'door') {
+        bar(along, ys + h / 2, w, h, O.leaf, E.door);
+        bar(along, yh + f / 2, w + 2 * f, f, O.proud, E.frame);
+        bar(along - hw - f / 2, ys + h / 2, f, h, O.proud, E.frame); bar(along + hw + f / 2, ys + h / 2, f, h, O.proud, E.frame);
+        return;
+      }
+      quad(along, ys + h / 2, w, h, O.glass, SC.glassTop, SC.glassBottom, 'glass');
+      var r = O.reveal;   // the reveal band just inside the opening: top, bottom, then the two sides
+      quad(along, yh - r / 2, w, r, O.revealD, reveal, reveal, 'reveal'); quad(along, ys + r / 2, w, r, O.revealD, reveal, reveal, 'reveal');
+      quad(along - hw + r / 2, ys + h / 2, r, h - 2 * r, O.revealD, reveal, reveal, 'reveal'); quad(along + hw - r / 2, ys + h / 2, r, h - 2 * r, O.revealD, reveal, reveal, 'reveal');
+      bar(along, yh + f / 2, w + 2 * f, f, O.proud, E.frame); bar(along, ys - f / 2, w + 2 * f, f, O.proud, E.frame);
+      bar(along - hw - f / 2, ys + h / 2, f, h, O.proud, E.frame); bar(along + hw + f / 2, ys + h / 2, f, h, O.proud, E.frame);
+      if (w >= O.mullionMin - 1e-9) bar(along, ys + h / 2, f, h, O.proud, E.frame);
+      bar(along, ys - f - O.sillT / 2, w + 2 * f + 2 * O.sillOver, O.sillT, O.sillOut, E.trim);
+    });
+  }
 
   three.buildRoof = function (house, world, mats) {
     var H = PC.C.HOUSE, R = PC.C.ROOF, fp = house.footprint, roof = house.roof, E = PC.data.exteriors[house.exterior];
@@ -5407,6 +5527,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
         if (h[0]) box(h[0].u, h[0].u + h[0].w, h[0].v, h[0].v + h[0].d, top, top + h[1], E.parapet);
       });
     }
+    openings(house, b);
     var g = world.getObjectByName('roof'), m = b.build(mats.batch, 'roofBatch'), out = [];
     if (m) { g.add(m); out.push(m); }
     if (tm) { g.add(tm); out.push(tm); }
