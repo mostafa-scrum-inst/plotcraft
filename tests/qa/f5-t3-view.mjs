@@ -37,9 +37,11 @@ if (!HAS) { R.note('skipped: PC.cam.viewOffset absent (F5-T3a not merged)'); pro
 if (!noShots) mkdirSync(shots, { recursive: true });
 const session = sessions({ R, shots, noShots }), { kit } = stage2Kit({ R, session });
 const VP = { phone: { tag: '360x640', w: 360, h: 640, touch: true }, land: { tag: '640x360', w: 640, h: 360, touch: true }, desk: { tag: '1280x800', w: 1280, h: 800, touch: false } };
-const t0 = Date.now(), TIMES = [], FULL = !!process.env.QA_FULL;   // QA_FULL=1: also C and the collapsed tour pass (release gate)
+// TL ruling after the 488 s QA_FULL gate (F6-T1a): C, the collapsed tour pass and the tour frame sweep of A leave QA_FULL=1
+// and run in the release step (QA_RELEASE=1; --release-only runs A and C there, from f6-t1-leak.mjs --max-only).
+const t0 = Date.now(), TIMES = [], FULL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only');
 const cut = (a, n = 8) => a.slice(0, n).concat(a.length > n ? [`... ${a.length} in all`] : []);
-async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) return; const t = Date.now(); try { await fn(); } catch (e) { R.check(`${label}: ran to the end`, [String(e && e.stack || e).split('\n').slice(0, 3).join(' | ')]); } TIMES.push(`${label} ${((Date.now() - t) / 1000).toFixed(1)} s`); }
+async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) return; if (RELONLY && !/^[AC] /.test(label)) return; const t = Date.now(); try { await fn(); } catch (e) { R.check(`${label}: ran to the end`, [String(e && e.stack || e).split('\n').slice(0, 3).join(' | ')]); } TIMES.push(`${label} ${((Date.now() - t) / 1000).toFixed(1)} s`); }
 
 // ================= M. node: the helper against my oracle =================
 await guard('M node', async () => {
@@ -168,7 +170,7 @@ await guard('A 1280x800', async () => {
   if (wMax > 45) f.push(`view rotation ${wMax.toFixed(1)} deg/s near ${wAt.toFixed(2)} s (<= 45)`);
   if (Math.abs(tr.duration - 54.5) > 1e-9 && PC.C.TOUR.overviewLeg === 4.5) f.push(`sample tour ${tr.duration} s (54.5)`);
   R.check(`${T} the sample tour (${tr.duration} s): every frame (${tr.out.length}, 0.5 s apart) has the look point at the uncovered centre; view rotation at most ${wMax.toFixed(1)} deg/s (<= 45 at Normal, plan §5)`, f); R.note(`${T} sample tour ${tr.duration} s: max view rotation ${wMax.toFixed(1)} deg/s near ${wAt.toFixed(2)} s`); }
-  else R.note(`${T} the tour frame sweep (centred look point, <= 45 deg/s) runs with QA_FULL=1 only (run-time budget)`);
+  else R.note(`${T} the tour frame sweep (centred look point, <= 45 deg/s) runs in the release step only (QA_RELEASE=1; run-time budget)`);
   // the widest room picked: its floor corners and the highlight inside the uncovered rectangle
   f = []; await tourTab(S);
   const rooms = await S.page.evaluate(() => PC.debug.scene().house.levels.flatMap((l) => l.rooms.map((r) => ({ id: r.id, name: r.name, level: l.id, baseY: l.baseY, u: r.u, v: r.v, w: r.w, d: r.d }))));
@@ -238,7 +240,7 @@ await guard('B 640x360', async () => {
 });
 
 // ================= C. 360x640 phone =================
-if (!FULL) R.note('C 360x640 and the collapsed-panel tour pass of A run with QA_FULL=1 only (run-time budget, A-16; the Designer device sweep measures the phone caption by default)');
+if (!FULL) R.note('C 360x640 and the collapsed-panel tour pass of A run in the release step only (QA_RELEASE=1; run-time budget, A-16; the Designer device sweep measures the phone caption by default)');
 else await guard('C 360x640', async () => {
   const S = await session(browser, VP.phone, { three: 'real' }), T = 'C 360x640 real'; const f = [];
   await to5(S, V.MAXMUT);

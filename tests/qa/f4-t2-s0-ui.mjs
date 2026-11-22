@@ -31,7 +31,9 @@ const { kit } = stage2Kit({ R, session });
 const VP = Object.fromEntries(VIEWPORTS.map((v) => [v.tag, v]));
 // run-time trim (QA batch 13, TL F5-T2 ruling 3): 640x360 only with QA_FULL=1 (standing condition: before each feature
 // review and whenever the Step 0 editor / CD-5 / low-fill code changes); 360x640 touch and 1280x800 mouse by default
-const RUN = [VP['360x640'], ...(process.env.QA_FULL ? [VP['640x360']] : []), VP['1280x800']].filter((v) => !only.length || only.includes(v.tag));
+// TL ruling after the 488 s QA_FULL gate (F6-T1a): 640x360 leaves QA_FULL=1 and runs in the release step (QA_RELEASE=1,
+// --only=640x360 from f6-t1-leak.mjs --max-only)
+const RUN = [VP['360x640'], ...(process.env.QA_RELEASE ? [VP['640x360']] : []), VP['1280x800']].filter((v) => !only.length || only.includes(v.tag));
 const NAMES = { bedroom: 'Bedroom', bathroom: 'Bathroom', kitchen: 'Kitchen', living: 'Living', dining: 'Dining', majlis: 'Majlis', office: 'Office', maid: "Maid's room", storage: 'Storage', laundry: 'Laundry' };
 function myNames(a) { const out = {}, num = (id) => parseInt(id.slice(1), 10);
   for (const lv of Q.levelIds(a)) { const g = {}; for (const r of a.rooms.filter((x) => x.level === lv).sort((p, q) => num(p.id) - num(q.id))) { if (r.master) { out[r.id] = 'Master bedroom'; continue; } (g[r.type] = g[r.type] || []).push(r); }

@@ -73,11 +73,12 @@ const countNear = (px, rgb, tol = 40) => { let n = 0; for (let i = 0; i < px.d.l
 const differ = (a, b) => { if (a.w !== b.w || a.h !== b.h) return true; let n = 0; for (let i = 0; i < a.d.length; i += 4) if (Math.abs(a.d[i] - b.d[i]) + Math.abs(a.d[i + 1] - b.d[i + 1]) + Math.abs(a.d[i + 2] - b.d[i + 2]) > 30) n++; return n > 4; };
 const SHELL0 = H.loadPC3().PC.scatter ? 's.ans.vegPct = 0;' : '';   // F4-T3 (TL Q6): shell-only fixture once the sample has trees
 const TIMES = [], ONLY = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7).split(',').filter(Boolean);   // --only=A,C: sections by letter (mutation runs)
-async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) return; const t = Date.now(); try { await fn(); } catch (e) { R.check(`${label}: ran to the end`, [String(e && e.stack || e).split('\n').slice(0, 3).join(' | ')]); } TIMES.push(`${label} ${((Date.now() - t) / 1000).toFixed(1)} s`); }
+async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) return; if (RELONLY && !REL_RE.test(label)) return; const t = Date.now(); try { await fn(); } catch (e) { R.check(`${label}: ran to the end`, [String(e && e.stack || e).split('\n').slice(0, 3).join(' | ')]); } TIMES.push(`${label} ${((Date.now() - t) / 1000).toFixed(1)} s`); }
 
 // F6-T1 run-time moves (TL Q-T8, docs/03-tasks/F6-T1/qa-full-moves.md): A 360x640, C 640x360 and D loop 360x640 run
-// with QA_FULL=1 only (the 1280x800 passes, C 360x640 and the mock stay in the default run).
-const FULL = !!process.env.QA_FULL;
+// in the release step only (QA_RELEASE=1; TL ruling after the 488 s QA_FULL gate: out of QA_FULL=1). --release-only runs
+// just those three (the release step: f6-t1-leak.mjs --max-only). The 1280x800 passes, C 360x640 and the mock stay default.
+const FULL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only'), REL_RE = /^(A 360x640|C 640x360|D loop 360x640)$/;
 const browser = await launch();
 
 // ================= A + B: acceptance and Q14 with real r128 =================
@@ -437,6 +438,6 @@ await guard('G controls', async () => {
 });
 
 await browser.close();
-if (!FULL) R.note('A 360x640, C 640x360 and D loop 360x640 run with QA_FULL=1 only (TL Q-T8 run-time moves)');
+if (!FULL) R.note('A 360x640, C 640x360 and D loop 360x640 run in the release step only (QA_RELEASE=1, f6-t1-leak.mjs --max-only; TL ruling)');
 R.note(`browser run ${((Date.now() - t0) / 1000).toFixed(1)} s (${TIMES.join(', ')})`);
 process.exit(R.done() ? 0 : 1);
