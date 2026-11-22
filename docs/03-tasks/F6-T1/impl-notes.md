@@ -111,6 +111,32 @@ colour retune and the sky golden regeneration) is not in this commit. `roofOnOpe
   - it becomes its own release step;
   - `run-all` gets a QA_FULL durations table so the long files start first.
 
+## 2b. After the TL ruling (b) + (c): release step and QA_FULL table (f6t1 543f303)
+
+- **The maximum-house leak stream is now a release step:** QA_RELEASE=1, or `--only leak-max`.
+  - It runs as its own process after the pool; files in the pool never see QA_RELEASE.
+  - **Result: 112.7 s against a 240 s limit, checks passed.**
+- **QA_FULL has its own durations table:** `tests/durations-full.json`.
+  - It was seeded from the 545.6 s QA_FULL run, minus the 175 s of the leak stream that moved out.
+  - It was rewritten by the green run below.
+- **QA_FULL=1 run: green in 488.1 s, still 8 s over 480.**
+  - C-4.8 solo: 128 ms.
+  - Summed file time: 1 414 s.
+- **The largest QA_FULL deltas over the default run** are all QA's rows:
+
+  | File | QA_FULL delta |
+  |---|---:|
+  | f5-t3 | +32 s |
+  | f4-t2-step0 | +26 s |
+  | f1-t1 | +22 s |
+  | f2-t2 | +22 s |
+  | f4-t1 | +18 s |
+  | f2-t3 | +17 s |
+  | f1-t3 | +15 s |
+  | f4-t2 | +15 s |
+
+- By the ruling, QA trims its own QA_FULL rows next, starting with f5-t3.
+
 ## 3. On-demand shadow map (TL Q-T8 follow-up, CTO conditions)
 
 - **`shadowsDirty()`** sets `renderer.shadowMap.needsUpdate` and counts `info().shadowUpdates`. It runs:
