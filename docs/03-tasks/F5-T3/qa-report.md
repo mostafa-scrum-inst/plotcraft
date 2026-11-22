@@ -1,5 +1,25 @@
 # F5-T3a QA report
 
+## Round 2 (re-test of 65e78ca)
+
+**Tested on:** main at `7974b6d`. This includes the FS fixes in `65e78ca` and the PM's decision to keep "None selected" (O-2).
+
+| Bug | Fix | Re-test | Result |
+|---|---|---|---|
+| B-1 | `available = canRead && canWrite`, with a unit test | `f1-t2-flows` default run (J at 360x640), and J at 1280x800 under `QA_FULL=1` | **Fixed:** 584 / 0 and 323 / 0. `get-throws` shows the note and turns the adapter off again. |
+| B-2 | The area label splits at the first space ("460" / "sq ft") | `f2-t2-questions` and `f2-t3-site-rooms`, all sections and viewports under `QA_FULL=1`, m and ft | **Fixed:** 873 / 0 and 1065 / 0. |
+| B-3 | The pool note uses the UI font at 360: 304 / 336 px in m / ft at 14 px | `f5-t3-view` under `QA_FULL=1`, section E | **Fixed:** the ft note is on one line. The whole suite is 28 / 0. |
+
+- **Full run (default, `--jobs 3`):** all steps passed in **419.8 s**, with 0 failures. That is inside the 420 s limit, but only just.
+  - My next trim candidate is the run order of long suites (`run-all` takes them in alphabetical order, so the tail is uneven). That is not my file.
+- **`QA_FULL=1` device sweep:** 380 / 0 in round 1. The fixes did not touch the sweep's areas (storage adapter, 2D area label, pool-note CSS); its stage-2 content is the pool note, and B-3 was re-checked on its own.
+- **Screenshots:** I am committing `tests/qa/shots/F5-T3/` (9 PNGs, 0.9 MB), as earlier rounds did for F3-T3, F4-T3 and F5-T1. These are the round-2 frames: lens, caption, 640x360, chip, read-only resume, area label.
+- **Observations:** O-1 is the collapsed 640x360 chip form, accepted by my check. O-2 is closed by the PM.
+
+VERDICT: PASSED
+
+## Round 1
+
 Date: 2026-11-22. Author: QA.
 
 **Brief:**
