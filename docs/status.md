@@ -259,3 +259,4 @@
 - [PM] QA F5-T3 O-2: empty stage-3 readout keeps "None selected" (under the "Room" label; "Tap a room" withdrawn) — no code change, FS not needed; goals-and-stories round 14
 - [QA] F5-T3a round 2 (8ffce8c): PASSED. B-1..B-3 fixed (65e78ca): f1-t2 584/0 (J 1280 QA_FULL 323/0), f2-t2 873/0, f2-t3 1065/0, f5-t3 28/0 under QA_FULL. Full run 419.8 s, all green (at the 420 s edge). F5-T3 shots committed.
 - [Designer] F5-T3a outcome written (docs/03-tasks/F5-T3/outcome.md): QA round 2 PASSED (B-1..B-3 fixed in 65e78ca), full run 419.8 s, QA_FULL sweep 380/0; Designer + FS parts, CTO a-c status (a met, b met with republish pending, c holds), known limits, F5-T3b list; RESUME list trimmed (zero-room house moved to known limits per TL finding 2).
+- 2026-11-22 04:07 UTC — Orchestrator: F5-T3a QA round 2 PASSED (419.8 s); outcome written; app republished v7; testing doc SCCTR7B12rB9kFeCdKDsUb. TL outcome review pending. Phone-gate decision card open with client.
