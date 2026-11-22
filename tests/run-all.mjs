@@ -10,7 +10,11 @@
 //                                                  on this 4-core machine, TL F4-T1 outcome review; target <= 420 s)
 //   QA_FULL=1 node tests/run-all.mjs               release gate: the QA_FULL-only checks too, and first, alone, the C-4.8
 //                                                  build-time step (tests/solo/build-time.mjs); its number is reprinted
-//                                                  at the end
+//                                                  at the end; --write-durations under QA_FULL=1 writes
+//                                                  tests/durations-full.json, which orders QA_FULL runs
+//   QA_RELEASE=1 or --only leak-max                 also the release step: QA's 200-op maximum-house leak stream
+//                                                  (tests/qa/f6-t1-leak.mjs --max-only), own process, after the pool,
+//                                                  limit 240 s, its time reprinted at the end
 //   --write-durations                              after a green full run, rewrite tests/durations.json (commit it
 //                                                  with the run)
 //
@@ -18,6 +22,7 @@
 // screenshots). No step flag = all steps. Build and lint always run. Browser files are separate processes with
 // their own browser, pages opened from file:// and no shared files, so they can run side by side; their output is
 // printed whole, file by file, when each one ends. They start longest first (F5-T3c), by tests/durations.json
+// (tests/durations-full.json under QA_FULL=1)
 // (label -> seconds from the last green full run); files not in the table start first, ties by label.
 import { spawn, spawnSync } from 'node:child_process';
 import { readdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -40,7 +45,8 @@ const run = (label, argv) => {
   if (r.status !== 0) { console.log(`\nrun-all: FAILED at "${label}"`); done(false); }
   console.log(`(${label}: ${secs(Date.now() - t)})`);
 };
-const table = join(here, 'durations.json'), took = {};
+// Two duration tables (TL ruling, F6-T1a): the default run and QA_FULL=1 order files by their own last green run.
+const table = join(here, process.env.QA_FULL ? 'durations-full.json' : 'durations.json'), took = {};
 const known = (() => { try { return JSON.parse(readFileSync(table, 'utf8')); } catch { return {}; } })();
 const longestFirst = (tasks) => tasks.slice().sort((a, b) => {
   const da = known[a.label], db = known[b.label];
@@ -90,6 +96,19 @@ if (process.env.QA_FULL && want('--e2e') && (!words.length || words.some((w) => 
 }
 if (browser.length) console.log(`\n${browser.length} browser file(s), ${jobs} at a time`);
 const failed = soloFailed.concat(await pool(longestFirst(browser)));
+// Release step (TL ruling, F6-T1a): the 200-operation leak stream on the maximum house runs in its own process, after
+// the pool, with QA_RELEASE=1 or --only leak-max (at release, and when src/js/three/** or the leak suite changes).
+// Its own limit is 240 s; its time is printed again at the end like the C-4.8 line.
+if (process.env.QA_RELEASE || words.includes('leak-max')) {
+  const label = 'release qa/f6-t1-leak.mjs --max-only', t = Date.now();
+  console.log(`\n=== ${label} (own process, after the pool) ===`);
+  const r = spawnSync(process.execPath, [join(here, 'qa', 'f6-t1-leak.mjs'), '--max-only', '--no-shots'], { cwd: root, encoding: 'utf8', env: Object.assign({}, process.env, { QA_RELEASE: '1' }) });
+  process.stdout.write((r.stdout || '') + (r.stderr || ''));
+  const sec = (Date.now() - t) / 1000, over = sec > 240;
+  soloLines.push(`  [leak-max] maximum-house leak stream: ${sec.toFixed(1)} s, limit 240 s, ${r.status === 0 ? 'checks passed' : 'checks FAILED'}${over ? ' — OVER the limit' : ''}`);
+  console.log(`(${label}: ${r.status === 0 && !over ? 'ok' : 'FAILED' + (over ? ', over 240 s' : ', exit ' + r.status)}, ${secs(Date.now() - t)})`);
+  if (r.status !== 0 || over) failed.push(label);
+}
 if (soloLines.length) console.log('\n' + soloLines.join('\n'));
 if (failed.length) console.log('\nfailed: ' + failed.join(', '));
 if (args.includes('--write-durations')) {
