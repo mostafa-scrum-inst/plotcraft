@@ -352,7 +352,8 @@ try {
   }
 
   // ============ J. localStorage unavailable or throwing: the app must work fully (360x640 and 1280x800) ============
-  for (const vp of VIEWPORTS.filter((v) => ['360x640', '1280x800'].includes(v.tag) && (!only || v.tag === only))) {
+  // A-16 trim (QA batch 14): J's seven storage modes at 360x640 by default; 1280x800 too with QA_FULL=1 (release gate)
+  for (const vp of VIEWPORTS.filter((v) => (process.env.QA_FULL ? ['360x640', '1280x800'] : ['360x640']).includes(v.tag) && (!only || v.tag === only))) {
     for (const mode of ['getter-throws', 'undefined', 'null', 'all-throw', 'set-throws', 'late-fail', 'get-throws']) {
       const s = await session(browser, vp, { init: [STORAGE_MODES[mode]] }); const T = `${vp.tag} J storage ${mode}`;
       const noStore = !mode.startsWith('late');

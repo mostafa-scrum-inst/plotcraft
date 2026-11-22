@@ -9,6 +9,10 @@ const SHORT_RE = /^Only .+ of planting fits around the building, parking and poo
 export const M2 = 'm²', DOT = ' · ';
 export const LEVEL = { B: 'Basement', G: 'Ground floor', 1: 'First floor', 2: 'Second floor' };
 export const lab = (hook, v) => `css:[data-pc="${hook}"] label:has(input[value="${v}"])`;       // radio option, tapped on its label
+// F5-T3a two-line area label, QA's expectation: the number on line 1, the whole unit on line 2 ("108" / "m²", "1162" / "sq ft")
+export const areaLines = (t) => { const i = t.indexOf(' '); return [t.slice(0, i), t.slice(i + 1)]; };
+// the drawn texts show the area label: one line, or the two-line split (F5-T3a)
+export const hasArea = (texts, t, f53) => texts.includes(t) || (f53 && areaLines(t).every((x) => texts.includes(x)));
 export const fmtLen = Q.fmtLen, fmtArea = Q.fmtArea, r1 = (x) => Math.round(x * 10) / 10;
 
 // ---------------- QA's own expectation for a state ----------------
@@ -53,7 +57,7 @@ export const READ = () => {
     radios: Object.fromEntries(['q-unit', 'unit-toggle', 'q-floors', 'q-roof', 'q-exterior', 'q-pool-size', 'q-gate'].map((h) => [h, radio(h)])),
     disabled: { roof: dis('q-roof'), pool: dis('q-pool-size'), gate: dis('q-gate') }, q7: typeof PC.site.gateU === 'function',
     sw: Object.fromEntries(['q-basement', 'q-usable-roof', 'q-parking-covered', 'q-pool', 'q-wall', 'q-seating'].map((h) => [h, q(h).checked])),
-    north: t('q-north-value'), street: t('q-street-value'), poolNote: t('q-pool-size-note'), roofNote: !q('q-roof-note').hidden,
+    north: t('q-north-value'), street: t('q-street-value'), poolNote: t('q-pool-size-note'), f53: !!(PC.cam && PC.cam.viewOffset), roofNote: !q('q-roof-note').hidden,
     sum: { plot: t('sum-plot'), buildable: t('sum-buildable'), fp: t('sum-footprint'), veg: t('sum-veg'), status: t('sum-status'), kind: q('summary').dataset.kind },
     levels: [...q('sum-levels').children].map((r) => r.textContent.trim().replace(/\s+/g, ' ')),
     rows: [...q('conflict-list').children].map((li) => ({ kind: li.dataset.kind, code: li.dataset.code, text: li.querySelector('[data-pc="conflict-text"]').textContent, q: (li.querySelector('[data-pc="conflict-goto"]').getAttribute('aria-label') || '').replace(/\D+/g, '') })),
@@ -86,7 +90,9 @@ export async function syncProblems(page) {
   if (Object.values(P.disabled.gate).some((d) => d !== (P.q7 ? !a.extras.wall : false))) f.push(`gate radios disabled ${JSON.stringify(P.disabled.gate)} with wall ${a.extras.wall}`);
   const sw = { 'q-basement': a.basement, 'q-usable-roof': a.usableRoof, 'q-parking-covered': a.parking.covered, 'q-pool': a.pool.on, 'q-wall': a.extras.wall, 'q-seating': a.extras.seating };
   for (const [h, v] of Object.entries(sw)) if (P.sw[h] !== v) f.push(`${h} checked=${P.sw[h]}, state ${v}`);
-  const pn = ['S', 'M', 'L'].map((k) => { const [w, d] = Q.POOL[k]; return `${k} ${len(w)} × ${len(d)} ${u}`; }).join(DOT); if (P.poolNote !== pn) f.push(`pool note "${P.poolNote}" vs "${pn}"`);
+  // F5-T3a (PM round 14, binding): the pool note in dimensions, "S 3 × 6 · M 4 × 8 · L 5 × 10 m" / ft to one decimal, unit once
+  const pn = P.f53 ? (u === 'ft' ? 'S 9.8 × 19.7 · M 13.1 × 26.2 · L 16.4 × 32.8 ft' : 'S 3 × 6 · M 4 × 8 · L 5 × 10 m')
+    : ['S', 'M', 'L'].map((k) => { const [w, d] = Q.POOL[k]; return `${k} ${len(w)} × ${len(d)} ${u}`; }).join(DOT); if (P.poolNote !== pn) f.push(`pool note "${P.poolNote}" vs "${pn}"`);
   if (P.roofNote && !a.usableRoof) f.push('roof note shown without usable roof');
   if (!s.plot.closed) return f;
   // readouts
@@ -115,7 +121,9 @@ export async function syncProblems(page) {
   if (P.texts) {
     if (!P.texts.includes('front')) f.push('preview: street edge not labelled "front"');
     // class labels may carry a trailing "*" for an edge the user overrode (F2-S4, from F2-T3 on)
-    for (const x of P.texts) if (!['front', 'back', 'side', 'back*', 'side*', 'N'].includes(x) && !(ex.fp && x === fmtArea(ex.fp.area, u))) f.push(`preview draws "${x}" (my footprint ${ex.fp ? fmtArea(ex.fp.area, u) : 'none'})`);
+    // F5-T3a: a footprint area label wider than the footprint goes on two lines ("143" / "m²") or outside on the street side
+    const areaParts = ex.fp && P.f53 ? areaLines(fmtArea(ex.fp.area, u)) : [];
+    for (const x of P.texts) if (!['front', 'back', 'side', 'back*', 'side*', 'N'].includes(x) && !(ex.fp && x === fmtArea(ex.fp.area, u)) && !areaParts.includes(x)) f.push(`preview draws "${x}" (my footprint ${ex.fp ? fmtArea(ex.fp.area, u) : 'none'})`);
     const counts = (arr) => arr.reduce((o, x) => ((o[x] = (o[x] || 0) + 1), o), {}), mine = counts(ex.cls), drawn = counts(P.texts.map((x) => x.replace(/\*$/, '')).filter((x) => ['back', 'side'].includes(x)));
     for (const k in drawn) if (drawn[k] > (mine[k] || 0)) f.push(`preview labels ${drawn[k]} "${k}" edges, my classes have ${mine[k] || 0}`);
     if (ex.fp) { const fr = P.app.fpScr; if (!fr) f.push('preview: app has no footprint, mine has one'); else {

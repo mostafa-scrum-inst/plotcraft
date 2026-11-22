@@ -153,7 +153,8 @@ try {
       for (let i = 0; i < n; i++) { if (i === e) continue;
         await S.tapAt(await S.edgeMid(i)); let s = await S.state();
         if ((s.ans.edgeOv || {})[i] !== other(auto[i]) || Object.keys(s.ans.edgeOv).length !== 1) pr.push(`edge ${i + 1}: after one tap edgeOv ${JSON.stringify(s.ans.edgeOv)}, expected {${i}: ${other(auto[i])}}`);
-        const L = await S.page.evaluate(LABELS); if (!L.labels.some((l) => l.text === other(auto[i]) + '*')) pr.push(`edge ${i + 1}: no "${other(auto[i])}*" label`);
+        // F5-T3a (A-15 as updated): a culled "*" label is replaced by a midpoint tick on that edge
+        const L = await S.page.evaluate(LABELS), tk = await S.page.evaluate(TICKS); if (!L.labels.some((l) => l.text === other(auto[i]) + '*') && !tk.some((t) => t.edge === i)) pr.push(`edge ${i + 1}: no "${other(auto[i])}*" label${tk.length ? ' or tick' : ''}`);
         pr.push(...ovProblems(s).map((x) => `edge ${i + 1}: ${x}`));
         await S.tapAt(await S.edgeMid(i)); s = await S.state(); if (Object.keys(s.ans.edgeOv).length) pr.push(`edge ${i + 1}: second tap left ${JSON.stringify(s.ans.edgeOv)}`);
         if ((await S.page.evaluate(LABELS)).labels.some((l) => /\*$/.test(l.text))) pr.push(`edge ${i + 1}: a "*" label is left after switching back`); }
@@ -168,8 +169,8 @@ try {
       if (pname === 'sample') {
         // all four non-street edges overridden: no label overlap, all labels present, none over a control
         for (let i = 1; i < n; i++) await S.tapAt(await S.edgeMid(i));
-        const L = await S.page.evaluate(LABELS), stars = L.labels.filter((l) => /\*$/.test(l.text)).length;
-        R.check(`${V} B sample, 4 edges overridden: "front" and 4 "*" labels drawn, no overlap, none over the control, toggle or compass`, [...(stars === 4 && L.labels.some((l) => l.text === 'front') ? [] : [`${stars} * labels`]), ...labelProblems(L)]);
+        const L = await S.page.evaluate(LABELS), tk = await S.page.evaluate(TICKS), stars = L.labels.filter((l) => /\*$/.test(l.text)).length + tk.length;   // F5-T3a: labels + ticks (A-15)
+        R.check(`${V} B sample, 4 edges overridden: "front" and 4 "*" labels${tk.length ? ` (${tk.length} as midpoint ticks, A-15)` : ''} drawn, no overlap, none over the control, toggle or compass`, [...(stars === 4 && L.labels.some((l) => l.text === 'front') ? [] : [`${stars} * labels`]), ...labelProblems(L)]);
         const mark = await S.shown('site-legend-mark');
         R.check(`${V} B sample: the "* set by you" legend mark ${vp === PHONE ? 'never shows in phone portrait' : vp === LAND ? 'is hidden with the legend in short landscape' : 'shows while overrides exist'}`, vp === DESK ? mark : !mark);
         await S.shot(`B-sample-class-4-overrides`); await sync(S, 'B sample 4 overrides');

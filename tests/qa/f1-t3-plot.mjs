@@ -2,7 +2,7 @@
 // Run: node tests/qa/f1-t3-plot.mjs [--no-shots] [--only=360x640]
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { ROOT, VIEWPORTS, launch, collector, STORAGE_MODES, CANVAS_SPY, touchDriver } from './lib.mjs';
+import { ROOT, VIEWPORTS, launch, collector, STORAGE_MODES, CANVAS_SPY, touchDriver, parseColor, over, lum } from './lib.mjs';
 import { sessions, KEY, sleep, eq, sel, defaultProblems } from './session.mjs';
 
 const SHOTS = join(ROOT, 'tests/qa/shots/F1-T3'); mkdirSync(SHOTS, { recursive: true });
@@ -12,6 +12,9 @@ const R = collector('F1-T3 plot');
 const base = sessions({ R, shots: SHOTS, noShots });
 const MAIN = VIEWPORTS.filter((v) => v.tag !== '640x360' && (!only || v.tag === only));
 const LAND = VIEWPORTS.find((v) => v.tag === '640x360');
+// A-16 trim (QA batch 14, F5-T3a full run 442.6 s): sections I, L and N run at 360x640 + 1280x800 (I: 360x640) by default and at
+// every listed viewport with QA_FULL=1 (the release gate; standing condition: before each feature review).
+const FULLV = (vs) => (process.env.QA_FULL ? vs : vs.filter((v) => v.tag === '360x640' || v.tag === '1280x800'));
 // A-16 trim (F3-T3 first item, docs/03-tasks/F3-T3/qa-trim.md): sections A-G run at 360x640 (touch) and 1280x800 (mouse)
 // only. Their 768x1024 twin is tests/e2e/plot.spec.mjs (drawing, gesturesAndUnits, ftDrawing, draftsAndGuard run at
 // 768x1024 touch); the same behaviours by touch stay here at 360x640. O, L and N keep 768x1024 (their e2e twins,
@@ -377,7 +380,10 @@ try {
         R.check(`${V} F sample (${u}): the three long edges (20, 30, 26 m) are labelled`, [want[0], want[1], want[4]].filter((w) => !tx.includes(w)).map((w) => 'missing ' + w));
         if (missing.length) R.note(`${V} sample (${u}): edge labels hidden by culling: ${missing.join(', ')}`);
         R.check(`${V} F sample (${u}): labels do not overlap, are inside the canvas and clear of the chip`, await s.labelProblems());
-        R.check(`${V} F sample (${u}): label text contrast on the canvas`, (await s.frame()).texts.filter((t) => !/^#16212b$/i.test(t.fill)).map((t) => `${t.text} drawn in ${t.fill}`));
+        // F5-T3a (plan §7): the area label is the lighter #46535F (500 12px); it must still reach 4.5:1 over the plot fill on the canvas
+        const f53 = await s.page.evaluate(() => !!(PC.cam && PC.cam.viewOffset)), pal = await s.page.evaluate(() => ({ canvas: PC.data.palette2d.canvas, plot: PC.data.palette2d.plot.fill }));
+        const cr = (fg) => { const bg = over(parseColor(pal.plot), parseColor(pal.canvas)), a = lum(parseColor(fg)), b = lum(bg); return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05); };
+        R.check(`${V} F sample (${u}): label text contrast on the canvas${f53 ? ' (F5-T3a: the area label #46535F at >= 4.5:1 over the plot fill)' : ''}`, (await s.frame()).texts.filter((t) => !/^#16212b$/i.test(t.fill) && !(f53 && t.text === fmtArea(584, u) && /^#46535f$/i.test(t.fill) && cr(t.fill) >= 4.5)).map((t) => `${t.text} drawn in ${t.fill}${/^#/.test(t.fill) ? ` (${cr(t.fill).toFixed(2)}:1)` : ''}`));
         await s.layout(`${V} F sample (${u})`); await s.shot('F-sample-' + u);
       }
       R.check(`${V} F unit change kept the sample vertices`, samePts((await s.state()).plot.pts, SAMPLE, 0));
@@ -451,7 +457,7 @@ try {
     await s.end('360x640 H', { resume: false }); }
 
   // ============ I. phone start panel in its three states, with a real stored draft (Designer change) ============
-  for (const vp of VIEWPORTS.filter((v) => ['360x640', '768x1024'].includes(v.tag) && (!only || v.tag === only))) {
+  for (const vp of FULLV(VIEWPORTS.filter((v) => ['360x640', '768x1024'].includes(v.tag) && (!only || v.tag === only)))) {
     const V = vp.tag; const cover = (s) => s.page.evaluate(() => { const p = document.querySelector('[data-pc="start-panel"]'), cv = document.querySelector('[data-pc="plot-canvas"]').getBoundingClientRect(); const kids = [...p.children].filter((k) => !k.hidden && k.getBoundingClientRect().height > 0).map((k) => k.getBoundingClientRect()); const top = Math.min(...kids.map((k) => k.top)), bottom = Math.max(...kids.map((k) => k.bottom)); return { covered: Math.round(cv.bottom - top), below: Math.round(bottom - cv.bottom), pe: getComputedStyle(p).pointerEvents, hint: (() => { const h = p.querySelector('.pc-start__hint'); return !!h && h.getBoundingClientRect().height > 0; })(), btn: (() => { const r = document.querySelector('[data-pc="btn-sample"]').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; })() }; });
     { const s = await plotSession(browser, vp); const m = await cover(s);
       R.check(`${V} I no draft: only the floating "Load sample project" button, 60 px of canvas or less, container lets taps through`, m.covered <= 60 && m.below <= 0 && !m.hint && m.pe === 'none' && m.btn[3] >= 44 && !(await s.shown('resume-box')) && !(await s.shown('note-nosave')) ? [] : [JSON.stringify(m)]);
@@ -504,7 +510,7 @@ try {
   }
 
   // ============ L. F1-S2 "each edge shows its length while drawing and after closing": plots at the canvas border, m and ft ============
-  for (const vp of VIEWPORTS.filter((v) => !only || v.tag === only)) for (const u of ['m', 'ft']) { const s = await plotSession(browser, vp); const T = `${vp.tag} L (${u})`;
+  for (const vp of FULLV(VIEWPORTS.filter((v) => !only || v.tag === only))) for (const u of ['m', 'ft']) { const s = await plotSession(browser, vp); const T = `${vp.tag} L (${u})`;
     const H = vp.tag === '640x360' ? 12 : 20, SQ = [[0, 0], [20, 0], [20, H], [0, H]]; if (u === 'ft') { await s.act('unit-ft'); await s.settle(); }
     const SQu = u === 'ft' ? SQ.map((p) => p.map((v) => Math.round(v / FT) * FT)) : SQ;      // what the taps snap to
     await s.tapW(...SQ[0]); await s.tapW(...SQ[1]); if (!vp.touch) await s.page.mouse.move(3, 3);
@@ -555,7 +561,7 @@ try {
     await s.end(T); }   // end(): flush, reload, the draft must be offered and resume exactly
 
   // ============ N. Fit view control (touch has no keyboard "0") ============
-  for (const vp of VIEWPORTS.filter((v) => !only || v.tag === only)) { const s = await plotSession(browser, vp); const T = `${vp.tag} N`;
+  for (const vp of FULLV(VIEWPORTS.filter((v) => !only || v.tag === only))) { const s = await plotSession(browser, vp); const T = `${vp.tag} N`;
     R.check(`${T} Fit view: one button, named, 44 px or more, inside the canvas area, clear of the scale chip and the start button`, await s.page.evaluate(() => { const f = [], all = document.querySelectorAll('[data-pc="plot-fit"]'), b = all[0]; if (all.length !== 1) return ['count ' + all.length]; const r = b.getBoundingClientRect(), cv = document.querySelector('[data-pc="plot-canvas"]').getBoundingClientRect(); if (r.width < 43.5 || r.height < 43.5) f.push(`size ${r.width}x${r.height}`); if (b.getAttribute('aria-label') !== 'Fit view' || b.type !== 'button') f.push('name/type'); if (r.left < cv.left || r.top < cv.top || r.right > cv.right || r.bottom > cv.bottom) f.push('outside the canvas'); const X = (q) => { const e = document.querySelector(q); if (!e || e.closest('[hidden]')) return false; const o = e.getBoundingClientRect(); return o.width > 0 && !(r.right <= o.left || o.right <= r.left || r.bottom <= o.top || o.bottom <= r.top); }; for (const q of ['.pc-plot__scale', '[data-pc="btn-sample"]', '[data-pc="start-panel"]']) if (X(q)) f.push('overlaps ' + q); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); if (!hit || !b.contains(hit)) f.push('not hittable'); return f; }));
     const d0 = await s.view(); await s.act('plot-fit'); await s.settle();
     R.check(`${T} Fit on an empty project keeps the default view and places nothing`, eq(await s.view(), d0) && (await s.pts()).length === 0 && !(await s.dialogOpen()));

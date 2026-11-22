@@ -25,7 +25,7 @@ const PHONE = VP['360x640'], LAND = VP['640x360'], TAB = VP['768x1024'], DESK = 
 // every listed viewport with QA_FULL=1 (standing condition: run QA_FULL=1 before each feature review and whenever the
 // code these sweeps guard changes).
 const FULL = (...vps) => (process.env.QA_FULL ? vps : vps.filter((v) => v === PHONE || v === DESK));
-import { M2, DOT, LEVEL, lab, fmtLen, fmtArea, r1, streetOf, expectFor, northText, northStored, sizeChanges, lOf, READ, syncProblems, stage2Kit, seedPlans, hintProblems } from './stage2kit.mjs';
+import { M2, DOT, LEVEL, lab, fmtLen, fmtArea, r1, streetOf, expectFor, northText, northStored, sizeChanges, lOf, READ, syncProblems, stage2Kit, seedPlans, hintProblems, hasArea } from './stage2kit.mjs';
 const { sync, kit } = stage2Kit({ R, session });
 
 const U_PLOT = [[0, 0], [40, 0], [40, 40], [28, 40], [28, 12], [12, 12], [12, 40], [0, 40]];
@@ -36,7 +36,7 @@ const browser = await launch();
 const t0 = Date.now();
 try {
   // ======================= A. Item 1: every control by real touch updates value, readout, preview, summary =======================
-  if (want('A')) for (const vp of [PHONE, LAND]) {
+  if (want('A')) for (const vp of (process.env.QA_FULL ? [PHONE, LAND] : [PHONE])) {   // A-16 trim (QA batch 14): 640x360 with QA_FULL=1
     const V = vp.tag, S = await kit(browser, vp);
     R.check(`${V} A sample loaded by tap is the 6.2 sample`, sampleProblems(await S.state()));
     await sync(S, 'A sample on stage 2');
@@ -55,8 +55,8 @@ try {
     // live feedback while the finger is down: label, preview label and summary show the value under the finger, state unchanged
     if (vp.touch) { const g = await S.page.evaluate(() => { const e = document.querySelector('[data-pc="q-footprint"]'); e.scrollIntoView({ block: 'nearest' }); const r = e.getBoundingClientRect(); return { x: r.left, y: r.top + r.height / 2, w: r.width }; });
       const pos = (v) => [g.x + 8 + (v - 10) / 70 * (g.w - 16), g.y];
-      await S.T.drag(pos(33), pos(50), { steps: 8, whileDown: async () => { await S.settle(); const P = await S.page.evaluate(() => ({ out: document.querySelector('[data-pc="q-footprint-out"]').textContent, fp: document.querySelector('[data-pc="sum-footprint"]').textContent, st: PC.debug.state().ans.footprintPct, texts: __spy.frame('site-canvas').texts.map((t) => t.text) }));
-        const s = await S.state(), ex = expectFor({ ...s, ans: { ...s.ans, footprintPct: 50 } }, {}); R.check(`${V} A Q3 live while dragging: label, summary and preview show 50 %, state still 33`, P.out === '50 %' && P.st === 33 && P.fp === `${fmtArea(ex.fp.area, 'm')}${DOT}${r1(ex.fp.pct)} %` && P.texts.includes(fmtArea(ex.fp.area, 'm')) ? [] : [JSON.stringify(P), fmtArea(ex.fp.area, 'm')]); } });
+      await S.T.drag(pos(33), pos(50), { steps: 8, whileDown: async () => { await S.settle(); const P = await S.page.evaluate(() => ({ out: document.querySelector('[data-pc="q-footprint-out"]').textContent, fp: document.querySelector('[data-pc="sum-footprint"]').textContent, st: PC.debug.state().ans.footprintPct, texts: __spy.frame('site-canvas').texts.map((t) => t.text), f53: !!(PC.cam && PC.cam.viewOffset) }));
+        const s = await S.state(), ex = expectFor({ ...s, ans: { ...s.ans, footprintPct: 50 } }, {}); R.check(`${V} A Q3 live while dragging: label, summary and preview show 50 %, state still 33`, P.out === '50 %' && P.st === 33 && P.fp === `${fmtArea(ex.fp.area, 'm')}${DOT}${r1(ex.fp.pct)} %` && hasArea(P.texts, fmtArea(ex.fp.area, 'm'), P.f53) ? [] : [JSON.stringify(P), fmtArea(ex.fp.area, 'm')]); } });
       await S.settle(); await sync(S, 'A Q3 released at 50');
       // Q4 the same way: 50 -> 10 %, summary vegetation follows the finger (my budget with the placed parking and pool)
       const gv = await S.page.evaluate(() => { const e = document.querySelector('[data-pc="q-veg"]'); e.scrollIntoView({ block: 'nearest' }); const r = e.getBoundingClientRect(); return { x: r.left, y: r.top + r.height / 2, w: r.width }; });

@@ -9,20 +9,23 @@
 //     expanded (and collapsed under QA_FULL=1): the caption never meets the panel card or its toggle, stays inside the canvas, and the
 //     longest caption "Master bedroom · Second floor" is among them.
 //   B 640x360 touch real: stage 5 side by side (canvas ∩ panel = 0, panel 272 px), collapsed canvas = 640 - 44 +- 1; Reset
-//     then frames the whole house inside the canvas; the tour caption inside the canvas, never over the panel / toggle.
+//     (or full width under the 44 x 44 collapsed chip, as built), Reset then frames the whole house inside the canvas; the tour caption inside the canvas, never over the panel / toggle.
 //   C 360x640 touch real (QA_FULL=1 only, with A's collapsed tour pass): tour caption of the maximum house >= 8 px below the header, inside the canvas, off the panel /
 //     toggle; "Building…" text fits (no overflow).
 //   D 1280x800 (three.js off): toasts with a measurement go on a unit change; saving stops mid-session -> the PM toast once,
 //     then the no-save chip; storage blocked -> the chip (aria-label / title, 44 px, tap toast), hidden while saving works;
 //     quota full with a stored draft (read works, write fails) -> Resume offered and works, chip shown, the draft never
 //     rewritten, Start new still asks.
-// Run: node tests/qa/f5-t3-view.mjs [--no-shots] [--only=M,A,B,C,D]
+//   E 2D (TL focus 5): pool note on one line at 360 in m and ft (PM texts); area label one / two lines inside the footprint
+//     or outside on the street side; Parking / Pool legend entries only when present.
+// Run: node tests/qa/f5-t3-view.mjs [--no-shots] [--only=M,A,B,C,D,E]
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT, collector, launch, STORAGE_MODES } from './lib.mjs';
 import { sessions } from './session.mjs';
 import * as H from './f4-t1-ref.mjs';
 import * as V from './f5-t3-ref.mjs';
+import { stage2Kit, fmtArea } from './stage2kit.mjs';
 
 const R = collector('F5-T3 view');
 const noShots = process.argv.includes('--no-shots'), shots = join(ROOT, 'tests/qa/shots/F5-T3');
@@ -31,7 +34,7 @@ const { PC } = H.loadPC3();
 const HAS = !!(PC.cam && typeof PC.cam.viewOffset === 'function');
 if (!HAS) { R.note('skipped: PC.cam.viewOffset absent (F5-T3a not merged)'); process.exit(R.done() ? 0 : 1); }
 if (!noShots) mkdirSync(shots, { recursive: true });
-const session = sessions({ R, shots, noShots });
+const session = sessions({ R, shots, noShots }), { kit } = stage2Kit({ R, session });
 const VP = { phone: { tag: '360x640', w: 360, h: 640, touch: true }, land: { tag: '640x360', w: 640, h: 360, touch: true }, desk: { tag: '1280x800', w: 1280, h: 800, touch: false } };
 const t0 = Date.now(), TIMES = [], FULL = !!process.env.QA_FULL;   // QA_FULL=1: also C and the collapsed tour pass (release gate)
 const cut = (a, n = 8) => a.slice(0, n).concat(a.length > n ? [`... ${a.length} in all`] : []);
@@ -68,11 +71,14 @@ const LENS = () => {
   cam.updateMatrixWorld(); const pr = (x, y, z) => { const v = new THREE.Vector3(x, y, z).project(cam); return [(v.x + 1) / 2 * cv.width, (1 - v.y) / 2 * cv.height]; };
   const vw = cam.view && cam.view.enabled ? [cam.view.fullWidth, cam.view.fullHeight, cam.view.offsetX, cam.view.offsetY, cam.view.width, cam.view.height] : null;
   return { view: vw, aspect: cam.aspect, fov: cam.fov, canvas: { l: cv.left, t: cv.top, r: cv.right, b: cv.bottom, w: cv.width, h: cv.height }, panel: R('v3-panel'), toggle: R('v3-panel-toggle'),
+    iv: i.viewOffset === undefined ? 'absent' : i.viewOffset, buf: [i.renderer.domElement.width, i.renderer.domElement.height], dpr: i.renderer.getPixelRatio(),
     pose: p, tp: pr(p.target[0], p.target[1], p.target[2]), limits: PC.cam.limits(i.house, PC.cam.visibleAspect(cv.width, cv.height, { right: vw ? vw[2] : 0 })) };
 };
 function lensProblems(L, tag, { expanded }) {
   const f = [], W = L.canvas.w, Hh = L.canvas.h, o = expanded ? Math.round(L.canvas.r - L.panel.l) : 0, want = V.myViewOffset(Math.round(W), Math.round(Hh), { right: o });
   if (expanded && Math.abs(o - V.OCCL_DESK) > 1) f.push(`${tag}: the panel covers ${o} px of the canvas (320 + 16 = 336 expected)`);
+  if (JSON.stringify(L.iv) !== JSON.stringify(want)) f.push(`${tag}: PC.debug.scene().viewOffset ${JSON.stringify(L.iv)}, mine ${JSON.stringify(want)}`);
+  if (Math.abs(L.buf[0] - Math.round(W * L.dpr)) > 1 || Math.abs(L.buf[1] - Math.round(Hh * L.dpr)) > 1) f.push(`${tag}: drawing buffer ${L.buf} for a ${W} x ${Hh} canvas at dpr ${L.dpr} (not re-fitted)`);
   if (JSON.stringify(L.view) !== JSON.stringify(want)) f.push(`${tag}: camera.view ${JSON.stringify(L.view)}, mine ${JSON.stringify(want)}`);
   const x = V.principalX(W, want); if (Math.abs(L.tp[0] - x) > 1 || Math.abs(L.tp[1] - Hh / 2) > 1) f.push(`${tag}: the orbit target projects to (${L.tp.map((v) => v.toFixed(1))}), (${x.toFixed(1)}, ${(Hh / 2).toFixed(1)}) +- 1 expected`);
   return f;
@@ -138,6 +144,29 @@ await guard('A 1280x800', async () => {
   if (Math.abs(L3.pose.theta - L2.pose.theta) < 1e-3) f.push(`the drag did not orbit (theta ${L2.pose.theta} -> ${L3.pose.theta})`);
   f.push(...lensProblems(L3, 'after the orbit', { expanded: true }));
   R.check(`${T} a mouse orbit keeps the pivot on the target (theta ${L2.pose.theta.toFixed(3)} -> ${L3.pose.theta.toFixed(3)}), which still projects to the uncovered centre`, f);
+  // Reset, a window resize and a WebGL context restore keep the lens (TL focus 2)
+  f = []; await S.act('v3-reset'); await ready(S); f.push(...lensProblems(await S.page.evaluate(LENS), 'after Reset', { expanded: true }));
+  await S.page.setViewportSize({ width: 1200, height: 760 }); await S.settle(); await ready(S); f.push(...lensProblems(await S.page.evaluate(LENS), 'resized to 1200x760', { expanded: true }));
+  await S.page.setViewportSize({ width: 1280, height: 800 }); await S.settle(); await ready(S); f.push(...lensProblems(await S.page.evaluate(LENS), 'back to 1280x800', { expanded: true }));
+  const r0 = await S.page.evaluate(() => { const i = PC.debug.scene(); window.__lc = i.renderer.getContext().getExtension('WEBGL_lose_context'); window.__lc.loseContext(); return i.restores; });
+  await S.until(() => S.page.evaluate(() => PC.debug.scene().lost), 4000); await S.page.evaluate(() => window.__lc.restoreContext());
+  if (!(await S.until(() => S.page.evaluate((r) => PC.debug.scene().restores > r && !PC.debug.scene().lost, r0), 8000))) f.push('the context was not restored'); await ready(S);
+  f.push(...lensProblems(await S.page.evaluate(LENS), 'after a context restore', { expanded: true }));
+  R.check(`${T} the lens holds after Reset, a resize to 1200x760 and back, and a WebGL context loss / restore (view, info().viewOffset, drawing buffer, centred target)`, f);
+  // the tour: frames centred in the uncovered area, and no whip pans (<= 45 deg/s at Normal, sampled every 0.5 s of tour time)
+  if (FULL) { f = []; await tourTab(S); await S.page.evaluate(() => { document.querySelector('[data-pc="v3-tour-start"]').click(); PC.three.tour.pause(); });
+  const tr = await S.page.evaluate(async () => { const T = PC.three.tour, st = T.state(), cv = document.querySelector('[data-pc="v3-canvas"]').getBoundingClientRect(), cam = PC.debug.scene().camera, out = [];
+    for (let tau = 0.25; tau < st.plan.duration - 0.1; tau += 0.5) { T.pause(); PC.debug.tourSeek(tau); T.resume(); await new Promise((r) => requestAnimationFrame(() => r())); T.pause();
+      const p = PC.view3d.pose(), e = PC.cam.position(p); cam.updateMatrixWorld(); const v = new THREE.Vector3(p.target[0], p.target[1], p.target[2]).project(cam);
+      out.push({ tau, d: [p.target[0] - e[0], p.target[1] - e[1], p.target[2] - e[2]], x: (v.x + 1) / 2 * cv.width, speed: T.state().speed }); }
+    return { out, duration: st.plan.duration, W: cv.width, o: Math.round(cv.right - document.querySelector('[data-pc="v3-panel"]').getBoundingClientRect().left) }; });
+  await stopTour(S); await S.settle();
+  let wMax = 0, wAt = 0; for (let k = 1; k < tr.out.length; k++) { const a = tr.out[k - 1].d, b = tr.out[k].d, la = Math.hypot(...a), lb = Math.hypot(...b), c = (a[0] * b[0] + a[1] * b[1] + a[2] * b[2]) / la / lb, w = Math.acos(Math.max(-1, Math.min(1, c))) * 180 / Math.PI / (tr.out[k].tau - tr.out[k - 1].tau); if (w > wMax) { wMax = w; wAt = tr.out[k].tau; } }
+  const off = tr.out.filter((q) => Math.abs(q.x - (tr.W - tr.o) / 2) > 1); if (off.length) f.push(`${off.length} of ${tr.out.length} tour frames with the target off the uncovered centre (e.g. x ${off[0].x.toFixed(1)} at ${off[0].tau} s)`);
+  if (wMax > 45) f.push(`view rotation ${wMax.toFixed(1)} deg/s near ${wAt.toFixed(2)} s (<= 45)`);
+  if (Math.abs(tr.duration - 54.5) > 1e-9 && PC.C.TOUR.overviewLeg === 4.5) f.push(`sample tour ${tr.duration} s (54.5)`);
+  R.check(`${T} the sample tour (${tr.duration} s): every frame (${tr.out.length}, 0.5 s apart) has the look point at the uncovered centre; view rotation at most ${wMax.toFixed(1)} deg/s (<= 45 at Normal, plan §5)`, f); R.note(`${T} sample tour ${tr.duration} s: max view rotation ${wMax.toFixed(1)} deg/s near ${wAt.toFixed(2)} s`); }
+  else R.note(`${T} the tour frame sweep (centred look point, <= 45 deg/s) runs with QA_FULL=1 only (run-time budget)`);
   // the widest room picked: its floor corners and the highlight inside the uncovered rectangle
   f = []; await tourTab(S);
   const rooms = await S.page.evaluate(() => PC.debug.scene().house.levels.flatMap((l) => l.rooms.map((r) => ({ id: r.id, name: r.name, level: l.id, baseY: l.baseY, u: r.u, v: r.v, w: r.w, d: r.d }))));
@@ -159,7 +188,11 @@ await guard('A 1280x800', async () => {
   lap(); for (const ex of FULL ? [true, false] : [true]) {
     if ((await expanded(S)) !== ex) await toggle(S);
     const scan = await tourScan(S), c = captionProblems(scan, ex ? 'expanded' : 'collapsed'); lap(); f.push(...c.f); scan.out.forEach((s) => s.text && texts.add(s.text));
-    if (ex) await S.shot('A-caption-longest');
+    if (ex) { await S.shot('A-caption-longest');
+      // a caption far longer than any room name (synthetic text while paused): the max-width keeps it clear of the card
+      const lg = await S.page.evaluate(() => { const t = document.querySelector('[data-pc="v3-caption-text"]'), was = t.textContent, R = (h) => { const r = document.querySelector(`[data-pc="${h}"]`).getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom }; };
+        t.textContent = 'Master bedroom with a very long custom name that never ends · Second floor of a very long house name'; const o = { cap: R('v3-caption'), panel: R('v3-panel'), toggle: R('v3-panel-toggle') }; t.textContent = was; return o; });
+      if (V.inter(lg.cap, lg.panel) || V.inter(lg.cap, lg.toggle)) f.push(`a 100-character caption ${V.fmtR(lg.cap)} meets the panel ${V.fmtR(lg.panel)} (max-width)`); }
     await stopTour(S); await S.settle();
   }
   if (!texts.has(V.LONGEST)) f.push(`the longest caption "${V.LONGEST}" never shown (seen: ${[...texts].join(" | ")})`);
@@ -181,7 +214,11 @@ await guard('B 640x360', async () => {
   R.check(`${T} expanded: side by side, canvas ${L0.canvas.w.toFixed(0)} x ${L0.canvas.h.toFixed(0)} px, panel ${(L0.panel.r - L0.panel.l).toFixed(0)} px, coverage ${cov.toFixed(0)} px² (0), no lens shift`, f);
   await S.shot('B-side-by-side');
   f = []; await toggle(S); await ready(S); await S.page.evaluate(() => PC.view3d.resetView()); await ready(S);   // the Reset button lives in the collapsed panel
-  const L1 = await S.page.evaluate(LENS); if (Math.abs(L1.canvas.w - (VP.land.w - V.STRIP)) > 1) f.push(`collapsed canvas ${L1.canvas.w.toFixed(1)} px wide (${VP.land.w - V.STRIP} +- 1)`);
+  // plan §2 said "collapsed canvas = 640 - 44 +- 1" (a 44 px strip); as built the collapsed panel is the 44 x 44 toggle chip over
+  // the canvas corner (as at 1280) and the canvas takes the full width. Either is accepted: no more than the 44 px strip or chip covered.
+  const L1 = await S.page.evaluate(LENS), cov1 = area(L1.canvas, L1.panel), strip = Math.abs(L1.canvas.w - (VP.land.w - V.STRIP)) <= 1 && cov1 <= 0.5, chip = Math.abs(L1.canvas.w - VP.land.w) <= 1 && L1.panel && (L1.panel.r - L1.panel.l) <= V.STRIP + 1.5 && (L1.panel.b - L1.panel.t) <= V.STRIP + 1.5;
+  if (!strip && !chip) f.push(`collapsed: canvas ${L1.canvas.w.toFixed(1)} px wide, panel ${V.fmtR(L1.panel)} covering ${cov1.toFixed(0)} px² (a 596 px canvas beside a 44 px strip, or a full-width canvas under a 44 x 44 chip)`);
+  R.note(`${T} collapsed layout: ${strip ? '596 px canvas beside the 44 px strip' : chip ? `full-width canvas, the collapsed panel a ${(L1.panel.r - L1.panel.l).toFixed(0)} x ${(L1.panel.b - L1.panel.t).toFixed(0)} chip over its corner (plan §2 said 640 - 44)` : 'neither'}`);
   const box = await S.page.evaluate(() => { const i = PC.debug.scene(), cam = i.camera, cv = document.querySelector('[data-pc="v3-canvas"]').getBoundingClientRect(); cam.updateMatrixWorld(); const b = new THREE.Box3().setFromObject(i.world), ps = [];
     for (const x of [b.min.x, b.max.x]) for (const y of [Math.max(0, b.min.y), b.max.y]) for (const z of [b.min.z, b.max.z]) { const v = new THREE.Vector3(x, y, z).project(cam); ps.push([(v.x + 1) / 2 * cv.width, (1 - v.y) / 2 * cv.height]); }
     const h = i.house, fp = h.footprint, hp = []; const top = h.roof.baseY + 1;
@@ -190,7 +227,7 @@ await guard('B 640x360', async () => {
   const outF = (ps) => ps.filter((p) => p[0] < -1 || p[0] > box.w + 1 || p[1] < -1 || p[1] > box.h + 1).length, oh = outF(box.house), op = outF(box.plot);
   if (oh) f.push(`after Reset ${oh} of 16 points of the house bounding circle (ground and roof) fall outside the ${box.w.toFixed(0)} x ${box.h.toFixed(0)} canvas`);
   R.note(`${T} after Reset (collapsed) ${box.plot.length - op} of ${box.plot.length} plot corners inside the canvas`);
-  R.check(`${T} collapsed: canvas ${L1.canvas.w.toFixed(0)} px (640 - 44 +- 1); Reset frames the house inside the canvas (its bounding circle at ground and roof height)`, f);
+  R.check(`${T} collapsed: canvas ${L1.canvas.w.toFixed(0)} px, covered only by the 44 px collapsed panel; Reset frames the house inside the canvas (its bounding circle at ground and roof height)`, f);
   await S.shot('B-collapsed-reset');
   f = []; await toggle(S); await ready(S);
   const scan = await tourScan(S), c = captionProblems(scan, 'tour'); f.push(...c.f); await stopTour(S);
@@ -244,8 +281,17 @@ await guard('D toasts and storage', async () => {
     if (!c || !c.vis) f.push(`no visible element with aria-label "${V.TXT.chip}" (the no-save chip)`);
     else { if (!c.header) f.push('the chip is not in the header'); if (c.title !== V.TXT.chip) f.push(`title "${c.title}"`); if (c.text) f.push(`visible text "${c.text}" (none)`); if (c.w < 44 - 0.5 || c.h < 44 - 0.5) f.push(`target ${c.w.toFixed(0)} x ${c.h.toFixed(0)} px (44)`);
       await tapChip(S, c); const t = await S.toasts(); if (!t.includes(V.TXT.chipToast)) f.push(`tap: toasts ${JSON.stringify(t)}`);
-      await S.act('btn-sample'); await S.settle(); c = await S.page.evaluate(CHIP, V.TXT.chip); if (!c || !c.vis) f.push('the chip goes once a plot exists (start panel hidden)'); }
-    R.check(`${T} storage blocked: the no-save chip in the header (aria-label and title "${V.TXT.chip}", no text, >= 44 px); a tap shows "${V.TXT.chipToast.slice(0, 50)}…"; still there after the sample loads`, f);
+      // a unit change drops only the measurement toast: the chip toast stays (TL focus 4)
+      await S.page.evaluate(() => { const st = PC.sample.state(); st.plot.pts = [[0, 0], [5, 0], [5, 5], [0, 5]]; st.ans.unit = 'ft'; st.plans = {}; st.stage = 1; PC.store.replace(st); }); await S.settle();
+      c = await S.page.evaluate(CHIP, V.TXT.chip); await tapChip(S, c); await S.act('step-2'); await S.settle(); const t1 = await S.toasts(); await S.act('unit-m'); await S.settle(); const t2 = await S.toasts();
+      if (!t1.includes(V.TXT.chipToast) || !t1.some((x) => /sq ft/.test(x))) f.push(`before the unit change: ${JSON.stringify(t1)} (chip toast + a sq ft one)`);
+      else if (!t2.includes(V.TXT.chipToast) || t2.some((x) => /sq ft/.test(x))) f.push(`after the unit change: ${JSON.stringify(t2)} (the chip toast kept, the sq ft one gone)`);
+      // the chip on every stage
+      await S.page.evaluate(() => { const st = PC.sample.state(); st.plans = {}; st.stage = 1; PC.store.replace(st); }); await S.settle(); const miss = [];
+      for (const n of [1, 2, 3, 4, 5]) { await S.page.evaluate((n) => { if (n === 3) PC.store.go(2); PC.store.go(n); if (n === 3) PC.store.commit((s) => { for (const id in s.plans) if (!s.plans[id].error) s.plans[id].approved = true; }, { nav: true }); }, n); await S.settle();
+        const st = await S.page.evaluate(() => PC.store.get().stage); c = await S.page.evaluate(CHIP, V.TXT.chip); if (st !== n || !c || !c.vis) miss.push(`stage ${n} (at ${st}): ${c && c.vis ? 'shown' : 'hidden'}`); }
+      if (miss.length) f.push(`chip on every stage: ${miss.join(', ')}`); }
+    R.check(`${T} storage blocked: the no-save chip in the header (aria-label and title "${V.TXT.chip}", no text, >= 44 px); a tap shows "${V.TXT.chipToast.slice(0, 50)}…"; on every stage 1-5; a unit change drops the measurement toast but keeps the chip toast`, f);
     await S.shot('D-nosave-chip'); await S.end(`${T} blocked`); }
   { const S = await session(browser, VP.desk), f = []; let c = await S.page.evaluate(CHIP, V.TXT.chip); if (c && c.vis) f.push('chip shown at start');
     await S.act('btn-sample'); await S.settle(); await S.flush(); c = await S.page.evaluate(CHIP, V.TXT.chip); if (c && c.vis) f.push('chip shown after a save');
@@ -265,6 +311,52 @@ await guard('D toasts and storage', async () => {
     R.check(`${T} quota full with a stored draft (read works, writes fail): Resume offered and it restores the draft, Start new asks first, the no-save chip shows, the stored draft is never changed or removed`, f);
     R.note(`${T} read-only state: ${w.filter((x) => x[0] === 'set').length} setItem attempts (all failing) after the reload`);
     await S.shot('D-readonly-resume'); await S.end(`${T} read-only resume`); }
+});
+
+// ================= E. 2D labels and texts (TL focus 5) =================
+const AREA = () => { const c = document.querySelector('[data-pc="site-canvas"]').getBoundingClientRect(), site = PC.debug.site(), fp = site.footprint, a = PC.debug.siteArea(), L = PC.debug.siteLabels();
+  if (!fp) return { fp: null, a, L };
+  const sc = (u, v) => { const p = PC.debug.toScreen('site', u, v); return [p[0] - c.left, p[1] - c.top]; }, cs = [sc(fp.u, fp.v), sc(fp.u + fp.w, fp.v), sc(fp.u + fp.w, fp.v + fp.d), sc(fp.u, fp.v + fp.d)];
+  const xs = cs.map((p) => p[0]), ys = cs.map((p) => p[1]);
+  return { fp: { l: Math.min(...xs), r: Math.max(...xs), t: Math.min(...ys), b: Math.max(...ys) }, street: sc(fp.u + fp.w / 2, fp.v), back: sc(fp.u + fp.w / 2, fp.v + fp.d), area: fp.w * fp.d, a, L }; };
+function areaProblems(A, want, tag) {
+  const f = []; if (!A.fp) return [`${tag}: no footprint`];
+  const R0 = (l) => ({ l: l.x, r: l.x + l.w, t: l.y, b: l.y + l.h });
+  if (!A.a) return [`${tag}: no area label (siteArea null)`];
+  const parts = want.split(' '), got = A.a.lines.join(' ');
+  if (got !== want) f.push(`${tag}: area label "${got}", mine "${want}"`);
+  const rs = A.a.lines.map((t) => A.L.find((l) => l.text === t)).filter(Boolean).map(R0);
+  if (A.a.mode === 'one' || A.a.mode === 'two') { if (A.a.mode === 'two' && JSON.stringify(A.a.lines) !== JSON.stringify(parts)) f.push(`${tag}: two lines ${JSON.stringify(A.a.lines)}`);
+    for (const r of rs) if (!V.inside(r, A.fp, 0.5)) f.push(`${tag}: ${A.a.mode}-line area label ${V.fmtR(r)} not inside the footprint ${V.fmtR(A.fp)}`);
+    if (rs.length && Math.max(...rs.map((r) => r.r - r.l)) > (A.fp.r - A.fp.l) - 8 + 0.5) f.push(`${tag}: area label ${Math.max(...rs.map((r) => r.r - r.l)).toFixed(0)} px wide in a ${(A.fp.r - A.fp.l).toFixed(0)} px footprint (<= width - 8)`); }
+  else if (A.a.mode === 'outside') { const x = A.a.x - 0, y = A.a.y - 0, ds = Math.hypot(x - A.street[0], y - A.street[1]), db = Math.hypot(x - A.back[0], y - A.back[1]);
+    for (const r of rs) if (V.inter(r, A.fp, 0.5)) f.push(`${tag}: outside label ${V.fmtR(r)} over the footprint ${V.fmtR(A.fp)}`);
+    if (!(ds < db)) f.push(`${tag}: outside label not on the street side`); }
+  else f.push(`${tag}: mode ${A.a.mode}`);
+  return f;
+}
+const lines = (S, h) => S.page.evaluate((h) => { const e = document.querySelector(`[data-pc="${h}"]`), rg = document.createRange(); rg.selectNodeContents(e); return new Set([...rg.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top))).size; }, h);
+await guard('E 2D labels', async () => {
+  // 360x640: the pool note in m and ft on one line, the area label rule on the sample and a narrow footprint
+  { const S = await kit(browser, VP.phone), T = 'E 360x640', f = [];
+    await S.openGroup('outdoor'); for (const u of ['m', 'ft']) { if (u === 'ft') await S.act('unit-ft'); const t = await S.page.evaluate(() => document.querySelector('[data-pc="q-pool-size-note"]').textContent.trim().replace(/\s+/g, ' ')), n = await lines(S, 'q-pool-size-note');
+      const want = u === 'm' ? 'S 3 × 6 · M 4 × 8 · L 5 × 10 m' : 'S 9.8 × 19.7 · M 13.1 × 26.2 · L 16.4 × 32.8 ft'; if (t !== want || n !== 1) f.push(`${u}: "${t}" on ${n} lines ("${want}", one line)`); }
+    await S.act('unit-m'); await S.settle();
+    let A = await S.page.evaluate(AREA); f.push(...areaProblems(A, fmtArea(A.area, 'm'), `sample (${A.a && A.a.mode})`)); const m1 = A.a && A.a.mode;
+    await S.page.evaluate(() => PC.store.commit((s) => { s.plot = { pts: [[0, 0], [10, 0], [10, 40], [0, 40]], closed: true }; s.ans.streetEdge = 0; s.ans.footprintPct = 25; s.ans.parking = { cars: 0, covered: false }; s.ans.pool = { on: false, size: 'S' }; })); await S.settle();
+    A = await S.page.evaluate(AREA); f.push(...areaProblems(A, fmtArea(A.area, 'm'), `10 x 40 m plot (${A.a && A.a.mode})`)); const m2 = A.a && A.a.mode;
+    if (m2 === 'one') f.push(`10 x 40 m plot: the one-line area label fits a ${A.fp ? (A.fp.r - A.fp.l).toFixed(0) : '?'} px footprint? (two lines or outside expected)`);
+    R.check(`${T} the pool note on one line in m and ft (PM round 14 texts); the area label: sample ${m1}, narrow 10 x 40 m plot ${m2} (one / two lines inside the footprint at <= width - 8, else outside on the street side)`, f);
+    await S.shot('E-area-narrow'); await S.end(T); }
+  // 1280x800: the Parking / Pool legend entries only when the drawing has them
+  { const S = await kit(browser, VP.desk), T = 'E 1280x800', f = [];
+    const LG = () => S.page.evaluate(() => ['site-legend-parking', 'site-legend-pool'].map((h) => { const e = document.querySelector(`[data-pc="${h}"]`); return e && !e.hidden && getComputedStyle(e).display !== 'none' ? e.textContent.trim() : null; }));
+    let g = await LG(); if (g[0] !== 'Parking' || g[1] !== 'Pool') f.push(`sample (2 cars, S pool): legend ${JSON.stringify(g)}`);
+    await S.page.evaluate(() => PC.store.commit((s) => { s.ans.pool = { on: false, size: 'S' }; })); await S.settle(); g = await LG(); if (g[0] !== 'Parking' || g[1] !== null) f.push(`pool off: legend ${JSON.stringify(g)}`);
+    await S.page.evaluate(() => PC.store.commit((s) => { s.ans.parking = { cars: 0, covered: false }; })); await S.settle(); g = await LG(); if (g[0] !== null || g[1] !== null) f.push(`no cars, no pool: legend ${JSON.stringify(g)}`);
+    const A = await S.page.evaluate(AREA); f.push(...areaProblems(A, fmtArea(A.area, 'm'), `sample at 1280 (${A.a && A.a.mode})`));
+    R.check(`${T} the legend shows "Parking" / "Pool" only while the drawing has them (sample: both; pool off: Parking; no cars: none); the area label rule holds`, f);
+    await S.end(T); }
 });
 
 await browser.close();
