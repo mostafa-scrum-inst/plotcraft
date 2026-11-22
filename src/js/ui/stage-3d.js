@@ -12,12 +12,20 @@
    off, the room's level, highlight, 1.2 s flight), syncs the Roof switch and the level radios, and shows the caption
    "Room · Level" (caption(), shared with the F5-T2 tour; PM round 12). The select keeps the chosen room (PM Q7).
    The selection is cleared by any manual level change (All included), Reset view, Roof on, "Go to room…", and by
-   PC.view3d itself on a rebuild or close (onSelect(null)); orbit / zoom / pan keep it (TL ruling Q3). */
+   PC.view3d itself on a rebuild or close (onSelect(null)); orbit / zoom / pan keep it (TL ruling Q3).
+   Drone tour (F5-T2, F5-S2; A-14 as built; PM round 13): Start (clears the finder selection, Roof off) runs
+   PC.three.tour at the session speed (Normal on a page load; kept between tours and stage visits, not in the draft).
+   Pause / Resume (aria-pressed; the caption's pause button mirrors it) and Stop in the panel and in the caption, which
+   reads "Room · Level" or "Overview". Each stop sets the level radios and the Roof switch through .checked, which fires
+   no change event, so it never ends the tour (plan review item 4). A level radio, Reset view, Roof on and a finder
+   pick end the tour first; the Light tab and the speed radios do not. When it ends (Stop, a gesture, leaving stage 5,
+   a rebuild, the end) the camera, level and Roof stay; the caption and highlight are cleared and the select shows
+   "Go to room…" (PM Q12). */
 (function (PC) {
   'use strict';
   var ui = PC.ui = PC.ui || {};
   ui.stages = ui.stages || {};
-  var LATER = ['v3-tour-start', 'v3-tour-pause', 'v3-tour-stop'];
+  var LATER = [];                                 // every stage-5 control is live since F5-T2
   var PRESETS = ['morning', 'noon', 'evening', 'night'];
   var TABS = ['view', 'light', 'tour'];
   var open = false, house = null, level = 'all', levelsKey = '', roomsKey = '';
@@ -67,10 +75,10 @@
     var box = ui.$('v3-caption'), t = ui.$('v3-caption-text');
     while (t.firstChild) t.removeChild(t.firstChild);
     if (parts) {
-      var a = document.createElement('span'), b = document.createElement('span');
+      var a = document.createElement('span');
       a.className = 'pc-caption__room'; a.textContent = parts[0];
-      b.className = 'pc-caption__level'; b.textContent = ' · ' + parts[1];
-      t.appendChild(a); t.appendChild(b);
+      t.appendChild(a);
+      if (parts[1]) { var b = document.createElement('span'); b.className = 'pc-caption__level'; b.textContent = ' · ' + parts[1]; t.appendChild(b); }
     }
     ui.show(box, !!parts);
   }
@@ -85,6 +93,43 @@
     ui.$('v3-roof').checked = false;
     caption(PC.cam.caption(house, id));
   }
+  // ---- drone tour (F5-T2) ----
+  function renderTour() {
+    var st = PC.three.tour ? PC.three.tour.state() : { running: false, paused: false }, on = st.running, pz = on && st.paused;
+    ui.$('v3-tour-start').disabled = on;
+    ['v3-tour-pause', 'v3-tour-stop'].forEach(function (h) { ui.$(h).disabled = !on; });
+    ['v3-tour-pause', 'v3-caption-pause'].forEach(function (h) {
+      var b = ui.$(h);
+      b.setAttribute('aria-label', pz ? 'Resume tour' : 'Pause tour');
+      if (h === 'v3-tour-pause') b.setAttribute('aria-pressed', pz ? 'true' : 'false');
+    });
+    ['v3-caption-pause', 'v3-caption-stop'].forEach(function (h) { ui.show(ui.$(h), on); });
+    Array.prototype.slice.call(ui.$('v3-tour-speed').querySelectorAll('input')).forEach(function (i) { i.checked = i.value === PC.three.tour.speed(); });
+  }
+  function tourStop(stop) {
+    level = stop.level;
+    renderLevels();
+    ui.$('v3-roof').checked = false;
+    caption(stop.kind === 'room' ? PC.cam.caption(house, stop.id) : ['Overview']);
+  }
+  function tourEnd(reason) {
+    if (reason !== 'replaced') { ui.$('v3-room').value = ''; caption(null); }
+    renderTour();
+  }
+  function startTour() {
+    if (!house || PC.three.tour.running()) return;
+    clearRoom();
+    ui.$('v3-roof').checked = false;
+    PC.three.tour.start({ onStop: tourStop, onEnd: tourEnd });
+    renderTour();
+  }
+  function togglePause() {
+    var st = PC.three.tour.state();
+    if (!st.running) return;
+    if (st.paused) PC.three.tour.resume(); else PC.three.tour.pause();
+    renderTour();
+  }
+  function endTour() { if (PC.three.tour.running()) PC.three.tour.stop(); }
   function renderLevels() {
     Array.prototype.slice.call(ui.$('v3-level').querySelectorAll('input')).forEach(function (inp) { inp.checked = inp.value === level; });
   }
@@ -118,15 +163,22 @@
   ui.stages.view3d = {
     init: function () {
       LATER.forEach(function (h) { ui.$(h).disabled = true; });
-      Array.prototype.slice.call(ui.$('v3-tour-speed').querySelectorAll('input')).forEach(function (i) { i.disabled = true; });
       ui.on(ui.$('v3-level'), 'change', function (e) {
         if (!e.target || e.target.name !== 'v3-level' || !e.target.checked) return;
         level = e.target.value;
+        endTour();
         clearRoom();
         PC.view3d.setLevel(level);
       });
-      ui.on(ui.$('v3-roof'), 'change', function (e) { if (e.target.checked) clearRoom(); PC.view3d.setRoof(e.target.checked); });
-      ui.on(ui.$('v3-reset'), 'click', function () { clearRoom(); PC.view3d.resetView(); });
+      ui.on(ui.$('v3-roof'), 'change', function (e) { if (e.target.checked) { endTour(); clearRoom(); } PC.view3d.setRoof(e.target.checked); });
+      ui.on(ui.$('v3-reset'), 'click', function () { endTour(); clearRoom(); PC.view3d.resetView(); });
+      ui.on(ui.$('v3-tour-start'), 'click', startTour);
+      ui.on(ui.$('v3-tour-pause'), 'click', togglePause);
+      ui.on(ui.$('v3-caption-pause'), 'click', togglePause);
+      ui.on(ui.$('v3-tour-stop'), 'click', endTour);
+      ui.on(ui.$('v3-caption-stop'), 'click', endTour);
+      ui.on(ui.$('v3-tour-speed'), 'change', function (e) { if (e.target && e.target.name === 'v3-tour-speed' && e.target.checked) PC.three.tour.setSpeed(e.target.value); });
+      renderTour();
       ui.on(ui.$('v3-room'), 'change', function (e) { goRoom(e.target.value); });
       PC.view3d.setOnSelect(function (id) { if (id === null) unselected(); });
       ui.on(ui.$('v3-time'), 'input', function (e) { setLook({ hour: parseFloat(e.target.value) }); });
@@ -142,11 +194,13 @@
       Object.assign(PC.debug = PC.debug || {}, {
         house: function () { return house; },
         scene: function () { return PC.view3d.info(); },
-        cam: function () { return PC.view3d.pose(); }
+        cam: function () { return PC.view3d.pose(); },
+        // test-only (TL F5-T2 ruling Q8): set the running tour's time; no product code calls it
+        tourSeek: function (tau) { return PC.three.tour.debugSeek(tau); }
       });
       ui.shell.register(5, {
         enter: function () { open = true; renderLook(); show(PC.store.get()); },
-        leave: function () { open = false; PC.view3d.close(); },
+        leave: function () { open = false; PC.view3d.close(); renderTour(); },
         // a store change while the 3D view is open rebuilds only when the model really changed (house.key)
         render: function (s) {
           if (!open) return;
