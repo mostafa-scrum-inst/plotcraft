@@ -13,6 +13,7 @@
 // Default: 50 operations on the sample house (TL Q-T8 / plan §9.5). QA_RELEASE=1 or --max-only: only the 200-op maximum-house stream (release step, <= 240 s; TL ruling F6-T1a gate).
 // Run: node tests/qa/f6-t1-leak.mjs [--no-shots] [--seed=N] [--ops=N] [--force]
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { ROOT, collector, launch } from './lib.mjs';
 import { sessions } from './session.mjs';
 import * as V from './f6-t1-ref.mjs';
@@ -106,8 +107,17 @@ try {
   let t = Date.now();
   if (!MAXONLY) { await probeRun(browser, '960x600 real sample', '', OPS, SEED, VP_DEF); TIMES.push(`sample ${((Date.now() - t) / 1000).toFixed(1)} s`); }
   if (MAXONLY) { t = Date.now(); await probeRun(browser, '1280x800 real maximum house (release step)', MAXMUT, 200, SEED + 1); const s = (Date.now() - t) / 1000; TIMES.push(`maximum house ${s.toFixed(1)} s`);
-    R.check(`[leak-max] the 200-operation maximum-house stream runs in ${s.toFixed(1)} s <= ${MAX_S} s (TL release-step limit)`, s <= MAX_S ? [] : [`${s.toFixed(1)} s`]); }
+    R.note(`[leak-max] the 200-operation maximum-house stream ran in ${s.toFixed(1)} s`); }
   else R.note('the 200-operation maximum-house stream is its own release step: QA_RELEASE=1 or --max-only, run-all --only leak-max (TL ruling, F6-T1a gate)');
 } finally { await browser.close(); }
+// The release step also carries the rows the TL moved out of QA_FULL=1 after the 488 s gate (F6-T1a): each in its own
+// process with QA_RELEASE=1, after the stream. The whole step stays <= 240 s.
+const RELEASE_ROWS = [['f4-t1-view.mjs', '--no-shots', '--release-only'], ['f5-t3-view.mjs', '--no-shots', '--release-only'], ['f4-t2-s0-ui.mjs', '--no-shots', '--only=640x360']];
+if (MAXONLY) {
+  for (const [f, ...a] of RELEASE_ROWS) { const t = Date.now(), r = spawnSync('node', [join(ROOT, 'tests/qa', f), ...a], { stdio: 'inherit', cwd: ROOT, env: { ...process.env, QA_RELEASE: '1' } }); const s = (Date.now() - t) / 1000;
+    TIMES.push(`${f} ${s.toFixed(1)} s`); R.check(`[release] ${f} ${a.join(' ')} (QA_RELEASE=1): its checks pass (${s.toFixed(1)} s)`, r.status === 0 ? [] : [`exit ${r.status}`]); }
+  const all = (Date.now() - t0) / 1000;
+  R.check(`[leak-max] the release step (200-op maximum-house stream + ${RELEASE_ROWS.length} release rows) runs in ${all.toFixed(1)} s <= ${MAX_S} s (TL limit)`, all <= MAX_S ? [] : [`${all.toFixed(1)} s`]);
+}
 R.note(`timings: ${TIMES.join(', ')}; run ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 process.exit(R.done() ? 0 : 1);
