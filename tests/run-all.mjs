@@ -8,13 +8,16 @@
 //   node tests/run-all.mjs --qa --only f1-t3       one QA suite
 //   --jobs N                                       browser files run N at a time (default 3: two green full runs at 3
 //                                                  on this 4-core machine, TL F4-T1 outcome review; target <= 420 s)
+//   --write-durations                              after a green full run, rewrite tests/durations.json (commit it
+//                                                  with the run)
 //
 // Steps: --unit, --three, --e2e (tests/e2e/*.spec.mjs), --qa (QA's own suites, tests/qa/run-*.mjs, without
 // screenshots). No step flag = all steps. Build and lint always run. Browser files are separate processes with
 // their own browser, pages opened from file:// and no shared files, so they can run side by side; their output is
-// printed whole, file by file, when each one ends.
+// printed whole, file by file, when each one ends. They start longest first (F5-T3c), by tests/durations.json
+// (label -> seconds from the last green full run); files not in the table start first, ties by label.
 import { spawn, spawnSync } from 'node:child_process';
-import { readdirSync, existsSync } from 'node:fs';
+import { readdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -34,6 +37,14 @@ const run = (label, argv) => {
   if (r.status !== 0) { console.log(`\nrun-all: FAILED at "${label}"`); done(false); }
   console.log(`(${label}: ${secs(Date.now() - t)})`);
 };
+const table = join(here, 'durations.json'), took = {};
+const known = (() => { try { return JSON.parse(readFileSync(table, 'utf8')); } catch { return {}; } })();
+const longestFirst = (tasks) => tasks.slice().sort((a, b) => {
+  const da = known[a.label], db = known[b.label];
+  if ((da === undefined) !== (db === undefined)) return da === undefined ? -1 : 1;
+  if (da !== undefined && da !== db) return db - da;
+  return a.label < b.label ? -1 : a.label > b.label ? 1 : 0;
+});
 // Runs the tasks `jobs` at a time; each task's output is buffered and printed when it ends. Resolves to the failed labels.
 function pool(tasks) {
   return new Promise((resolve) => {
@@ -46,7 +57,7 @@ function pool(tasks) {
       child.on('close', (code) => {
         console.log(`\n=== ${task.label} ===`); process.stdout.write(Buffer.concat(out));
         console.log(`(${task.label}: ${code === 0 ? 'ok' : 'FAILED, exit ' + code}, ${secs(Date.now() - t)})`);
-        if (code !== 0) failed.push(task.label);
+        if (code !== 0) failed.push(task.label); else took[task.label] = Math.round((Date.now() - t) / 100) / 10;
         running--; start();
       });
     };
@@ -63,6 +74,13 @@ const browser = [];
 if (want('--e2e')) for (const f of picked(list('e2e', '.spec.mjs'))) browser.push({ label: 'e2e ' + f.slice(here.length + 1), argv: [f] });
 if (want('--qa')) for (const f of picked(list('qa', '.mjs').filter((f) => /[\\/]run-[^\\/]+\.mjs$/.test(f)))) browser.push({ label: 'qa ' + f.slice(here.length + 1), argv: [f, '--no-shots'] });
 if (browser.length) console.log(`\n${browser.length} browser file(s), ${jobs} at a time`);
-const failed = await pool(browser);
+const failed = await pool(longestFirst(browser));
 if (failed.length) console.log('\nfailed: ' + failed.join(', '));
+if (args.includes('--write-durations')) {
+  if (failed.length || only.length || words.length) console.log('\nrun-all: durations not written (needs a green full run)');
+  else {
+    const out = {}; for (const k of Object.keys(took).sort()) out[k] = took[k];
+    writeFileSync(table, JSON.stringify(out, null, 2) + '\n'); console.log(`\nrun-all: ${table.slice(root.length + 1)} written (${Object.keys(out).length} files)`);
+  }
+}
 done(failed.length === 0);
