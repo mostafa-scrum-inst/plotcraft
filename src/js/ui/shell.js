@@ -39,6 +39,7 @@
     call(shown, 'enter');
   }
 
+  var lastUnit = null;
   function render(state, prev, meta) {
     if (!ready) return;
     var s = PC.store.get(), st = PC.stages.status(s);
@@ -47,6 +48,8 @@
     renderStepper(s, st);
     renderBar(s, st);
     ui.show(ui.$('sample-strip'), s.sampleClean && STRIP_STAGES.indexOf(s.stage) >= 0);
+    if (lastUnit !== null && lastUnit !== s.ans.unit) ui.toast.dropUnits();   // F5-T3a: no toast in the old unit
+    lastUnit = s.ans.unit;
     ui.$('unit-m').checked = s.ans.unit === 'm';
     ui.$('unit-ft').checked = s.ans.unit === 'ft';
     if (controllers[s.stage]) ui.banner.hide(STATIC_ID);
@@ -69,7 +72,7 @@
   function stepTap(n) {
     var s = PC.store.get();
     if (n === s.stage) return;
-    if (!PC.store.go(n)) ui.toast(PC.stages.status(s)[n].reason);
+    if (!PC.store.go(n)) ui.toast(PC.stages.status(s)[n].reason, { units: true });   // may quote the minimum area
   }
 
   ui.stages = ui.stages || {};

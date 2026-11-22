@@ -74,12 +74,13 @@
     var i = toasts.indexOf(t); if (i >= 0) toasts.splice(i, 1);
   }
   // Short message above the action bar. The same text while still visible only restarts its timer.
+  // opts: { ms, kind, units } (units: the text quotes a measurement; dropped on a unit change).
   ui.toast = function (text, opts) {
     var ms = (opts && opts.ms) || 3500, kind = (opts && opts.kind) || 'info';
     toasts.filter(function (x) { return !x.el.isConnected; }).forEach(dropToast);
     var t = toasts.filter(function (x) { return x.text === text; })[0];
     if (!t) {
-      t = { text: text, el: ui.tpl('tpl-toast'), timer: null };
+      t = { text: text, el: ui.tpl('tpl-toast'), timer: null, units: !!(opts && opts.units) };
       ui.$('toast-text', t.el).textContent = text;
       t.el.setAttribute('data-kind', kind);
       ui.$('toast-region').appendChild(t.el);
@@ -89,6 +90,10 @@
     t.timer = setTimeout(function () { dropToast(t); }, ms);
     return t.el;
   };
+
+  // F5-T3a (F1 review item 7): a toast raised with { units: true } quotes a measurement in the unit of its moment;
+  // the shell calls this when the display unit changes, so no toast keeps showing the old unit.
+  ui.toast.dropUnits = function () { toasts.filter(function (x) { return x.units; }).forEach(dropToast); };
 
   /* ---- banners (one per id, in the banner slot) ---- */
   var banners = {};

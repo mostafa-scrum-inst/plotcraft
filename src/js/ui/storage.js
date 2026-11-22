@@ -1,30 +1,38 @@
 /* PC.ui.storage: the only file that touches localStorage (A-3). Every access is guarded; on any failure the
-   adapter turns into a no-op with available = false. PC.ui.autosave: debounced draft writer (A-4). */
+   adapter turns into a no-op with available = false. A full quota at start (read
+   works, the probe write fails) is the read-only state: the stored draft is still offered (F5-T3a, TL ruling 4).
+   PC.ui.autosave: debounced draft writer (A-4); one toast when saving stops mid-session (PM round 14). */
 (function (PC) {
   'use strict';
   var ui = PC.ui = PC.ui || {};
 
+  // available = saving works (the probe write succeeded and no write failed since). canRead alone is the read-only
+  // state of a full quota (F5-T3a, TL ruling 4): a stored draft is still offered for Resume, nothing is ever written.
   var S = ui.storage = {
-    available: false,
+    available: false, canRead: false, canWrite: false,
     probe: function () {
+      var ls = null;
+      try { ls = window.localStorage; ls.getItem('plotcraft.probe'); S.canRead = true; } catch (e) { S.canRead = false; }
       try {
-        var ls = window.localStorage, k = 'plotcraft.probe';
+        if (!ls) throw new Error('no storage');
+        var k = 'plotcraft.probe';
         ls.setItem(k, '1'); ls.removeItem(k);
-        S.available = true;
-      } catch (e) { S.available = false; }
+        S.canWrite = true;
+      } catch (e) { S.canWrite = false; }
+      S.available = S.canWrite;
       return S.available;
     },
     get: function (key) {
-      if (!S.available) return null;
-      try { return window.localStorage.getItem(key); } catch (e) { S.available = false; return null; }
+      if (!S.canRead) return null;
+      try { return window.localStorage.getItem(key); } catch (e) { off(); return null; }
     },
     set: function (key, text) {
-      if (!S.available) return false;
-      try { window.localStorage.setItem(key, text); return true; } catch (e) { S.available = false; return false; }
+      if (!S.canWrite) return false;
+      try { window.localStorage.setItem(key, text); return true; } catch (e) { off(); return false; }
     },
     remove: function (key) {
-      if (!S.available) return false;
-      try { window.localStorage.removeItem(key); return true; } catch (e) { S.available = false; return false; }
+      if (!S.canWrite) return false;
+      try { window.localStorage.removeItem(key); return true; } catch (e) { off(); return false; }
     },
 
     // The draft (A-4). PC.draft.KEYS is the one list of draft keys, current first: read the first one present,
@@ -47,10 +55,15 @@
     keepRejected: function (raw) { return typeof raw === 'string' && S.set(S.REJECTED_KEY, raw); }
   };
   var oldGone = false;
+  // Any failure after the probe turns the adapter off entirely (F1 behaviour, unchanged).
+  function off() { S.canRead = S.canWrite = S.available = false; }
 
   var timer = null, dirty = false;
   var A = ui.autosave = {
     DELAY: 400,
+    // PM round 14, word for word; shown once per session when saving stops after it worked.
+    STOPPED: 'Saving has stopped: this browser\'s storage is full or blocked. Your work stays on screen but will be lost when you close or reload the page.',
+    stoppedToast: false,
     start: function () {
       PC.store.subscribe(function () { dirty = true; A.schedule(); });
       document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') A.flush(); });
@@ -68,7 +81,10 @@
       var s = PC.store.get(), was = S.available;
       if (PC.draft.isEmpty(s)) S.removeDraft();
       else S.writeDraft(PC.draft.serialize(s, Date.now()));
-      if (was && !S.available && ui.start) ui.start.render();   // storage just failed: show the note
+      if (was && !S.available) {                                 // storage just failed: the note, the chip, one toast
+        if (ui.start) ui.start.render();
+        if (!A.stoppedToast && ui.toast) { A.stoppedToast = true; ui.toast(A.STOPPED, { kind: 'warn', ms: 8000 }); }
+      }
     }
   };
 })(globalThis.PC = globalThis.PC || {});

@@ -103,5 +103,62 @@ try {
     T.none(problems(), 'quota: clean log');
     await ctx.close();
   }
+  // F5-T3a (TL ruling 4): full quota at start with a valid draft stored: the read-only state offers Resume, the
+  // no-save note and the header chip show, nothing is ever written, Start new still asks first
+  {
+    const src = await open(browser, VIEWPORTS[0]);
+    await src.act('btn-sample');
+    const draft = await src.page.evaluate(() => PC.draft.serialize(PC.store.get(), 1700000000000));
+    await src.ctx.close();
+    const init = `if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.setItem('plotcraft.draft.v2', ${JSON.stringify(draft)}); }
+      window.__writes = 0; Storage.prototype.setItem = function () { window.__writes++; throw new DOMException('full', 'QuotaExceededError'); };
+      Storage.prototype.removeItem = function () { window.__writes++; throw new DOMException('full', 'QuotaExceededError'); };`;
+    const o = await open(browser, VIEWPORTS[0], { init }), { ctx, page, act, hook, problems } = o;
+    const vis = (h) => page.evaluate((h) => { const e = document.querySelector(`[data-pc="${h}"]`); return !e.hidden && e.getClientRects().length > 0; }, h);
+    T.ok(await page.evaluate(() => PC.ui.storage.canRead && !PC.ui.storage.canWrite && !PC.ui.storage.available), 'read-only: canRead, not canWrite');
+    T.eq(await page.evaluate(() => window.__writes), 1, 'read-only: the probe write is the only attempt at boot');
+    T.ok(await vis('resume-box') && await vis('note-nosave') && await vis('nosave-chip'), 'read-only: Resume offered, the no-save note and the header chip shown');
+    const chip = await hook('nosave-chip').boundingBox();
+    T.ok(chip.width >= 44 - 0.5 && chip.height >= 44 - 0.5, `no-save chip ${chip.width.toFixed(0)}x${chip.height.toFixed(0)} px`);
+    T.eq(await page.evaluate(() => [document.querySelector('[data-pc="nosave-chip"]').getAttribute('aria-label'), document.querySelector('[data-pc="nosave-chip"]').title]),
+      ['Drafts are not saved on this device', 'Drafts are not saved on this device'], 'chip aria-label and title (PM round 14)');
+    await act('btn-resume');
+    T.ok(await page.evaluate(() => PC.store.get().plot.pts.length > 0 && PC.store.get().sampleClean !== undefined), 'read-only: Resume restores the stored draft');
+    await page.evaluate(() => PC.ui.autosave.flush());
+    await act('btn-next');
+    await page.evaluate(() => PC.ui.autosave.flush());
+    T.ok(await vis('nosave-chip'), 'read-only: the chip stays on the next stage');
+    await act('nosave-chip');
+    T.eq(await page.evaluate(() => [...document.querySelectorAll('[data-pc="toast-text"]')].map((e) => e.textContent)), ['Drafts are not saved on this device. Your work will be lost when you close or reload the page.'], 'chip tap: the PM toast');
+    T.eq(await page.evaluate(() => [window.__writes, localStorage.getItem('plotcraft.draft.v2') !== null]), [1, true], 'read-only: no write attempted after the probe (Resume, edits, autosave), the stored draft kept');
+    // a reload offers it again; Start new still asks before discarding
+    await page.reload();
+    await act('btn-startnew');
+    T.ok(await vis('dialog-layer'), 'read-only: Start new asks first');
+    await act('dialog-cancel');
+    T.none(problems(), 'read-only: clean log');
+    await ctx.close();
+  }
+  // F5-T3a: saving stops mid-session -> one toast (PM round 14) and the chip; a unit change drops measurement toasts
+  {
+    const o = await open(browser, VIEWPORTS[2]), { ctx, page, act, problems } = o;
+    const toasts = () => page.evaluate(() => [...document.querySelectorAll('[data-pc="toast-text"]')].map((e) => e.textContent));
+    await act('btn-sample'); await page.evaluate(() => PC.ui.autosave.flush());
+    T.ok(await page.evaluate(() => document.querySelector('[data-pc="nosave-chip"]').hidden), 'saving works: no chip');
+    await page.evaluate(() => { Storage.prototype.setItem = function () { throw new DOMException('full', 'QuotaExceededError'); }; });
+    await act('btn-next'); await page.evaluate(() => PC.ui.autosave.flush());
+    const STOP = 'Saving has stopped: this browser\'s storage is full or blocked. Your work stays on screen but will be lost when you close or reload the page.';
+    T.eq(await toasts(), [STOP], 'saving stopped: the PM toast');
+    T.ok(await page.evaluate(() => !document.querySelector('[data-pc="nosave-chip"]').hidden), 'saving stopped: the chip appears');
+    await page.evaluate(() => { document.querySelectorAll('.pc-toast').forEach((e) => e.remove()); });
+    await act('btn-back'); await page.evaluate(() => PC.ui.autosave.flush());
+    T.ok(!(await toasts()).includes(STOP), 'saving stopped: shown once per session');
+    // unit change: a toast raised with { units: true } goes, others stay
+    await page.evaluate(() => { PC.ui.toast('Minimum 538 sq ft', { units: true }); PC.ui.toast('Unrelated note'); });
+    await page.locator('label:has(> [data-pc="unit-ft"])').click();
+    T.eq((await toasts()).filter((t) => t !== STOP), ['Unrelated note'], 'unit change: the measurement toast is dropped, the other kept');
+    T.none(problems(), 'saving stopped: clean log');
+    await ctx.close();
+  }
 } finally { await browser.close(); }
 process.exit(T.done() ? 1 : 0);

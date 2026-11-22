@@ -5908,32 +5908,40 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 </script>
 <script>/* js/ui/storage.js */
 /* PC.ui.storage: the only file that touches localStorage (A-3). Every access is guarded; on any failure the
-   adapter turns into a no-op with available = false. PC.ui.autosave: debounced draft writer (A-4). */
+   adapter turns into a no-op with available = false. A full quota at start (read
+   works, the probe write fails) is the read-only state: the stored draft is still offered (F5-T3a, TL ruling 4).
+   PC.ui.autosave: debounced draft writer (A-4); one toast when saving stops mid-session (PM round 14). */
 (function (PC) {
   'use strict';
   var ui = PC.ui = PC.ui || {};
 
+  // available = saving works (the probe write succeeded and no write failed since). canRead alone is the read-only
+  // state of a full quota (F5-T3a, TL ruling 4): a stored draft is still offered for Resume, nothing is ever written.
   var S = ui.storage = {
-    available: false,
+    available: false, canRead: false, canWrite: false,
     probe: function () {
+      var ls = null;
+      try { ls = window.localStorage; ls.getItem('plotcraft.probe'); S.canRead = true; } catch (e) { S.canRead = false; }
       try {
-        var ls = window.localStorage, k = 'plotcraft.probe';
+        if (!ls) throw new Error('no storage');
+        var k = 'plotcraft.probe';
         ls.setItem(k, '1'); ls.removeItem(k);
-        S.available = true;
-      } catch (e) { S.available = false; }
+        S.canWrite = true;
+      } catch (e) { S.canWrite = false; }
+      S.available = S.canWrite;
       return S.available;
     },
     get: function (key) {
-      if (!S.available) return null;
-      try { return window.localStorage.getItem(key); } catch (e) { S.available = false; return null; }
+      if (!S.canRead) return null;
+      try { return window.localStorage.getItem(key); } catch (e) { off(); return null; }
     },
     set: function (key, text) {
-      if (!S.available) return false;
-      try { window.localStorage.setItem(key, text); return true; } catch (e) { S.available = false; return false; }
+      if (!S.canWrite) return false;
+      try { window.localStorage.setItem(key, text); return true; } catch (e) { off(); return false; }
     },
     remove: function (key) {
-      if (!S.available) return false;
-      try { window.localStorage.removeItem(key); return true; } catch (e) { S.available = false; return false; }
+      if (!S.canWrite) return false;
+      try { window.localStorage.removeItem(key); return true; } catch (e) { off(); return false; }
     },
 
     // The draft (A-4). PC.draft.KEYS is the one list of draft keys, current first: read the first one present,
@@ -5956,10 +5964,15 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     keepRejected: function (raw) { return typeof raw === 'string' && S.set(S.REJECTED_KEY, raw); }
   };
   var oldGone = false;
+  // Any failure after the probe turns the adapter off entirely (F1 behaviour, unchanged).
+  function off() { S.canRead = S.canWrite = S.available = false; }
 
   var timer = null, dirty = false;
   var A = ui.autosave = {
     DELAY: 400,
+    // PM round 14, word for word; shown once per session when saving stops after it worked.
+    STOPPED: 'Saving has stopped: this browser\'s storage is full or blocked. Your work stays on screen but will be lost when you close or reload the page.',
+    stoppedToast: false,
     start: function () {
       PC.store.subscribe(function () { dirty = true; A.schedule(); });
       document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') A.flush(); });
@@ -5977,7 +5990,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       var s = PC.store.get(), was = S.available;
       if (PC.draft.isEmpty(s)) S.removeDraft();
       else S.writeDraft(PC.draft.serialize(s, Date.now()));
-      if (was && !S.available && ui.start) ui.start.render();   // storage just failed: show the note
+      if (was && !S.available) {                                 // storage just failed: the note, the chip, one toast
+        if (ui.start) ui.start.render();
+        if (!A.stoppedToast && ui.toast) { A.stoppedToast = true; ui.toast(A.STOPPED, { kind: 'warn', ms: 8000 }); }
+      }
     }
   };
 })(globalThis.PC = globalThis.PC || {});
@@ -6060,12 +6076,13 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     var i = toasts.indexOf(t); if (i >= 0) toasts.splice(i, 1);
   }
   // Short message above the action bar. The same text while still visible only restarts its timer.
+  // opts: { ms, kind, units } (units: the text quotes a measurement; dropped on a unit change).
   ui.toast = function (text, opts) {
     var ms = (opts && opts.ms) || 3500, kind = (opts && opts.kind) || 'info';
     toasts.filter(function (x) { return !x.el.isConnected; }).forEach(dropToast);
     var t = toasts.filter(function (x) { return x.text === text; })[0];
     if (!t) {
-      t = { text: text, el: ui.tpl('tpl-toast'), timer: null };
+      t = { text: text, el: ui.tpl('tpl-toast'), timer: null, units: !!(opts && opts.units) };
       ui.$('toast-text', t.el).textContent = text;
       t.el.setAttribute('data-kind', kind);
       ui.$('toast-region').appendChild(t.el);
@@ -6075,6 +6092,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     t.timer = setTimeout(function () { dropToast(t); }, ms);
     return t.el;
   };
+
+  // F5-T3a (F1 review item 7): a toast raised with { units: true } quotes a measurement in the unit of its moment;
+  // the shell calls this when the display unit changes, so no toast keeps showing the old unit.
+  ui.toast.dropUnits = function () { toasts.filter(function (x) { return x.units; }).forEach(dropToast); };
 
   /* ---- banners (one per id, in the banner slot) ---- */
   var banners = {};
@@ -6142,6 +6163,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     call(shown, 'enter');
   }
 
+  var lastUnit = null;
   function render(state, prev, meta) {
     if (!ready) return;
     var s = PC.store.get(), st = PC.stages.status(s);
@@ -6150,6 +6172,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     renderStepper(s, st);
     renderBar(s, st);
     ui.show(ui.$('sample-strip'), s.sampleClean && STRIP_STAGES.indexOf(s.stage) >= 0);
+    if (lastUnit !== null && lastUnit !== s.ans.unit) ui.toast.dropUnits();   // F5-T3a: no toast in the old unit
+    lastUnit = s.ans.unit;
     ui.$('unit-m').checked = s.ans.unit === 'm';
     ui.$('unit-ft').checked = s.ans.unit === 'ft';
     if (controllers[s.stage]) ui.banner.hide(STATIC_ID);
@@ -6172,7 +6196,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   function stepTap(n) {
     var s = PC.store.get();
     if (n === s.stage) return;
-    if (!PC.store.go(n)) ui.toast(PC.stages.status(s)[n].reason);
+    if (!PC.store.go(n)) ui.toast(PC.stages.status(s)[n].reason, { units: true });   // may quote the minimum area
   }
 
   ui.stages = ui.stages || {};
@@ -6206,7 +6230,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 
 </script>
 <script>/* js/ui/start.js */
-/* PC.ui.start: start panel (Resume draft / Start new / Load sample / no-save note), pending-draft guard, Skip to 3D. */
+/* PC.ui.start: start panel (Resume draft / Start new / Load sample / no-save note), the header no-save chip (F5-T3a),
+   pending-draft guard, Skip to 3D. In the read-only state (full quota: reads work, writes do not) a stored draft is
+   still offered; nothing is written (storage.set is a no-op), Start new still asks first. */
 (function (PC) {
   'use strict';
   var ui = PC.ui = PC.ui || {};
@@ -6227,7 +6253,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     ui.show(ui.$('start-panel'), s.plot.pts.length === 0);
     ui.show(ui.$('resume-box'), !!pending);
     ui.show(ui.$('note-nosave'), !ui.storage.available);
+    ui.show(ui.$('nosave-chip'), !ui.storage.available);   // F5-T3a: the header chip, on every stage
   }
+  // PM round 14, word for word.
+  var NOSAVE_TOAST = 'Drafts are not saved on this device. Your work will be lost when you close or reload the page.';
 
   function confirmDiscard() {
     return ui.dialog.confirm({
@@ -6304,6 +6333,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       ui.on(ui.$('btn-startnew'), 'click', startNew);
       ui.on(ui.$('btn-sample'), 'click', loadSample);
       ui.on(ui.$('btn-skip3d'), 'click', skip);
+      ui.on(ui.$('nosave-chip'), 'click', function () { ui.toast(NOSAVE_TOAST, { kind: 'warn' }); });
       PC.store.subscribe(render);
       render();
     }
@@ -6821,7 +6851,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     // The area label goes first (it has the best spot), then the edge lengths around it.
     if (closed) {
       var sc = v.toScreen(PC.geom.innerPoint(pts));
-      D.label(v, PC.units.fmtArea(Math.abs(PC.geom.area(pts)), u), sc[0], sc[1], labels, opt);
+      D.label(v, PC.units.fmtArea(Math.abs(PC.geom.area(pts)), u), sc[0], sc[1], labels, Object.assign({}, opt, { font: P.font.area, color: P.label.area }));   // F5-T3a: lighter area label
     }
     if (live) D.edgeLabels(v, live, false, fmt, labels, { color: P.plot.live, avoid: opt.avoid });
     D.edgeLabels(v, pts, closed, fmt, labels, opt);
@@ -7118,7 +7148,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
    or, in tap mode "Back / side", switch that edge's class (F2-S4). */
 (function (PC) {
   'use strict';
-  var ui = PC.ui = PC.ui || {}, view = null, api = null, labels = [], dragNorth = null, focusEdge = null;
+  var ui = PC.ui = PC.ui || {}, view = null, api = null, labels = [], ticks = [], area = null, dragNorth = null, focusEdge = null;
   var PAD = { t: 26, r: 30, b: 26, l: 30 }, DIAL = 20;
 
   function site() { return PC.site.analyse(api.state()); }
@@ -7188,6 +7218,57 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   // Labels that are always drawn: the street edge ("front") and every overridden edge ("side*"), however short the
   // edge. Free spots first (outside, then inside the edge); forced only as a last resort, and never over the
   // compass or a floating control (TL plan-review ruling 6).
+  // One edge label with the normal culling (as draw2d.edgeLabels): none when the edge is too short for it or no
+  // spot beside it is free. Returns true when drawn.
+  function edgeLabel(v, a, b, text, avoid) {
+    var D = ui.draw2d, g = v.ctx, o = { avoid: avoid }, vis = D.clipToView(v, v.toScreen(a), v.toScreen(b), 2);
+    if (!vis) return false;
+    g.font = PC.data.palette2d.font.label;
+    var tw = g.measureText(text).width, p = vis[0], q = vis[1], dx = q[0] - p[0], dy = q[1] - p[1], l = Math.sqrt(dx * dx + dy * dy);
+    if (l < tw + 20) return false;
+    var off = 13 + Math.abs(dy / l) * (tw / 2 - 4), along = [0.5, 0.35, 0.65, 0.22, 0.78], k, s2;
+    for (k = 0; k < along.length; k++) for (s2 = 1; s2 >= -1; s2 -= 2) {
+      var sx = p[0] + dx * along[k] - dy / l * off * s2, sy = p[1] + dy * along[k] + dx / l * off * s2;
+      if (D.labelFree(v, D.labelRect(v, text, sx, sy, o), labels, o)) { D.label(v, text, sx, sy, labels, o); return true; }
+    }
+    return false;
+  }
+  // The "*" tick of an overridden edge whose label was culled: 6 px across the edge at its midpoint, on the inner
+  // side, in the edge's class colour, 2 px wide.
+  function ovTick(v, pts, i, color) {
+    var n = pts.length, a = v.toScreen(pts[i]), b = v.toScreen(pts[(i + 1) % n]), dx = b[0] - a[0], dy = b[1] - a[1], l = Math.sqrt(dx * dx + dy * dy) || 1;
+    var m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], nx = -dy / l, ny = dx / l, scr = pts.map(function (p) { return v.toScreen(p); });
+    if (!PC.geom.pointInPoly([m[0] + nx * 3, m[1] + ny * 3], scr)) { nx = -nx; ny = -ny; }
+    var g = v.ctx;
+    g.save(); g.setLineDash([]); g.lineCap = 'butt'; g.lineWidth = 2; g.strokeStyle = color;
+    g.beginPath(); g.moveTo(m[0], m[1]); g.lineTo(m[0] + nx * 6, m[1] + ny * 6); g.stroke(); g.restore();
+    ticks.push({ edge: i, x: m[0], y: m[1], dx: nx, dy: ny });
+  }
+  // The footprint area label (F5-T3a, Designer spec): the lighter area font / colour; on two lines ("108" / "m²",
+  // 14 px apart) when one line is wider than the footprint less 8 px; outside the footprint on the street side
+  // (centred, 4 px off its street edge, no leader) when two lines do not fit either.
+  function areaLabel(v, fp, text, avoid) {
+    var D = ui.draw2d, P = PC.data.palette2d, o = { avoid: avoid, font: P.font.area, color: P.label.area };
+    var cs = [[fp.u, fp.v], [fp.u + fp.w, fp.v], [fp.u + fp.w, fp.v + fp.d], [fp.u, fp.v + fp.d]].map(function (p) { return v.toScreen(p); });
+    var xs = cs.map(function (p) { return p[0]; }), w = Math.max.apply(null, xs) - Math.min.apply(null, xs);
+    var c = v.toScreen([fp.u + fp.w / 2, fp.v + fp.d / 2]), sp = text.lastIndexOf(' '), lines = [text.slice(0, sp), text.slice(sp + 1)];
+    if (D.labelRect(v, text, c[0], c[1], o).w <= w - 8) { area = D.label(v, text, c[0], c[1], labels, o) ? { mode: 'one', lines: [text] } : null; return; }
+    var wide = Math.max(D.labelRect(v, lines[0], 0, 0, o).w, D.labelRect(v, lines[1], 0, 0, o).w);
+    if (wide <= w - 8) {
+      var r0 = D.labelRect(v, lines[0], c[0], c[1] - 7, o), r1 = D.labelRect(v, lines[1], c[0], c[1] + 7, o);
+      r0.h = r1.h = 14; r0.y = c[1] - 14; r1.y = c[1];
+      if (D.labelFree(v, r0, labels, o) && D.labelFree(v, r1, labels, o)) {
+        D.label(v, lines[0], c[0], c[1] - 7, null, o); D.label(v, lines[1], c[0], c[1] + 7, null, o);
+        labels.push(r0, r1); area = { mode: 'two', lines: lines };
+      } else area = null;
+      return;
+    }
+    // outside, street side: the street edge is v = fp.v (frame L); outward = from the centre to that edge's midpoint
+    var m = v.toScreen([fp.u + fp.w / 2, fp.v]), dx = m[0] - c[0], dy = m[1] - c[1], l = Math.sqrt(dx * dx + dy * dy) || 1, r = D.labelRect(v, text, 0, 0, o);
+    dx /= l; dy /= l;
+    var off = 4 + Math.abs(dx) * r.w / 2 + Math.abs(dy) * r.h / 2, x = m[0] + dx * off, y = m[1] + dy * off;
+    area = D.label(v, text, x, y, labels, o) ? { mode: 'outside', lines: [text], x: x, y: y } : null;
+  }
   function forcedLabel(v, a, b, text, avoid) {
     var D = ui.draw2d, vis = D.clipToView(v, v.toScreen(a), v.toScreen(b), 2), o = { avoid: avoid };
     if (!vis) return;
@@ -7221,8 +7302,11 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 
   function draw(v) {
     var s = site(), D = ui.draw2d, P = PC.data.palette2d, state = api.state(), unit = state.ans.unit;
-    labels = [];
+    labels = []; ticks = []; area = null;
     D.clear(v);
+    // F5-T3a: the Parking / Pool legend entries only when the drawing has them (PM round 14)
+    ui.$('site-legend-parking').hidden = !(s && s.parking);
+    ui.$('site-legend-pool').hidden = !(s && s.pool);
     if (!s) return;
     var pts = s.ptsL, n = pts.length, i;
     var avoid = [dialRect()].concat(overlays()), ov = state.ans.edgeOv || {};
@@ -7237,13 +7321,13 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     }
     if (focusEdge !== null && focusEdge < n)                // the edge focused in the Q6 edge list (F2-S4 keyboard)
       D.path(v, [pts[focusEdge], pts[(focusEdge + 1) % n]], { stroke: P.edge.focus, width: P.line.edgeFocus });
-    // Labels, most important first: street, overridden edges (always shown), the footprint area, the other edges.
+    // Labels, most important first: street (always shown), overridden edges, the footprint area, the other edges.
+    // F5-T3a (A-15 as updated): an overridden edge's "*" label follows the normal culling; when it is culled, a "*"
+    // tick marks the edge's midpoint (the Q6 edge list stays the full reference).
     forcedLabel(v, pts[s.edge], pts[(s.edge + 1) % n], 'front', avoid);
-    for (i = 0; i < n; i++) if (ov[i] && i !== s.edge) forcedLabel(v, pts[i], pts[(i + 1) % n], s.edgeClass[i] + '*', avoid);
-    if (s.footprint) {
-      var c = v.toScreen([s.footprint.u + s.footprint.w / 2, s.footprint.v + s.footprint.d / 2]);
-      D.label(v, PC.units.fmtArea(s.footprint.area, unit), c[0], c[1], labels, { avoid: avoid });
-    }
+    for (i = 0; i < n; i++) if (ov[i] && i !== s.edge && !edgeLabel(v, pts[i], pts[(i + 1) % n], s.edgeClass[i] + '*', avoid))
+      ovTick(v, pts, i, P.edge[s.edgeClass[i]]);
+    if (s.footprint) areaLabel(v, s.footprint, PC.units.fmtArea(s.footprint.area, unit), avoid);
     D.edgeLabels(v, pts, true, function (len, k) { return k === s.edge || (ov[k] && k !== s.edge) ? null : s.edgeClass[k]; }, labels, { avoid: avoid });
     drawCompass(v, dragNorth !== null ? dragNorth : PC.frames.northL(state));
   }
@@ -7297,6 +7381,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       });
       Object.assign(PC.debug, {
         siteLabels: function () { view.drawNow(); return labels.slice(); },
+        siteTicks: function () { view.drawNow(); return ticks.slice(); },
+        siteArea: function () { view.drawNow(); return area; },
         // Edge highlighted from the Q6 edge list, or null.
         siteFocusEdge: function () { return focusEdge; },
         // North angle in L the compass arrow shows now (during a drag: the one under the finger).
@@ -7827,9 +7913,12 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     ui.$('q-stairs-box').hidden = !stairs; ui.$('q-stairs-none').hidden = stairs;
     ui.qrooms.render(s);
     ui.$('q-roof-note').hidden = !(roofNote && s.ans.usableRoof);
-    ui.$('q-pool-size-note').textContent = PC.C.SIZES.map(function (k) { var p = PC.C.POOL[k]; return k + ' ' + U.fmtDims(p.w, p.d, unit); }).join(' · ');
+    // PM round 14: "S 3 × 6 · M 4 × 8 · L 5 × 10 m" / "S 9.8 × 19.7 · M 13.1 × 26.2 · L 16.4 × 32.8 ft" (the unit once)
+    ui.$('q-pool-size-note').textContent = PC.C.SIZES.map(function (k) { var p = PC.C.POOL[k]; return k + ' ' + poolDim(p.w, unit) + ' \u00D7 ' + poolDim(p.d, unit); }).join(' · ') + ' ' + U.lenUnit(unit);
   }
 
+  // metres whole when whole (3, not 3.0), feet to one decimal (PM round 14)
+  function poolDim(m, unit) { var x = PC.units.toDisplay(m, unit); return unit === 'ft' ? x.toFixed(1) : String(Math.round(x * 10) / 10); }
   function render(s) {
     if (!F) return;
     if (!s.ans.usableRoof) roofNote = false;

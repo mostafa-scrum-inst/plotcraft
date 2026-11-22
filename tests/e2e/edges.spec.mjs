@@ -20,6 +20,7 @@ async function kit(vp) {
     hidden: (h) => hook(h).evaluate((el) => !!el.closest('[hidden]') || getComputedStyle(el).display === 'none'),
     labels: () => page.evaluate(() => PC.debug.siteLabels().map((l) => ({ text: l.text, x: l.x, y: l.y, w: l.w, h: l.h }))),
     texts: async () => (await k.labels()).map((l) => l.text),
+    ticks: () => page.evaluate(() => PC.debug.siteTicks()),
     // The tap-mode control is in the site preview of the Q-site group: after a stage change, wait until the stage
     // has settled and the control is visible (no fixed sleep; under full-run load the tap came too early, F3-T2 QA).
     mode: async (m) => {
@@ -108,7 +109,8 @@ async function tapMode(vp) {
     T.ok((await k.texts()).includes(want + '*'), `${tag} ...labelled "${want}*" (${await k.texts()})`);
     T.ok(!(await k.hidden('site-legend-mark')) || tag === '360x640', `${tag} ...legend explains the mark`);
   }
-  T.eq((await k.texts()).filter((t) => t.endsWith('*')).length, 4, `${tag} every overridden edge keeps its label, short ones too`);
+  // F5-T3a (A-15 as updated): marked labels follow the normal culling; a culled one leaves a "*" tick
+  T.eq((await k.texts()).filter((t) => t.endsWith('*')).length + (await k.ticks()).length, 4, `${tag} every overridden edge keeps its label or, when culled, a "*" tick`);
   await layoutClear(k, 'four overrides');
   T.eq((await k.state()).sampleClean, false, `${tag} an override is a real change: Skip to 3D goes`);
   for (const i of [1, 2, 3, 4]) await k.tapEdge(i);
@@ -162,7 +164,8 @@ async function keyboardList(vp) {
   T.eq([await k.ov(), await focused(), await page.evaluate(() => PC.debug.siteFocusEdge())], [{ 1: 'back' }, 'Edge 2, 30.0 m, back (set by you): make side', 1], `${tag} Enter switches it; focus stays on the same switch`);
   await page.keyboard.press('Tab'); await page.keyboard.press('Tab'); await page.keyboard.press(' '); await settled(page);
   T.eq([await k.ov(), await focused(), await page.evaluate(() => PC.debug.siteFocusEdge())], [{ 1: 'back', 3: 'side' }, 'Edge 4, 8.9 m, side (set by you): make back', 3], `${tag} Space switches the 8.9 m angled edge`);
-  T.ok((await k.texts()).includes('side*') && (await k.texts()).includes('back*'), `${tag} drawing labels follow (${await k.texts()})`);
+  const tk = (await k.ticks()).map((t) => t.edge), tx = await k.texts();
+  T.ok((tx.includes('side*') || tk.includes(3)) && (tx.includes('back*') || tk.includes(1)), `${tag} drawing marks follow: labels or ticks (${tx}; ticks ${tk})`);
   await k.tapEl(page.locator('label:has(> [data-pc="unit-ft"])')); await settled(page);
   T.eq([await k.ov(), await page.evaluate(() => document.querySelectorAll('[data-pc="edge-switch"]')[3].getAttribute('aria-label'))], [{ 1: 'back', 3: 'side' }, 'Edge 4, 29.3 ft, side (set by you): make back'], `${tag} unit switch keeps overrides; names in ft`);
   await hook('q-north-reset').focus(); await settled(page);
@@ -246,7 +249,7 @@ async function clearing(vp) {
   T.eq([(await k.state()).ans.edgeOv, await k.toasts()], [{ 3: 'side' }, []], `${tag} reload + Resume: overrides restored exactly, no notice`);
   T.eq(await k.state(), saved, `${tag} ...the whole state`);
   T.eq((await k.state()).stage, 2, `${tag} ...resumed on stage 2`);
-  T.ok((await k.texts()).includes('side*'), `${tag} ...and labelled`);
+  T.ok((await k.texts()).includes('side*') || (await k.ticks()).some((t) => t.edge === 3), `${tag} ...and marked (label or tick)`);
   await page.evaluate(() => PC.ui.autosave.flush());
   await page.reload(); await k.noToasts(); await k.act('btn-startnew'); await k.act('dialog-ok'); await settled(page);
   T.eq([await k.ov(), await k.toasts()], [{}, []], `${tag} Start new: none left, no notice`);
@@ -295,11 +298,53 @@ async function scaleAndLabels(vp) {
       const p = L[a], q = L[b];
       if (p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h) over.push(p.text + ' / ' + q.text);
     }
-    T.ok(texts.includes('front') && texts.filter((t) => t.endsWith('*')).length === 4, `${tag} ${m} mode: "front" and four marked labels (${texts})`);
+    // F5-T3a (A-15 as updated): a marked label follows the normal culling; a culled one leaves a "*" tick
+    const ticks = await page.evaluate(() => PC.debug.siteTicks().length);
+    T.ok(texts.includes('front') && texts.filter((t) => t.endsWith('*')).length + ticks === 4, `${tag} ${m} mode: "front"; four overridden edges marked by a label or a tick (${texts}; ${ticks} ticks)`);
     T.none(over, `${tag} ${m} mode: no two labels overlap`);
     await layoutClear(k, `${m} mode, four overrides`);
   }
+  if (tag === '360x640') await staircase(k);
   await k.end('scale and labels');
+}
+
+// F5-T3a (Designer spec, A-15 as updated) at 360x640 in scaleAndLabels' page: the 12-vertex staircase with every
+// non-street edge overridden: no two labels overlap, "front" is always labelled, every overridden edge has its "*"
+// label or a tick (6 px, on the inner side, at the midpoint); the footprint area label in the lighter style, on two
+// lines or outside on the street side when the footprint is narrow; the Parking / Pool legend entries follow the drawing.
+async function staircase(k) {
+  const { page, tag } = k;
+  await page.evaluate((pts) => PC.store.commit((s) => { s.plot = { pts, closed: true }; s.ans.streetEdge = 0; s.ans.edgeOv = {}; }), TWELVE); await settled(page);
+  await page.evaluate(() => PC.store.commit((s) => { const a = PC.debug.site().edgeAuto; for (let i = 1; i < a.length; i++) s.ans.edgeOv[i] = a[i] === 'side' ? 'back' : 'side'; })); await settled(page);
+  for (const m of ['street', 'class']) {
+    await k.mode(m);
+    const r = await page.evaluate(() => {
+      const L = PC.debug.siteLabels(), t = PC.debug.siteTicks(), s = PC.debug.site(), over = [];
+      for (let a = 0; a < L.length; a++) for (let b = a + 1; b < L.length; b++) { const p = L[a], q = L[b]; if (p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h) over.push(p.text + ' / ' + q.text); }
+      const c = document.querySelector('[data-pc="site-canvas"]').getBoundingClientRect(), P = s.ptsL.map((q) => { const v = PC.debug.toScreen('site', q[0], q[1]); return [v[0] - c.left, v[1] - c.top]; });
+      const inside = (x, y) => { let k = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) if ((P[i][1] > y) !== (P[j][1] > y) && x < (P[j][0] - P[i][0]) * (y - P[i][1]) / (P[j][1] - P[i][1]) + P[i][0]) k = !k; return k; };
+      return { over, marked: L.filter((l) => l.text.endsWith('*')).length, ticks: t.length, front: L.some((l) => l.text === 'front'), inner: t.every((x) => inside(x.x + x.dx * 4, x.y + x.dy * 4)), n: P.length };
+    });
+    T.none(r.over, `${tag} staircase, ${m} mode: no two labels overlap`);
+    T.ok(r.front && r.marked + r.ticks === r.n - 1 && r.inner, `${tag} staircase, ${m} mode: "front"; ${r.marked} "*" labels + ${r.ticks} ticks = ${r.n - 1} overridden edges; ticks on the inner side`);
+  }
+  // the area label: lighter style; a narrow footprint takes two lines or the street side
+  await page.evaluate(() => PC.store.commit((s) => { s.plot = { pts: [[0, 0], [9, 0], [9, 40], [0, 40]], closed: true }; s.ans.streetEdge = 0; s.ans.edgeOv = {}; })); await settled(page);
+  const a = await page.evaluate(() => { const r = PC.debug.siteArea(), f = PC.debug.site().footprint; return { r, fp: f && [f.u, f.v, f.w, f.d], fpw: f ? Math.abs(PC.debug.toScreen('site', f.u + f.w, 0)[0] - PC.debug.toScreen('site', f.u, 0)[0]) : 0 }; });
+  T.ok(a.r && (a.r.mode === 'two' || a.r.mode === 'outside') && (a.r.mode !== 'two' || /^\d+$/.test(a.r.lines[0]) && a.r.lines[1] === 'm²'), `${tag} narrow footprint (${a.fpw.toFixed(0)} px wide): area label ${JSON.stringify(a.r)}`);
+  T.ok(await page.evaluate(() => PC.data.palette2d.font.area.startsWith('500 12px ') && PC.data.palette2d.label.area === '#46535F'), `${tag} area label style keys (500 12px, #46535F)`);
+  // legend entries follow the drawing
+  const leg = () => page.evaluate(() => ['site-legend-parking', 'site-legend-pool'].map((h) => document.querySelector(`[data-pc="${h}"]`).hidden));
+  await page.evaluate(() => PC.store.commit((s) => { s.plot = PC.sample.state().plot; s.ans.streetEdge = PC.sample.state().ans.streetEdge; s.ans.pool = { on: false, size: 'M' }; s.ans.parking = { cars: 0, covered: false }; })); await settled(page);
+  const off = await leg();
+  await page.evaluate(() => PC.store.commit((s) => { s.ans.pool = { on: true, size: 'S' }; s.ans.parking = { cars: 1, covered: false }; })); await settled(page);
+  const on = await leg(), drawn = await page.evaluate(() => { const s = PC.debug.site(); return [!!s.parking, !!s.pool]; });
+  T.eq([off, on], [[true, true], [!drawn[0], !drawn[1]]], `${tag} Parking / Pool legend entries hidden without them, shown when drawn (${drawn})`);
+  // the pool-size note (PM round 14)
+  const note = () => page.evaluate(() => document.querySelector('[data-pc="q-pool-size-note"]').textContent);
+  const m = await note(); await page.evaluate(() => PC.store.commit((s) => { s.ans.unit = 'ft'; })); await settled(page); const ft = await note();
+  await page.evaluate(() => PC.store.commit((s) => { s.ans.unit = 'm'; })); await settled(page);
+  T.eq([m, ft], ['S 3 \u00D7 6 · M 4 \u00D7 8 · L 5 \u00D7 10 m', 'S 9.8 \u00D7 19.7 · M 13.1 \u00D7 26.2 · L 16.4 \u00D7 32.8 ft'], `${tag} pool-size note in the PM format`);
 }
 
 async function badDraft(vp) {

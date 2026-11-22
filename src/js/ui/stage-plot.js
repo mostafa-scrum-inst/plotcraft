@@ -88,7 +88,7 @@
     // The area label goes first (it has the best spot), then the edge lengths around it.
     if (closed) {
       var sc = v.toScreen(PC.geom.innerPoint(pts));
-      D.label(v, PC.units.fmtArea(Math.abs(PC.geom.area(pts)), u), sc[0], sc[1], labels, opt);
+      D.label(v, PC.units.fmtArea(Math.abs(PC.geom.area(pts)), u), sc[0], sc[1], labels, Object.assign({}, opt, { font: P.font.area, color: P.label.area }));   // F5-T3a: lighter area label
     }
     if (live) D.edgeLabels(v, live, false, fmt, labels, { color: P.plot.live, avoid: opt.avoid });
     D.edgeLabels(v, pts, closed, fmt, labels, opt);
