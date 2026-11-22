@@ -243,7 +243,7 @@ All textures are greyscale, tile at real scale through world UVs (C-3.5), and ar
 - **E1. Trees (F+L).**
   - **Trunk:** tapered (rTop 0.6 × rBottom), 6 segments, a slight lean ±4° per instance, in `#5B4636` retuned.
   - **Canopy:** 3 icosahedron lumps instead of one cone. IcosahedronGeometry(1, 1) has 80 triangles, so 3 lumps are 240 triangles, merged into one canopy geometry, instanced.
-    - Lump layout at unit scale: centre (0, 2.9, 0) r 1.2; (0.55, 2.3, 0.2) r 0.9; (−0.5, 2.4, −0.3) r 0.85.
+    - Lump layout at unit scale (refit for Q-D2 so it stays inside canopyR 1.35 radially and between canopyY0 1.4 and canopyY0 + canopyH 4.2): centre (0, 2.95, 0) r 1.2 (top 4.15); (0.45, 2.35, 0.15) r 0.85 (radial 1.32, bottom 1.50); (−0.40, 2.45, −0.25) r 0.80 (radial 1.27). canopyR is unchanged, so there is no re-scatter.
     - Flat shading.
   - **Second form, "cypress":** one tall cone r 0.55, h 3.6 (instanced separately, +1 mesh), chosen for every 4th tree near a boundary wall. It gives the Gulf-garden vocabulary (date palm is out of scope: too many triangles for its value).
   - **Colour variation:** per instance through `setColorAt` (C-2), as `material.color` × instance colour in [0.88, 1.08] value with a ±4° hue shift, seeded from the scatter. Seasons still set `material.color` (C-3.3).
@@ -343,3 +343,25 @@ The MVP is items 1–7 below, all F+L unless stated. In my estimate they remove 
 
 - **The lite tier exists for this:** a data switch, C-4.7.
 - If the phone check stalls, switch phones to lite first, then lower `maxDprCoarse` to 1.5.
+
+## 8. Answers to the FS plan questions (2026-11-22)
+
+- **Q-D1, windows as proud decals in the roof batch: accepted for the MVP.**
+  - Glass sits 0.01 m out, frame bars 0.05 m out, and the sill 0.08 m out × 0.04 m thick. The proud frame and sill cast the shadow line, which is what gives a window depth in the shots.
+  - Add a 0.06 m **reveal band** inside the frame: a quad ring in `frame` darkened 35 %, at 0.02 m. It fakes the reveal depth.
+  - Windows show only in exterior mode. That fits A1, since the cut-away walls are under the sill height anyway.
+  - The fallback (splitting the upper band) is needed only if the after-shots show z-fighting, or flat glass at grazing angles at 360x640.
+- **Q-D2, tree lumps: refitted** (§3.E1). `canopyR` and `canopyH` are unchanged, so the scatter, the tour eye floor and `fitShadow` are unaffected.
+- **Q-D3, door leaf: a new `door` key per exterior.** The leaf reads as the door; the frame keeps `frame`. Input hexes, retuned under ACES to these reads (±6):
+
+  | Q10 exterior | `door` |
+  |---|---|
+  | sand | `#6B4A32` (wood) |
+  | white | `#4E5A63` |
+  | terracotta | `#4A3426` |
+  | grey | `#2E3439` |
+
+- **TL retune rules, noted:**
+  - The fog and the sky dome are raw, unlit and not tone-mapped, so the §3.D1 table holds read values directly, and the fog colour equals the horizon hex.
+  - Everything else is retuned under ACES.
+  - The highlight stays `#C2410C` at all hours.
