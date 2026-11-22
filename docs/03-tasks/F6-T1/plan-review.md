@@ -173,3 +173,10 @@ If the runs are still over: QA measures f1-t1-layout 640x360 next, and any furth
   - the fog-near and dome-clip tests run at the narrowest aspect;
   - the Designer signs off portrait and phone Reset shots.
 - **Winter meadow stays green:** T1b, data only, with the fog and seam tests green.
+- **The PM approved it (round 16):** it goes in T1b's first commit.
+  - **Angle:** the largest up to 62° that passes the PM's checks at 360x640, 640x360 and 1280x800 (sample, Roof on). The Designer picks it from the shots.
+  - **PM checks:**
+    - the whole plot stays in frame (F4-S2);
+    - the house front reads clearly;
+    - the garden seating stays at least partly visible.
+  - **Also:** the tour overview follows Reset, and there are no story text changes.
