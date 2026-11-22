@@ -8,7 +8,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
-import { launch, open, suite, VIEWPORTS } from '../helpers/browser.mjs';
+import { launch, open, suite, VIEWPORTS, LANDSCAPE } from '../helpers/browser.mjs';
 import { ROOT, loadCore } from '../helpers/load.mjs';
 import { maxHouse } from '../helpers/houses.mjs';
 import { projectPx } from '../helpers/project.mjs';
@@ -383,6 +383,29 @@ async function liteSmoke(vp) {
   await o.ctx.close();
 }
 
+// F6-T1b (resetPhi 62, TL conditions): the Reset pose frames the whole plot, sample, Roof on, real r128, with the view
+// panel collapsed, at 360x640, 640x360 and 1280x800: every plot corner projects inside the canvas, and the pose is
+// the A-12 reset (phi = PC.C.CAM.resetPhi). Not asserted: the phone with the dock open (its near edge is cut by about
+// 1 px, a known limit until occl.bottom counts, T3b; impl-notes).
+async function resetFrame(vp) {
+  const tag = `${vp.tag} reset fit`, o = await open(browser, vp, { three: 'real', dpr: 1 }), { page, act, problems } = o;
+  await act('btn-sample'); await act('btn-skip3d');
+  await ready(page);
+  await act('v3-panel-toggle');
+  await page.waitForFunction(() => document.querySelector('[data-pc="v3-panel"]').classList.contains('is-collapsed'), null, { timeout: 5000 });
+  // the Reset button sits in the collapsed body: its action (PC.view3d.resetView) with the panel collapsed
+  await page.evaluate(() => PC.view3d.resetView());
+  await page.waitForFunction(() => !PC.view3d.flying() && !PC.debug.scene().frame, null, { timeout: 15000 });
+  const r = await page.evaluate(() => {
+    const i = PC.debug.scene(), cam = i.camera, h = PC.debug.house(), cr = document.querySelector('[data-pc="v3-canvas"]').getBoundingClientRect();
+    const pts = h.plot.pts.map((q) => { const v = new THREE.Vector3(q[0] - h.center[0], 0, -(q[1] - h.center[1])).project(cam); return [(v.x + 1) / 2 * cr.width, (1 - v.y) / 2 * cr.height]; });
+    return { roof: i.roof, phi: PC.view3d.pose().phi, want: PC.C.CAM.resetPhi * Math.PI / 180, margin: Math.min(...pts.map((q) => Math.min(q[0], cr.width - q[0], q[1], cr.height - q[1]))), W: cr.width, H: cr.height };
+  });
+  T.ok(r.roof && Math.abs(r.phi - r.want) < 1e-9 && r.margin >= 0, `${tag}: Roof on, phi ${(r.phi * 180 / Math.PI).toFixed(1)} deg = resetPhi, every plot corner inside the ${r.W} x ${r.H} canvas (margin ${r.margin.toFixed(0)} px, panel collapsed)`);
+  T.none(problems(), `${tag}: no page errors, console errors or THREE. warnings`);
+  await o.ctx.close();
+}
+
 // The mock side of the conformance check, in node.
 function mockSide() {
   const ctx = vm.createContext({});
@@ -438,5 +461,6 @@ try {
     await ctx.close();
   }
   await Promise.all([scene(VIEWPORTS[0], 3), scene(VIEWPORTS[2], 1), liteSmoke(VIEWPORTS[0])]);
+  for (const vp of [VIEWPORTS[0], LANDSCAPE, VIEWPORTS[2]]) await resetFrame(vp);
 } finally { await browser.close(); }
 process.exit(T.done() ? 1 : 0);

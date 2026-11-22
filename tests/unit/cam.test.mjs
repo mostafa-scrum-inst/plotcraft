@@ -43,7 +43,7 @@ test('reset: aspect-aware radius frames the plot circle in both half-angles; nev
     assert.ok(p.radius * Math.sin(Math.min(hv, hh)) >= h.radius - 1e-9, `fits at aspect ${aspect}`);
     assert.ok(p.radius >= 2.2 * h.radius - 1e-9);
     assert.deepEqual(C.clamp(p, L), C.copy(p), 'reset pose is never clamped');
-    assert.deepEqual(plain([p.target, p.theta, p.phi]), [[0, 0, 0], 30 * D, 50 * D]);
+    assert.deepEqual(plain([p.target, p.theta, p.phi]), [[0, 0, 0], 30 * D, 62 * D]);   // F6-T1b: resetPhi 62 (PM round 16, Designer d4dda7a, TL)
   }
   // landscape on a wide aspect falls back to 2.2 R when that already fits
   const wide = C.reset(sample, 3);
