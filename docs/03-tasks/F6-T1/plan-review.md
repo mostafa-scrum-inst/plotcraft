@@ -153,3 +153,10 @@ If the runs are still over: QA measures f1-t1-layout 640x360 next, and any furth
 - A mutation that drops the level trigger must fail a test.
 - On real r128: hide the upper levels, and the ground pixel under the upper storey changes.
 - No change to cto-constraints.md is needed.
+
+## Addendum: C-4.8 build-time check (TL, T1a)
+- The switch on load average is dropped.
+- The default run keeps a regression guard: best of 3 builds of the max house ≤ 800 ms, every time.
+- The C-4.8 check itself (best of 3 ≤ 400 ms) runs as a solo step under QA_FULL=1, the release gate.
+- Measured: 324–390 ms solo; 590–720 ms inside a loaded run.
+- The budget is unchanged. The CTO was informed.
