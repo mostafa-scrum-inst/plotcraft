@@ -1,7 +1,16 @@
 # PlotCraft — Product goals and user stories (prototype)
 
-Owner: PM. Source: `docs/00-brief.md`. Status: approved by the CTO (round 2); round 3 edits made at the F1 feature review; round 4 edits apply the client's binding decisions `docs/01-product/client-decisions.md` (CD-1 to CD-3); round 5 edits made at the F2 feature review; rounds 6 and 7 fix user-facing texts at the F3-T2 and F3-T3 plan reviews; round 8 edits made at the F3 feature review; round 9 fixes the stage-5 level selector labels at the F4-T1 plan review; round 10 applies CD-4 / CD-5 and answers the F4-T2 plan questions; round 11 records the default-camera decision and the vegetation-shortfall warning at the F4-T3 start; round 12 fixes the room-finder caption and dropdown state at the F5-T1 plan.
+Owner: PM. Source: `docs/00-brief.md`. Status: approved by the CTO (round 2); round 3 edits made at the F1 feature review; round 4 edits apply the client's binding decisions `docs/01-product/client-decisions.md` (CD-1 to CD-3); round 5 edits made at the F2 feature review; rounds 6 and 7 fix user-facing texts at the F3-T2 and F3-T3 plan reviews; round 8 edits made at the F3 feature review; round 9 fixes the stage-5 level selector labels at the F4-T1 plan review; round 10 applies CD-4 / CD-5 and answers the F4-T2 plan questions; round 11 records the default-camera decision and the vegetation-shortfall warning at the F4-T3 start; round 12 fixes the room-finder caption and dropdown state at the F5-T1 plan; round 13 answers the F5-T2 tour questions.
 This document says **what** and **how we know it works**. How it is built is the Tech Lead's call.
+
+## Changes in round 13 (2026-11-22, F5-T2 plan: drone-tour caption, highlight, end state, speed; no story IDs changed)
+
+| Item | Decision |
+|---|---|
+| Q10 caption at overview stops | **"Overview"**, as FS proposed. The caption stays shown, so Pause and Stop stay reachable. Room stops use the round-12 format ("Bedroom 2 · First floor"). |
+| Q11 highlight during the tour | **Yes**, as FS proposed: the current room gets the same orange highlight as the room finder; there is none at overview stops. |
+| Q12 after Stop or a gesture | **Confirmed as FS proposed.** The camera, level selector and Roof stay as they are (F5-S2 "leaves the camera where it is"); the caption and highlight are cleared, and the room finder shows "Go to room…". The level selector visibly shows where the tour stopped, so there is no automatic return to "All"; Reset view or "All" is one tap. |
+| Q13 speed | **Session state**, as FS proposed: default Normal, kept between tours and stage visits within the session, not saved in the draft (a reload gives Normal again). |
 
 ## Changes in round 12 (2026-11-21, F5-T1 plan: room-finder caption and dropdown state; no story IDs changed)
 
@@ -498,8 +507,8 @@ Draw the land as a polygon with live measurements; includes the stage navigation
 
 **F5-S2 Take the drone tour.** As an architect, I want an automatic drone-style flight through the house so that I can present it hands-free.
 - "Start tour" switches the roof off and flies the camera along one continuous smooth curved path (no sharp turns or stop-and-snap) that begins with an exterior overview and then visits **every** room, level by level from the lowest (basement first if present) up, ending back at the overview.
-- During the tour the current room's name is shown and levels above the current room are hidden so the room is visible; the camera never passes below ground level.
-- Controls: Pause/Resume, Stop, and speed (slow / normal / fast). Stop, or any manual camera gesture, ends the tour and leaves the camera where it is under user control.
+- During the tour the current room's name and level are shown ("Bedroom 2 · First floor"; "Overview" at the overview stops) and the room is highlighted, and levels above the current room are hidden so the room is visible; the camera never passes below ground level (round 13).
+- Controls: Pause/Resume, Stop, and speed (slow / normal / fast). Stop, or any manual camera gesture, ends the tour and leaves the camera, level and Roof where they are, under user control; the caption and highlight are cleared. The speed is kept for the session (default Normal; round 13).
 - Time of day and season can be changed during the tour without interrupting it.
 - Works with a single room and with the maximum house (4 plan levels x 10 rooms, CD-4); a normal-speed tour of the sample project lasts 30–90 s.
 - Leaving the 3D stage stops the tour; coming back does not auto-restart it.
