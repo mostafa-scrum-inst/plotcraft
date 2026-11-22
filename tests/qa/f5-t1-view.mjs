@@ -41,7 +41,7 @@ const cut = (a, n = 8) => a.slice(0, n).concat(a.length > n ? [`... ${a.length} 
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 // rAF counter + a per-frame pose recorder (window.__rec while window.__recOn)
 const REC = () => { const raf = window.requestAnimationFrame.bind(window); window.__raf = 0; window.__rec = []; window.__recOn = false;
-  window.requestAnimationFrame = (cb) => { window.__raf++; return raf((ts) => { cb(ts); if (window.__recOn && window.PC && PC.view3d && PC.view3d.pose) window.__rec.push([ts, PC.view3d.pose(), PC.view3d.flying ? PC.view3d.flying() : null]); }); }; };
+  window.requestAnimationFrame = (cb) => { window.__raf++; return raf((ts) => { cb(ts); if (window.__recOn && window.PC && PC.view3d && PC.view3d.pose) { const fl = PC.debug && PC.debug.scene ? PC.debug.scene().flight : null; window.__rec.push([ts, PC.view3d.pose(), PC.view3d.flying ? PC.view3d.flying() : null, fl ? fl.t : null]); } }); }; };
 const READY = () => { const i = PC.debug.scene(), q = (h) => document.querySelector(`[data-pc="${h}"]`); return (i.active && !i.building && i.builds > 0 && q('v3-building').hidden && !i.frame && !i.dirty) || !q('v3-unavailable').hidden; };
 async function ready(S, ms = 8000) { const ok = await S.until(() => S.page.evaluate(READY), ms); await S.settle(); return ok; }
 const landed = (S) => S.until(() => S.page.evaluate(() => !PC.view3d.flying() && !PC.debug.scene().frame && !PC.debug.scene().dirty), 5000);
@@ -116,6 +116,7 @@ function selectedProblems(st, h, id, tag, before = null) {
 const clearedProblems = (st, tag) => { const f = []; if (st.caption !== null) f.push(`${tag}: caption "${st.caption}" still shown`); if (st.value !== '') f.push(`${tag}: select "${st.value}"`); if (st.hl && st.hl.visible) f.push(`${tag}: highlight still shown`); return f; };
 
 const browser = await launch();
+const PXDIFF = ([a, b]) => Promise.all([a, b].map((s) => new Promise((res) => { const im = new Image(); im.onload = () => { const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const x = c.getContext('2d'); x.drawImage(im, 0, 0); res(x.getImageData(0, 0, im.width, im.height).data); }; im.src = 'data:image/png;base64,' + s; }))).then(([p, q]) => { let n = 0; for (let k = 0; k < p.length; k += 4) if (Math.abs(p[k] - q[k]) + Math.abs(p[k + 1] - q[k + 1]) + Math.abs(p[k + 2] - q[k + 2]) > 30) n++; return n; });
 const OBS = [], LAP = []; let lapT = Date.now(); const lap = (n) => { const t = Date.now(); LAP.push(`${n} ${((t - lapT) / 1000).toFixed(1)}`); lapT = t; };
 const MAXMUT = "s.plot.pts = [[0, 0], [60, 0], [60, 50], [0, 50]]; s.ans.streetEdge = 0; s.ans.footprintPct = 40; s.ans.floors = 3; s.ans.basement = true; s.ans.lift = true; s.ans.usableRoof = true; s.ans.roofType = 'terrace'; s.ans.pool = { on: true, size: 'L' }; s.ans.parking = { cars: 4, covered: true }; s.ans.extras = { wall: true, gate: 'right', seating: true }; s.ans.pairs = []; s.ans.rooms = []; let n = 1; for (const l of ['B', 'G', '1', '2']) for (const ty of ['bedroom', 'bathroom', 'kitchen', 'living', 'dining', 'majlis', 'office', 'maid', 'storage', 'laundry']) s.ans.rooms.push({ id: 'r' + n++, type: ty, level: l, size: 'S', area: null, master: false }); s.ans.nextRoomId = n;";
 
@@ -135,6 +136,7 @@ await guard('A 1280x800', async () => {
   await S.shot('A-select');
   lap('load');
   // 1. keyboard pick (ground floor)
+  await S.page.evaluate(() => PC.debug.scene().renderNow()); const geomsNone = (await S.page.evaluate(STATE)).geoms;
   const g = [], L0 = await S.page.evaluate(LIGHTS), first = groups[0].rooms[0].id, cur0 = await S.page.evaluate(() => PC.view3d.pose());
   await S.page.focus('[data-pc="v3-room"]'); await S.page.evaluate(() => { window.__rec = []; window.__recOn = true; }); await S.page.keyboard.press('ArrowDown'); await landed(S);
   let rec = await recStop(S), st = await S.page.evaluate(STATE);
@@ -156,7 +158,7 @@ await guard('A 1280x800', async () => {
   const shot = async () => (await S.page.locator('[data-pc="v3-canvas"]').screenshot()).toString('base64');
   const on = await shot(); await S.page.evaluate(() => { PC.debug.scene().world.getObjectByName('highlight').visible = false; PC.debug.scene().renderNow(); }); await S.settle(); const off = await shot();
   await S.page.evaluate(() => { PC.debug.scene().world.getObjectByName('highlight').visible = true; PC.debug.scene().renderNow(); }); await S.settle();
-  const nd = await S.page.evaluate(([a, b]) => Promise.all([a, b].map((s) => new Promise((res) => { const im = new Image(); im.onload = () => { const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const x = c.getContext('2d'); x.drawImage(im, 0, 0); res(x.getImageData(0, 0, im.width, im.height).data); }; im.src = 'data:image/png;base64,' + s; }))).then(([p, q]) => { let n = 0; for (let k = 0; k < p.length; k += 4) if (Math.abs(p[k] - q[k]) + Math.abs(p[k + 1] - q[k + 1]) + Math.abs(p[k + 2] - q[k + 2]) > 30) n++; return n; }), [on, off]);
+  const nd = await S.page.evaluate(PXDIFF, [on, off]);
   if (nd < 30) p.push(`the highlight changes only ${nd} px of the frame`);
   await S.shot('A-highlight');
   lap('first');
@@ -185,19 +187,34 @@ await guard('A 1280x800', async () => {
     await chooseIn(S, id); await S.page.waitForTimeout(250); await act(); const a = await S.page.evaluate(() => ({ p: PC.view3d.pose(), f: PC.view3d.flying() }));
     await S.page.waitForTimeout(150); const b = await S.page.evaluate(() => PC.view3d.pose()); if (name === 'mouse down') await S.page.mouse.up();
     if (a.f) cc.push(`${name}: still flying`); if (F.poseDist(a.p, b) > 1e-9) cc.push(`${name}: the pose kept moving`); }
+  // Tab on the focused canvas does not cancel; a hidden tab mid-flight stops the frames and resumes with one capped step
+  await chooseIn(S, groups[1].rooms[1].id); await S.page.waitForTimeout(250); await S.page.focus('[data-pc="v3-canvas"]'); await S.page.keyboard.press('Tab');
+  if (!(await S.page.evaluate(() => PC.view3d.flying()))) cc.push('Tab on the focused canvas cancelled the flight');
+  const hid = await S.page.evaluate(async () => { const t0 = PC.debug.scene().flight && PC.debug.scene().flight.t, set = (v) => { Object.defineProperty(document, 'visibilityState', { value: v, configurable: true }); Object.defineProperty(document, 'hidden', { value: v === 'hidden', configurable: true }); document.dispatchEvent(new Event('visibilitychange')); };
+    set('hidden'); const tHide = PC.debug.scene().flight && PC.debug.scene().flight.t, r0 = window.__rec.length; await new Promise((r) => setTimeout(r, 600)); const during = window.__rec.slice(r0).filter((e) => e[3] !== null && e[3] !== tHide).length;
+    const tBack = PC.debug.scene().flight && PC.debug.scene().flight.t; const r1 = window.__rec.length; set('visible'); await new Promise((r) => setTimeout(r, 400)); delete document.visibilityState; delete document.hidden;
+    const after = window.__rec.slice(r1).filter((e) => e[3] !== null); return { t0, tHide, tBack, during, first: after.length ? after[0][3] : null, flying: PC.view3d.flying(), dt: PC.C.CAM.dtMax }; });
+  if (hid.during || hid.tBack !== hid.tHide) cc.push(`hidden tab: the flight advanced while hidden (${hid.tHide} -> ${hid.tBack}, ${hid.during} frames)`);
+  else if (hid.first === null) { if (!hid.flying && !(await S.page.evaluate(() => PC.view3d.flying()))) {} else cc.push('hidden tab: no frame after the tab came back'); }
+  else if (Math.abs(hid.first - hid.tBack - hid.dt) > 1e-6) cc.push(`hidden tab: the first step after return is ${(hid.first - hid.tBack).toFixed(1)} ms (one ${hid.dt} ms capped step expected)`);
+  await landed(S); await recStop(S);
+  // pan (right drag) keeps the selection
+  await S.page.mouse.move(...box); await S.page.mouse.down({ button: 'right' }); await S.page.mouse.move(box[0] + 40, box[1] + 30, { steps: 4 }); await S.page.mouse.up({ button: 'right' }); await S.settle(); s2 = await S.page.evaluate(STATE);
+  if (s2.caption === null || s2.value === '') cc.push('a pan drag cleared the selection');
   await recStop(S);
   await S.page.mouse.move(...box); await S.page.mouse.down(); await S.page.mouse.move(box[0] + 80, box[1], { steps: 4 }); await S.page.mouse.up(); await S.settle(); s2 = await S.page.evaluate(STATE);
   if (s2.caption === null || s2.value === '') cc.push('an orbit drag cleared the selection');
-  R.check(`${T}: wheel, mouse down and an arrow key mid-flight cancel at once (wheel: interpolated radius x ${k.toFixed(4)}, target kept, no snap); the pose then stays; zoom and orbit keep the selection`, cc);
+  R.check(`${T}: wheel, mouse down and an arrow key mid-flight cancel at once (wheel: interpolated radius x ${k.toFixed(4)}, target kept, no snap); the pose then stays; Tab does not cancel; a hidden tab mid-flight resumes with one ${PC.C.CAM.dtMax || 100} ms step; zoom, pan and orbit keep the selection`, cc);
   lap('cancel');
   // 5. clearing (each from a fresh pick, flight still running)
   const cl = [], someRoom = groups[0].rooms[2].id;
   await viewTab(S);
   for (const [name, act] of [['"All"', () => S.act(pick('all'))], ['another level', () => S.act(pick(groups[1].level))], ['Reset view', () => S.act('v3-reset')],
-    ['"Go to room…"', () => S.page.selectOption('[data-pc="v3-room"]', '')], ['a rebuild (Q10 while open)', async () => { await S.page.evaluate(() => PC.store.commit((s) => { s.ans.exterior = s.ans.exterior === 'sand' ? 'terracotta' : 'sand'; })); await ready(S); }],
+    ['"Go to room…"', () => S.page.selectOption('[data-pc="v3-room"]', '')], ['a rebuild (Q18 while open)', async () => { const b0 = (await S.page.evaluate(STATE)).builds; await S.page.evaluate(() => PC.store.commit((s) => { s.ans.interior.style = s.ans.interior.style === 'modern' ? 'classic' : 'modern'; })); await S.until(() => S.page.evaluate((b) => PC.debug.scene().builds > b, b0), 5000); await ready(S); if ((await S.page.evaluate(STATE)).builds <= b0) cl.push('Q18: no rebuild'); }],
     ['a context restore', async () => { const b0 = (await S.page.evaluate(STATE)).builds; await S.page.evaluate(() => { const gl = PC.debug.scene().renderer.getContext(); window.__lc = gl.getExtension('WEBGL_lose_context'); window.__lc.loseContext(); }); await S.until(() => S.page.evaluate(() => PC.debug.scene().lost), 3000); await S.page.evaluate(() => window.__lc.restoreContext()); await S.until(() => S.page.evaluate((b) => PC.debug.scene().builds > b, b0), 5000); await ready(S); }]]) {
     await chooseIn(S, someRoom); await S.settle(); const a = await S.page.evaluate(STATE); if (a.caption === null) { cl.push(`${name}: setup pick not shown`); continue; }
     await act(); await S.settle(); const b = await S.page.evaluate(STATE); cl.push(...clearedProblems(b, name));
+    if (name === '"Go to room…"') { await S.page.evaluate(() => PC.debug.scene().renderNow()); const gg = (await S.page.evaluate(STATE)).geoms; if (gg !== geomsNone) cl.push(`"Go to room…": renderer geometries ${gg}, ${geomsNone} with no selection (the cleared highlight not disposed)`); }
     if (/Reset|rebuild|restore/.test(name) && b.flying) cl.push(`${name}: still flying`);
     lap(name); }
   await recStop(S);
@@ -206,7 +223,7 @@ await guard('A 1280x800', async () => {
   await chooseIn(S, someRoom); await S.page.waitForTimeout(300); await S.page.evaluate(() => PC.store.go(4)); await S.settle(); const p4 = await S.page.evaluate(() => PC.view3d.pose());
   await S.page.evaluate(() => PC.store.go(5)); await ready(S); await S.page.waitForTimeout(300); const p5 = await S.page.evaluate(() => ({ p: PC.view3d.pose(), f: PC.view3d.flying() })); await recStop(S);
   if (p5.f || F.poseDist(p4, p5.p) > 1e-6) cl.push(`leaving stage 5 mid-flight: flying ${p5.f} on return, pose moved ${F.poseDist(p4, p5.p).toFixed(3)} m`);
-  R.check(`${T}: "All", another level, Reset view, "Go to room…" (Roof on: check 2), a rebuild and a context restore each clear the highlight, the caption and the select (Reset / rebuild / restore also stop the flight); leaving stage 5 mid-flight stops the flight for good`, cut(cl));
+  R.check(`${T}: "All", another level, Reset view, "Go to room…" (Roof on: check 2), a Q18 rebuild and a context restore each clear the highlight (disposed: geometry count back to the no-selection count), the caption and the select (Reset / rebuild / restore also stop the flight); leaving stage 5 mid-flight stops the flight for good`, cut(cl));
   lap('leave');
   // 6. the maximum house in the same page: 40 rooms, a basement pick (landed), a second-floor pick, mesh budget
   const T2 = 'A 1280x800 maximum house', m = [];
@@ -218,26 +235,44 @@ await guard('A 1280x800', async () => {
   if (Math.abs(st.pose.phi - 15 * F.D2R) > 1e-6) m.push(`${bm.name}: basement phi ${(st.pose.phi / F.D2R).toFixed(2)} deg`);
   if (!F.pitCrossing(hm, st.pose).ok) m.push(`${bm.name}: the eye line meets ground level outside the footprint`);
   if (st.meshes !== m0 + 1 || st.meshes > 40) m.push(`${bm.name}: ${st.meshes} meshes (${m0} + 1 highlight, <= 40)`);
+  if (st.meshes !== 22) m.push(`${bm.name}: ${st.meshes} meshes with a room selected (22 by the TL count)`);
+  const above = await S.page.evaluate(() => { const w = PC.debug.scene().world, o = []; w.traverse((n) => { if (/^level-?(G|1|2)$/i.test(n.name) || (n.userData && ['G', '1', '2'].includes(n.userData.level) && n.parent === w)) { let v = true; for (let q = n; q; q = q.parent) if (!q.visible) v = false; if (v) o.push(n.name || n.userData.level); } }); return o; });
+  if (above.length) m.push(`${bm.name}: levels above still visible ${above}`);
+  const on2 = await shot(); await S.page.evaluate(() => { PC.debug.scene().world.getObjectByName('highlight').visible = false; PC.debug.scene().renderNow(); }); await S.settle(); const off2 = await shot();
+  await S.page.evaluate(() => { PC.debug.scene().world.getObjectByName('highlight').visible = true; PC.debug.scene().renderNow(); }); await S.settle();
+  const nd2 = await S.page.evaluate(PXDIFF, [on2, off2]); if (nd2 < 30) { const hit = await S.page.evaluate(() => { const i = PC.debug.scene(), T = THREE, cam = i.camera, hl = i.world.getObjectByName('highlight'); cam.updateMatrixWorld(); hl.geometry.computeBoundingBox(); const c = new T.Vector3(); hl.geometry.boundingBox.getCenter(c); hl.localToWorld(c);
+    const rc = new T.Raycaster(cam.position.clone(), c.clone().sub(cam.position).normalize()), h = rc.intersectObjects(i.world.children, true).find((x) => { for (let q = x.object; q; q = q.parent) if (!q.visible) return false; return true; });
+    const path = (o) => { const n = []; for (let q = o; q && q !== i.world; q = q.parent) n.unshift(q.name || q.type); return n.join('/'); }; return h ? `${path(h.object)} at Y ${h.point.y.toFixed(2)}` : 'nothing'; });
+    m.push(`${bm.name}: the basement highlight changes only ${nd2} px (first visible object on the eye -> highlight line: ${hit})`); }
   await S.shot('A-basement');
   lap('maxbase');
   const tm = gm[3].rooms[9]; await chooseIn(S, tm.id); await S.settle(); st = await S.page.evaluate(STATE); await recStop(S);
   m.push(...selectedProblems(st, hm, tm.id, tm.name)); if (st.cap !== true) m.push(`${tm.name}: groundCap ${st.cap} after leaving the basement`); if (st.meshes !== m0 + 1) m.push(`${tm.name}: ${st.meshes} meshes`);
-  R.check(`${T2}: 40 options in 4 groups; a basement pick opens the ground (level B, groundCap hidden) at phi 15 degrees with the eye line into the pit and lands on my pose; a second-floor pick follows the rules; meshes ${m0} + 1 <= 40`, cut(m));
+  R.check(`${T2}: 40 options in 4 groups; a basement pick opens the ground (level B, groundCap hidden) at phi 15 degrees with the levels above hidden, the eye line into the pit, the highlight in the real r128 frame, and lands on my pose; a second-floor pick follows the rules; meshes ${m0} + 1 = 22 <= 40`, cut(m));
   await S.end(T);
 });
 
-// ================= C. phone =================
+// ================= C. phone: the caption at 360 px (focus 7), "Master bedroom · Basement" =================
 await guard('C 360x640', async () => {
   const S = await session(browser, VP.phone, { three: 'real', init: [REC] }), T = 'C 360x640 real', f = [];
-  await to5(S); await tourTab(S); const h = await S.page.evaluate(HOUSE), sel = await S.page.evaluate(SELECT);
+  await to5(S, "s.ans.basement = true; const m = s.ans.rooms.find((r) => r.master); m.level = 'B'; s.ans.pairs = s.ans.pairs.filter((p) => !p.includes(m.id));"); await tourTab(S); const h = await S.page.evaluate(HOUSE), sel = await S.page.evaluate(SELECT);
   if (sel.h < 44 - 0.5) f.push(`select ${sel.h} px high`);
   const master = h.levels.flatMap((l) => l.rooms.map((r) => [r, l])).find(([r]) => r.name === 'Master bedroom');
-  await S.page.selectOption('[data-pc="v3-room"]', master[0].id); await S.settle(); await recStop(S);
-  const st = await S.page.evaluate(STATE); f.push(...selectedProblems(st, h, master[0].id, 'Master bedroom'));
-  const lay = await S.page.evaluate(() => { const c = document.querySelector('[data-pc="v3-caption"]').getBoundingClientRect(); return { l: c.left, r: c.right, w: innerWidth, sx: document.scrollingElement.scrollWidth, cw: document.documentElement.clientWidth }; });
-  if (lay.l < -0.5 || lay.r > lay.w + 0.5 || lay.sx > lay.cw) f.push(`caption ${lay.l.toFixed(0)}..${lay.r.toFixed(0)} in a ${lay.w} px viewport, page scroll width ${lay.sx}`);
-  await S.layout(`${T} Tour tab with a room`); await S.shot('C-master');
-  R.check(`${T}: select ${sel.h.toFixed(0)} px; a pick through the native picker gives "${F.captionOf('Master bedroom', master[1].id)}" inside the viewport with no page scroll, and the rules of A`, cut(f));
+  if (!master || master[1].id !== 'B') f.push(`fixture: Master bedroom on ${master && master[1].id}`);
+  else {
+    await S.page.selectOption('[data-pc="v3-room"]', master[0].id); await S.settle(); await recStop(S);
+    const st = await S.page.evaluate(STATE); f.push(...selectedProblems(st, h, master[0].id, 'Master bedroom'));
+    const lay = await S.page.evaluate(() => { const q = (h) => document.querySelector(`[data-pc="${h}"]`), c = q('v3-caption').getBoundingClientRect(), room = q('v3-caption').querySelector('.pc-caption__room'), lev = q('v3-caption').querySelector('.pc-caption__level'), tg = q('v3-panel-toggle'), t = tg && !tg.closest('[hidden]') ? tg.getBoundingClientRect() : null;
+      return { l: c.left, r: c.right, t: c.top, b: c.bottom, w: innerWidth, sx: document.scrollingElement.scrollWidth, cw: document.documentElement.clientWidth, room: room ? [room.textContent, room.scrollWidth, room.clientWidth, room.getBoundingClientRect().width] : null,
+        lev: lev ? [lev.textContent, lev.scrollWidth, lev.clientWidth, getComputedStyle(lev).textOverflow] : null, tog: t && t.width ? [t.left, t.right, t.top, t.bottom] : null }; });
+    if (lay.l < -0.5 || lay.r > lay.w + 0.5 || lay.sx > lay.cw) f.push(`caption ${lay.l.toFixed(0)}..${lay.r.toFixed(0)} in a ${lay.w} px viewport, page scroll width ${lay.sx}`);
+    if (!lay.room || lay.room[0] !== 'Master bedroom' || lay.room[1] > lay.room[2] + 1) f.push(`room part ${JSON.stringify(lay.room)} (whole "Master bedroom" expected)`);
+    if (!lay.lev || lay.lev[0].trim() !== '· Basement' || lay.lev[3] !== 'ellipsis') f.push(`level part ${JSON.stringify(lay.lev)} (" · Basement", text-overflow ellipsis)`);
+    else R.note(`C level part ${lay.lev[1] > lay.lev[2] + 1 ? `ellipsised (${lay.lev[1]} of ${lay.lev[2]} px)` : `fits whole (${lay.lev[1]} px)`} at 360 px`);
+    if (lay.tog && !(lay.tog[1] <= lay.l || lay.tog[0] >= lay.r || lay.tog[3] <= lay.t || lay.tog[2] >= lay.b)) f.push(`caption ${[lay.l, lay.r, lay.t, lay.b].map(Math.round)} under the panel toggle ${lay.tog.map(Math.round)}`);
+  }
+  await S.layout(`${T} Tour tab with a basement room`); await S.shot('C-master-basement');
+  R.check(`${T}: select ${sel.h.toFixed(0)} px; a pick through the native picker gives "Master bedroom · Basement" inside the viewport (no page scroll, not under the panel toggle): the room part whole, the level part with text-overflow ellipsis; the rules of A`, cut(f));
   await S.end(T);
 });
 
