@@ -20,21 +20,23 @@ const eqKeys = (o, keys) => (JSON.stringify(Object.keys(o)) === JSON.stringify(k
 const TYPES = ['bedroom', 'bathroom', 'kitchen', 'living', 'dining', 'majlis', 'office', 'maid', 'storage', 'laundry'];
 const AREA = { bedroom: [12, 16, 24], bathroom: [4, 6, 9], kitchen: [9, 14, 20], living: [20, 30, 42], dining: [12, 16, 24], majlis: [16, 24, 36], office: [9, 12, 16], maid: [6, 9, 12], storage: [4, 6, 9], laundry: [4, 6, 9] };
 const EXT = ['sand', 'white', 'terracotta', 'grey'], STY = ['modern', 'classic', 'minimal'], SEAS = ['spring', 'summer', 'autumn', 'winter'];
-const EXT_K = ['wall', 'wallInner', 'slab', 'roof', 'trim', 'parapet'], INT_K = ['fabric', 'wood', 'accent', 'white', 'metal', 'dark', 'floorMix'];
+// F6-T1b (impl-notes T1b data keys): exteriors gain frame / door, siteColors glassTop / glassBottom; marker PC.C.CONTACT
+const T1B = (() => { try { return /\bCONTACT\s*:/.test(readFileSync(join(SRC, 'js/core/const.js'), 'utf8')); } catch (e) { return false; } })();
+const EXT_K = ['wall', 'wallInner', 'slab', 'roof', 'trim', 'parapet', ...(T1B ? ['frame', 'door'] : [])], INT_K = ['fabric', 'wood', 'accent', 'white', 'metal', 'dark', 'floorMix'];
 // F6-T1a (impl-notes §6, plan §4.4 / §4.1): siteColors gains asphalt (street), each sky key gains skyMid / skyZenith (hex)
 // and exposure (number). Version-aware on the F6 core module src/js/core/texgen.js.
 const F6 = existsSync(join(SRC, 'js/core/texgen.js'));
-const SITE_K = ['ground', 'groundOuter', 'paving', 'poolWater', 'poolRim', 'boundaryWall', 'gate', 'carCanopy', 'seating', 'trunk', 'northMarker', 'highlight', ...(F6 ? ['asphalt'] : [])];
+const SITE_K = ['ground', 'groundOuter', 'paving', 'poolWater', 'poolRim', 'boundaryWall', 'gate', 'carCanopy', 'seating', 'trunk', 'northMarker', 'highlight', ...(F6 ? ['asphalt'] : []), ...(T1B ? ['glassTop', 'glassBottom'] : [])];
 const SKY_KK = ['h', 'background', 'sunColor', 'sunI', 'hemiSky', 'hemiGround', 'hemiI', ...(F6 ? ['skyMid', 'skyZenith', 'exposure'] : [])];
 const ANCH = ['back', 'front', 'left', 'right', 'bl', 'br', 'fl', 'fr', 'center'], CKEYS = ['fabric', 'wood', 'accent', 'white', 'metal', 'dark'];
 
 // ---------------- 1. schema ----------------
-R.check('1 exteriors: sand, white, terracotta, grey, each exactly the six A-10 roles, #RRGGBB upper case',
+R.check(`1 exteriors: sand, white, terracotta, grey, each exactly the ${EXT_K.length === 6 ? 'six A-10 roles' : 'six A-10 roles + frame / door (F6-T1b)'}, #RRGGBB upper case`,
   [...eqKeys(D.exteriors, EXT), ...EXT.flatMap((e) => [...eqKeys(D.exteriors[e], EXT_K), ...EXT_K.filter((k) => !HEX.test(D.exteriors[e][k])).map((k) => `${e}.${k}`)])]);
 R.check('1 interiors: modern, classic, minimal, exactly fabric..dark + floorMix in [0, 0.3]',
   [...eqKeys(D.interiors, STY), ...STY.flatMap((s) => [...eqKeys(D.interiors[s], INT_K), ...CKEYS.filter((k) => !HEX.test(D.interiors[s][k])).map((k) => `${s}.${k}`), ...(typeof D.interiors[s].floorMix === 'number' && D.interiors[s].floorMix >= 0 && D.interiors[s].floorMix <= 0.3 ? [] : [s + ' floorMix'])])]);
 R.check('1 roomTints: the 10 types + hall, stair, lift, all hex', [...eqKeys(D.roomTints, [...TYPES, 'hall', 'stair', 'lift']), ...Object.entries(D.roomTints).filter(([, v]) => !HEX.test(v)).map(([k]) => k)]);
-R.check(`1 siteColors: the ${SITE_K.length} A-10 keys${F6 ? ' (asphalt from F6-T1)' : ''}, all hex; ground = summer ground`, [...eqKeys(D.siteColors, SITE_K), ...Object.entries(D.siteColors).filter(([, v]) => !HEX.test(v)).map(([k]) => k), ...(D.siteColors.ground === D.sky.seasons.summer.ground ? [] : ['ground != summer ground'])]);
+R.check(`1 siteColors: the ${SITE_K.length} A-10 keys${F6 ? ' (asphalt from F6-T1' + (T1B ? ', glassTop / glassBottom from T1b' : '') + ')' : ''}, all hex; ground = summer ground`, [...eqKeys(D.siteColors, SITE_K), ...Object.entries(D.siteColors).filter(([, v]) => !HEX.test(v)).map(([k]) => k), ...(D.siteColors.ground === D.sky.seasons.summer.ground ? [] : ['ground != summer ground'])]);
 { const f = [];
   if (JSON.stringify(Object.keys(D.furniture)) !== JSON.stringify(TYPES)) f.push('types ' + Object.keys(D.furniture));
   for (const t of TYPES) { const L = D.furniture[t] || [], sp = L.filter((p) => p.sparse === true);

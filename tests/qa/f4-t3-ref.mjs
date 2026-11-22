@@ -14,6 +14,8 @@ import { grow, myPath, distSeg, inPolyL } from './f4-t2-ref.mjs';
 
 // ---- Designer §1: PC.data.vegetation (typed from designer-plan.md) ----
 export const VEG_TABLE = { tree: { trunkR: 0.12, trunkH: 2.6, canopyR: 1.35, canopyY0: 1.4, canopyH: 2.8, trunkSeg: 6, canopySeg: 8 }, shrub: { r: 0.7, h: 0.8, seg: 7 }, scale: [0.85, 1.15] };
+// F6-T1b (designer-plan E1 / E2, plan §6.2 C5; hand-entered): tapered leaning trunks, lump canopies and shrubs, tint, blobs
+export const VEG_T1B = { taper: 0.6, leanDeg: 4, lumps: [[0, 2.95, 0, 1.2], [0.45, 2.35, 0.15, 0.85], [-0.40, 2.45, -0.25, 0.80]], squashY: 0.7, treeValue: [0.88, 1.08], shrubValue: [0.94, 1.06], blobTreeK: 1.1, blobShrubK: 1.2 };
 export const CLEAR = VEG_TABLE.tree.canopyR * VEG_TABLE.scale[1];   // 1.5525 (TL ruling: the tree clearance)
 export const TREE_EDGE = CLEAR + 0.2, SHRUB_EDGE = 0.7;               // 1.7525 / 0.7 m from every plot edge
 export const SPACE = { tt: 2.4, st: 1.4, ss: 1.0 }, TREE_A = 6, SHRUB_A = 1.5, CAP = { trees: 120, shrubs: 200 }, POOL_CLEAR = 1;
@@ -53,10 +55,19 @@ export const R6_ROWS = [['summer', 12, '#B9D6EE', '#FFF7E8', 0.85, '#D6E6F5', '#
 export const R6_MATS = { spring: ['#76A953', '#558739', true, '#67A344'], summer: ['#668748', '#477338', true, '#507A3C'], autumn: ['#877F4D', '#A85D27', true, '#8A5A2F'], winter: ['#FFFFFF', null, false, '#CDEDFE'] };
 export const R6_NOON = { sunColor: '#FFF7E8', sunIntensity: 0.85, hemiSky: '#D6E6F5', hemiIntensity: 0.48, background: '#B9D6EE', hemiGround: '#B0B18F' };
 export const R6_SITE = { ground: '#668748', groundOuter: '#727E58', paving: '#C1B4A1', poolWater: '#398BB5', poolRim: '#F1E3C1', boundaryWall: '#B5A990', carCanopy: '#838D93', seating: '#7E664C', asphalt: '#5D6063' };
+// F6-T1b Designer retune (f6t1 c540c49, hand table): keys 12 / 16 / 17 / 18 change again; 6 / 7.5 h, the season
+// materials and the site colours as R6. Detected by keys 17 (sunI 0.99, hemiI 0.44) and 18 (0.89, 0.40).
+export const R7_KEYS = { 17: [0.99, 0.44], 18: [0.89, 0.40] };
+export const R7_KEY_EDITS = { ...R6_KEY_EDITS,
+  12: { background: '#B9D6EE', sunI: 1.0, hemiI: 0.40, hemiGround: '#C9BFA6', exposure: 1.05 }, 16: { background: '#BED6EA', sunI: 0.93, hemiI: 0.40, hemiGround: '#C2B79C', exposure: 1.05 },
+  17: { sunI: 0.99, hemiI: 0.44, hemiSky: '#D0D4DC', hemiGround: '#AEB08E', exposure: 1.5 }, 18: { sunI: 0.89, hemiI: 0.40, hemiSky: '#BCC4DA', hemiGround: '#A2A684', exposure: 1.65 } };
+export const R7_ROWS = [['summer', 12, '#B9D6EE', '#FFF7E8', 1.0, '#D6E6F5', '#B0B18F', 0.40], ['summer', 17.5, '#DFAA81', '#FFB273', 0.94, '#C6CCDB', '#98A37A', 0.42]];
+export const R7_NOON = { ...R6_NOON, sunIntensity: 1, hemiIntensity: 0.4 };
 export function skyGold(sky) {
+  if (keysAre(sky, R7_KEYS)) return { rows: R7_ROWS, o1: true, r6: true, r7: true, mats: R6_MATS, noon: R7_NOON, edits: R7_KEY_EDITS };
   if (keysAre(sky, F4T3_KEYS)) return { rows: SKY_GOLD, o1: false, mats: SEASON_MATS, noon: NOON_GOLD };
   if (keysAre(sky, O1_KEYS)) return { rows: SKY_GOLD_O1, o1: true, mats: SEASON_MATS, noon: NOON_GOLD };
-  if (keysAre(sky, R6_KEYS)) return { rows: R6_ROWS, o1: true, r6: true, mats: R6_MATS, noon: R6_NOON };
+  if (keysAre(sky, R6_KEYS)) return { rows: R6_ROWS, o1: true, r6: true, mats: R6_MATS, noon: R6_NOON, edits: R6_KEY_EDITS };
   return null;
 }
 // Designer §2 material colours per season (plot ground, canopy (visible), shrub); groundOuter #B3B0A6 always

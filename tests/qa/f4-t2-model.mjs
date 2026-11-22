@@ -72,7 +72,10 @@ const VEG = (h) => (h.site.trees && h.site.trees.length ? 2 : 0) + (h.site.shrub
 const byName = (world, name) => meshes(world).filter((m) => m.name === name);
 // F6-T1a (impl-notes §6): pads, seating pad, pool rim and footpath moved to 'paving', the N needle half to 'northNeedle',
 // the pitched slopes to 'roofTiles'; the site checks read the union of the site meshes (version-aware: absent before F6).
-const F6 = !!(PC.texgen || (PC.C.VIEW3D && PC.C.VIEW3D.tiers)), F6_NEW = ['paving', 'northNeedle', 'roofTiles', 'sky'];
+const F6 = !!(PC.texgen || (PC.C.VIEW3D && PC.C.VIEW3D.tiers)), F6_NEW = ['paving', 'northNeedle', 'roofTiles', 'sky', 'groundRing', 'blobs'];
+// F6-T1b (plan §6.1 / §6.2): opening decals and the wall-base skirt stand 0.005-0.05 m proud of the facade, so a ray from
+// outside may meet them first (impl-notes T1b); marker PC.C.CONTACT
+const T1B = !!PC.C.CONTACT, PROUD = T1B ? 0.09 : 0;   // the sill stands 0.08 m out (designer-plan Q-D1)
 const siteItems = (world) => ['siteBatch', 'paving', 'northNeedle'].flatMap((n) => byName(world, n).flatMap(itemsOf));
 
 // ================= F. furniture =================
@@ -199,8 +202,15 @@ if (want('R')) {
     for (const id of Q.levelIds(s.ans).filter((x) => x !== 'B')) { const b0 = H.INDEX[id] * pitch;
       for (const y of [b0 + 0.2 + 0.3, b0 + 0.2 + 1.0, b0 + 0.2 + 1.5, b0 + pitch - 0.05]) for (const k of [0.15, 0.35, 0.65, 0.85]) {
         const pts = [[[F.X(u0 + k * fp.w), y, F.Z(v0) + 5], [0, 0, -1], 'front'], [[F.X(u0 + k * fp.w), y, F.Z(v1) - 5], [0, 0, 1], 'back'], [[F.X(u0) - 5, y, F.Z(v0 + k * fp.d)], [1, 0, 0], 'left'], [[F.X(u1) + 5, y, F.Z(v0 + k * fp.d)], [-1, 0, 0], 'right']];
-        for (const [o, d, side] of pts) { if (id === 'G' && side === 'front' && Math.abs(u0 + k * fp.w - h.site.entrance.u) < 0.7 && y < b0 + 0.2 + 1.2) continue; const t = hitAt(o, d); if (!(t >= 5 - 1e-3 && t <= 5.2 + 1e-3)) { cl.push(`${tag} ${id} ${side} at ${k} / y ${y.toFixed(2)}: first hit ${t === Infinity ? 'none' : (t - 5).toFixed(2) + ' m past the facade'}`); } } } }
-    { const y = 0.2 + 0.6, t = hitAt([F.X(h.site.entrance.u), y, F.Z(v0) + 5], [0, 0, -1]); if (t < 5.25) cl.push(`${tag}: the door is closed (ray at the entrance stops ${(t - 5).toFixed(2)} m past the facade)`); }
+        for (const [o, d, side] of pts) { if (id === 'G' && side === 'front' && Math.abs(u0 + k * fp.w - h.site.entrance.u) < 0.7 && y < b0 + 0.2 + 1.2) continue; const t = hitAt(o, d); if (!(t >= 5 - PROUD - 1e-3 && t <= 5.2 + 1e-3)) { cl.push(`${tag} ${id} ${side} at ${k} / y ${y.toFixed(2)}: first hit ${t === Infinity ? 'none' : (t - 5).toFixed(2) + ' m past the facade'}`); } } } }
+    { const y = 0.2 + 0.6, o = [F.X(h.site.entrance.u), y, F.Z(v0) + 5];
+      if (!T1B) { const t = hitAt(o, [0, 0, -1]); if (t < 5.25) cl.push(`${tag}: the door is closed (ray at the entrance stops ${(t - 5).toFixed(2)} m past the facade)`); }
+      else {   // F6-T1b: the entrance gap in the walls stays open, and a door decal (leaf in the exterior's door colour) stands in it
+        rc.set(new THREE.Vector3(...o), new THREE.Vector3(0, 0, -1)); rc.far = 100; const hs = rc.intersectObjects(solid, false), wall = hs.find((x) => x.object.name !== 'roofBatch');
+        if (wall && wall.distance < 5.25) cl.push(`${tag}: the wall gap at the entrance is closed (${wall.object.name} ${(wall.distance - 5).toFixed(2)} m past the facade)`);
+        const first = hs[0], C = first && first.object.geometry.getAttribute('color'), want = H.lin(E.door);
+        if (!first || first.object.name !== 'roofBatch' || !C || ![C.getX(first.face.a), C.getY(first.face.a), C.getZ(first.face.a)].every((x, i) => Math.abs(x - want[i]) < 2e-5) || first.distance < 5 - PROUD - 1e-3)
+          cl.push(`${tag}: no door leaf (door ${E.door}) at the entrance: first hit ${first ? first.object.name + ' ' + (first.distance - 5).toFixed(2) + ' m' : 'none'}`); } }
   }
   R.check(`R ${CASES.length} roofs (flat / pitched / terrace x usable x lift, wide and deep pitched): model (never pitched when usable; stairHead / liftHead) and roofBatch geometry = QA's expectation (bands, slab, parapets 0.3 / 1.0, pergola, gable, heads)`, cut(f, 10));
   R.check('R roof on = a closed exterior: horizontal rays from all four sides at 0.5 / 1.2 / 1.7 m over each floor and under each next slab hit the facade; the entrance stays open', cut(cl, 8));
@@ -356,7 +366,7 @@ if (want('B')) {
     const vx = VEG(hm); if (mm > LIM + (F6 ? 0 : vx)) f.push(`${mm} meshes > ${LIM}${vx && !F6 ? ` + ${vx} vegetation` : ''}`);
     if (!hm.site.pool || !hm.site.parking || !hm.site.gate || !hm.site.seating || !hm.roof.stairHead || !hm.roof.liftHead) f.push(`items missing: ${JSON.stringify({ pool: !!hm.site.pool, parking: !!hm.site.parking, gate: !!hm.site.gate, seating: !!hm.site.seating, heads: [!!hm.roof.stairHead, !!hm.roof.liftHead] })}`);
     if (hm.levels.some((l) => !l.rooms.every((r) => r.furniture.length))) f.push('a room without furniture'); }
-  if (ms !== 12 + VEG(hs) + nNew(sw0)) f.push(`sample: ${ms} meshes (FS reports 12${VEG(hs) ? ` + ${VEG(hs)} vegetation (F4-T3)` : ''}${F6 ? ` + ${nNew(sw0)} F6 (paving / needle / tiles / sky)` : ''})`);
+  if (ms !== 12 + VEG(hs) + nNew(sw0)) f.push(`sample: ${ms} meshes (FS reports 12${VEG(hs) ? ` + ${VEG(hs)} vegetation (F4-T3)` : ''}${F6 ? ` + ${nNew(sw0)} F6 (paving / needle / tiles / sky / groundRing / blobs)` : ''})`);
   R.check(`B maximum house (4 levels x 10 room types, full, lift, pool L, 4 covered cars, wall, gate, seating, usable terrace): ${mm} meshes <= ${F6 ? '64 (F6-T1 budget)' : '18 (+ vegetation from F4-T3)'}, every item present, every room furnished; sample ${ms} meshes`, f);
   R.note(`B maximum house: ${mm} meshes, sample ${ms}; model ${tm} ms, batches ${tb3} ms (node, r128 without renderer)`);
 }

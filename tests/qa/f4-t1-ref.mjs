@@ -85,14 +85,31 @@ export const SUMMARIZE = `(function (world) {
     var path = []; for (var q = o.parent; q && q !== world; q = q.parent) path.unshift(q.name);
     var m = o.material, mc = m && m.color && !m.vertexColors ? [m.color.r, m.color.g, m.color.b] : null;
     out.push({ name: o.name, path: path.join('/'), group: path[path.length - 1] || '', visible: vis(o), castShadow: !!o.castShadow, receiveShadow: !!o.receiveShadow,
-      pos: pos, col: col, nor: nor, idx: idx ? Array.prototype.slice.call(idx.array) : null, mc: mc, vertexColors: !!(m && m.vertexColors), mat: m && m.type });
+      pos: pos, col: col, nor: nor, idx: idx ? Array.prototype.slice.call(idx.array) : null, mc: mc, vertexColors: !!(m && m.vertexColors), mat: m && m.type,
+      kinds: o.userData && o.userData.items ? o.userData.items.map(function (x) { return [x[0], x[1]]; }) : null });
   });
   return out;
 })`;
 export const summarize = (world) => (0, eval)(SUMMARIZE)(world);
 
 // faces of a batch mesh: groups of 4 vertices (each face planar, axis aligned, one colour)
-export function faces(m) {
+// F6-T1b (plan §6.2: new items are appended as new kinds and the oracles filter by userData.items kind): the contact
+// skirt / floor ring and the opening decals (glass, reveal) are set aside in m.extra; the rest is judged as before.
+export const NEW_KINDS = ['skirt', 'ring', 'glass', 'reveal'];
+function splitKinds(m) {
+  if (!m.kinds || !m.kinds.some(([k]) => NEW_KINDS.includes(k))) return { m, extra: [] };
+  const pos = [], col = m.col ? [] : null, nor = [], extra = []; let v = 0;
+  for (const [k, n] of m.kinds) {
+    const sl = (a) => (a && a.length ? a.slice(3 * v, 3 * (v + n)) : []);
+    if (NEW_KINDS.includes(k)) { const P = sl(m.pos), C = sl(m.col); const ys = [], xs = [], zs = []; for (let i = 0; i < P.length; i += 3) { xs.push(P[i]); ys.push(P[i + 1]); zs.push(P[i + 2]); }
+      extra.push({ kind: k, n, min: [Math.min(...xs), Math.min(...ys), Math.min(...zs)], max: [Math.max(...xs), Math.max(...ys), Math.max(...zs)], pos: P, col: C }); }
+    else { pos.push(...sl(m.pos)); if (col) col.push(...sl(m.col)); nor.push(...sl(m.nor)); }
+    v += n;
+  }
+  return { m: { ...m, pos, col, nor }, extra };
+}
+export function faces(m0) {
+  const { m, extra } = splitKinds(m0);
   const f = [], bad = [];
   if (m.pos.length % 12) bad.push(`${m.path}/${m.name}: ${m.pos.length / 3} vertices, not a multiple of 4`);
   for (let i = 0; i + 12 <= m.pos.length; i += 12) {
@@ -101,12 +118,21 @@ export function faces(m) {
     if (m.col) for (let k = 1; k < 4; k++) if (!sameC(c, m.col.slice(i + 3 * k, i + 3 * k + 3))) { bad.push(`${m.path}/${m.name}: face ${i / 12} has two colours`); break; }
     f.push({ min, max, c, n });
   }
-  return { f, bad };
+  return { f, bad, extra };
 }
 const fmt = (b) => `[${b.min.map((x) => x.toFixed(3))}]..[${b.max.map((x) => x.toFixed(3))}]`;
 const boxEq = (a, b, t = 2e-4) => [0, 1, 2].every((i) => near(a.min[i], b.min[i], t) && near(a.max[i], b.max[i], t));
 const union = (fs) => fs.length ? { min: [0, 1, 2].map((i) => Math.min(...fs.map((f) => f.min[i]))), max: [0, 1, 2].map((i) => Math.max(...fs.map((f) => f.max[i]))) } : null;
 
+// F6-T1b marker: the exteriors table gains frame / door (impl-notes T1b data keys)
+export const T1B = (D) => Object.values(D.exteriors || {}).some((e) => e && e.frame);
+// my footprint ring width (plan §6.2 item 3): min(0.8, free distance from the footprint to the plot outline - 0.05), 0 below 0.01
+export function myFootW(pL, fp) {
+  const cs = [[fp.u, fp.v], [fp.u + fp.w, fp.v], [fp.u + fp.w, fp.v + fp.d], [fp.u, fp.v + fp.d]];
+  const seg = (p, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy, t = l2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2)) : 0; return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy); };
+  let d = Infinity; for (let i = 0; i < pL.length; i++) { const a = pL[i], b = pL[(i + 1) % pL.length]; for (const c of cs) d = Math.min(d, seg(c, a, b)); for (let j = 0; j < 4; j++) d = Math.min(d, seg(a, cs[j], cs[(j + 1) % 4])); }
+  const w = Math.min(0.8, d - 0.05); return w > 0.01 ? w : 0;
+}
 // Problems of a world summary against my expectation. opts.level: the selected level ('all' | id) -> visibility rules.
 export function shellProblems(sum, X, D, opts = {}) {
   const P = [], F = X.F, fpT = tBox(F, X.fp, 0, 0);
@@ -120,6 +146,11 @@ export function shellProblems(sum, X, D, opts = {}) {
     const slab = ms.find((m) => m.name === 'slab'), walls = ms.find((m) => m.name === 'walls');
     if (!slab || !walls) { P.push(`${L.id}: slab ${!!slab} walls ${!!walls}`); continue; }
     const S = faces(slab), W = faces(walls); P.push(...S.bad, ...W.bad);
+    if (T1B(D)) {   // plan §6.2: 4 ring quads per room in the slab batch just above its tint quad; skirts only on the ground floor
+      const rings = S.extra.filter((e) => e.kind === 'ring'), sk = W.extra.filter((e) => e.kind === 'skirt');
+      if (rings.length !== 4 * L.rooms.length) P.push(`${L.id}: ${rings.length} floor-ring quads, want 4 x ${L.rooms.length} rooms`);
+      if (rings.some((e) => e.min[1] < L.floorY + TINT_LIFT - 1e-6 || e.max[1] > L.floorY + TINT_LIFT + 0.01)) P.push(`${L.id}: a floor-ring quad off the tint height`);
+      if (L.index === 0 ? !sk.length || sk.some((e) => e.max[1] > L.floorY + 0.6 + 1e-3 && e.max[1] > 0.6 + 1e-3) : sk.length) P.push(`${L.id}: ${sk.length} skirt quads${L.index === 0 ? ' (want some, <= 0.6 m high)' : ' (ground floor only)'}`); }
     // slab box: bottom at baseY, top at floorY with the hall tint, footprint size
     const slabBox = union(S.f.filter((f) => !(f.n && f.n[1] === 1 && near(f.min[1], L.floorY + TINT_LIFT))));
     const wantSlab = tBox(F, X.fp, L.baseY, L.floorY);
@@ -181,8 +212,13 @@ export function shellProblems(sum, X, D, opts = {}) {
       if (!Q.inPoly([m[0], -m[1]], plotPoly)) outside++;
       if (m[0] > fpT.min[0] + 1e-6 && m[0] < fpT.max[0] - 1e-6 && m[1] > fpT.min[2] + 1e-6 && m[1] < fpT.max[2] - 1e-6) inHole++;
     }
-    const want = Math.abs(Q.signedArea(F.pL)) - X.fp.w * X.fp.d;
-    if (!near(area, want, 1e-3)) P.push(`groundPlot area ${area.toFixed(3)} != plot - footprint ${want.toFixed(3)}`);
+    const fw = T1B(D) ? myFootW(F.pL, X.fp) : 0, want = Math.abs(Q.signedArea(F.pL)) - (X.fp.w + 2 * fw) * (X.fp.d + 2 * fw);
+    if (!near(area, want, 1e-3)) P.push(`groundPlot area ${area.toFixed(3)} != plot - footprint${fw ? ` grown by my ring ${fw.toFixed(3)} m` : ''} ${want.toFixed(3)}`);
+    if (T1B(D)) { const rg = sum.find((m) => m.name === 'groundRing');
+      if (fw > 0) { if (!rg) P.push(`no groundRing (ring ${fw.toFixed(3)} m)`); else { let ra = 0; const I = rg.idx || rg.pos.map((_, i) => i).filter((i) => i < rg.pos.length / 3);
+          for (let i = 0; i < I.length; i += 3) { const [a, b, c] = [I[i], I[i + 1], I[i + 2]].map((j) => [rg.pos[3 * j], rg.pos[3 * j + 2]]); ra += Math.abs((b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1])) / 2; }
+          const wantR = (X.fp.w + 2 * fw) * (X.fp.d + 2 * fw) - X.fp.w * X.fp.d; if (!near(ra, wantR, 1e-3)) P.push(`groundRing area ${ra.toFixed(3)} != the band ${wantR.toFixed(3)}`); } }
+      else if (rg) P.push('groundRing drawn with no free distance'); }
     if (outside || inHole) P.push(`groundPlot triangles outside the plot ${outside}, inside the footprint ${inHole}`);
     const cb = union(faces({ ...cap, col: null }).f);
     if (!cb || !boxEq(cb, { min: [fpT.min[0], CAP_LIFT, fpT.min[2]], max: [fpT.max[0], CAP_LIFT, fpT.max[2]] })) P.push(`groundCap ${cb && fmt(cb)} not the footprint at Y ${CAP_LIFT}`);

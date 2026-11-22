@@ -53,12 +53,12 @@ if (want('O')) {
   const GO = GOLD && GOLD.r6 ? '#727E58' : (PC.texgen || (PC.C.VIEW3D && PC.C.VIEW3D.tiers)) ? '#8E9E6A' : '#B3B0A6';
   if (T3.siteColors.groundOuter !== GO) f.push(`groundOuter ${T3.siteColors.groundOuter}, expected ${GO}`);
   if (GOLD && GOLD.r6) {   // the retune's changed key fields and site colours = the Designer's hand table (C-6.5)
-    for (const [h, ed] of Object.entries(V.R6_KEY_EDITS)) { const k = SKY.keys.find((x) => Math.abs(x.h - Number(h)) < 1e-9); if (!k) { f.push(`no sky key at ${h} h`); continue; }
+    for (const [h, ed] of Object.entries(GOLD.edits || V.R6_KEY_EDITS)) { const k = SKY.keys.find((x) => Math.abs(x.h - Number(h)) < 1e-9); if (!k) { f.push(`no sky key at ${h} h`); continue; }
       for (const [n, w] of Object.entries(ed)) if (typeof w === 'number' ? Math.abs(k[n] - w) > 1e-9 : String(k[n]).toUpperCase() !== w) f.push(`key ${h} h ${n} ${k[n]}, table ${w}`); }
     for (const [n, w] of Object.entries(V.R6_SITE)) if (String(T3.siteColors[n]).toUpperCase() !== w) f.push(`siteColors.${n} ${T3.siteColors[n]}, table ${w}`);
     if (SKY.groundBounce !== undefined && Math.abs(SKY.groundBounce - 0.25) > 1e-9) f.push(`groundBounce ${SKY.groundBounce}`); }
   const n = V.mySky(12, 'summer', 0, SKY); for (const k in NOON) if (n[k] !== NOON[k]) f.push(`noon ${k} ${n[k]}`);
-  R.check(`O QA oracle (A-13, two rounded A-10 mix steps) reproduces the Designer\'s ${GROWS.length}-row golden table (${GOLD && GOLD.r6 ? 'F6-T1a ACES retune rows; key edits and site colours = the hand table' : GOLD && GOLD.o1 ? 'O-1 17.5 h rows' : 'F4-T3 rows'}), the season material table and the ${GOLD && GOLD.r6 ? 'retuned' : 'F4-T1'} noon look`, f);
+  R.check(`O QA oracle (A-13, two rounded A-10 mix steps) reproduces the Designer\'s ${GROWS.length}-row golden table (${GOLD && GOLD.r6 ? `F6-T1${GOLD.r7 ? 'b' : 'a'} retune rows; key edits and site colours = the hand table` : GOLD && GOLD.o1 ? 'O-1 17.5 h rows' : 'F4-T3 rows'}), the season material table and the ${GOLD && GOLD.r6 ? 'retuned' : 'F4-T1'} noon look`, f);
 }
 
 // ================= K. PC.sky.compute =================
@@ -120,7 +120,21 @@ if (want('K')) {
 // ================= D. PC.data.vegetation =================
 if (want('D')) {
   if (!HAS.vegTable) R.note('D skipped: PC.data.vegetation absent');
-  else R.check('D PC.data.vegetation = the Designer\'s table (designer-plan 1: trunk 0.12 x 2.6 / 6, canopy 1.35 x 2.8 at 1.4 / 8, shrub 0.7 x 0.8 / 7, scale 0.85..1.15)', eq(PC.data.vegetation, V.VEG_TABLE) && eq(T3.vegetation, V.VEG_TABLE) ? [] : [JSON.stringify(PC.data.vegetation)]);
+  else if (!PC.C.CONTACT) R.check('D PC.data.vegetation = the Designer\'s table (designer-plan 1: trunk 0.12 x 2.6 / 6, canopy 1.35 x 2.8 at 1.4 / 8, shrub 0.7 x 0.8 / 7, scale 0.85..1.15)', eq(PC.data.vegetation, V.VEG_TABLE) && eq(T3.vegetation, V.VEG_TABLE) ? [] : [JSON.stringify(PC.data.vegetation)]);
+  else {   // F6-T1b (marker PC.C.CONTACT): the F4-T3 fields unchanged; the new fields = designer-plan E1 / E2 / C5 where it gives values
+    const v = PC.data.vegetation, f = [], T = v.tree || {}, Sh = v.shrub || {};
+    const base = { tree: Object.fromEntries(Object.keys(V.VEG_TABLE.tree).map((k) => [k, T[k]])), shrub: Object.fromEntries(Object.keys(V.VEG_TABLE.shrub).map((k) => [k, Sh[k]])), scale: v.scale };
+    if (!eq(base, V.VEG_TABLE)) f.push(`F4-T3 fields ${JSON.stringify(base)}`);
+    if (!eq(T3.vegetation, v)) f.push('page table != the source table');
+    if (T.taper !== V.VEG_T1B.taper || T.leanDeg !== V.VEG_T1B.leanDeg || !eq(T.lumps, V.VEG_T1B.lumps)) f.push(`tree taper / lean / lumps ${JSON.stringify([T.taper, T.leanDeg, T.lumps])}`);
+    for (const [x, y, z, r] of T.lumps || []) if (Math.hypot(x, z) + r > T.canopyR + 1e-9 || y - r < T.canopyY0 - 1e-9 || y + r > T.canopyY0 + T.canopyH + 1e-9) f.push(`tree lump ${[x, y, z, r]} outside the canopy envelope (Q-D2)`);
+    if (Sh.squashY !== V.VEG_T1B.squashY || !Array.isArray(Sh.lumps) || Sh.lumps.length !== 2) f.push(`shrub squashY / lumps ${JSON.stringify([Sh.squashY, Sh.lumps])}`);
+    const ICO0 = (1 + Math.sqrt(5)) / 2 / Math.hypot(1, (1 + Math.sqrt(5)) / 2);   // IcosahedronGeometry(1, 0): its highest / lowest vertex is at |y| 0.851
+    for (const [x, y, z, r] of Sh.lumps || []) if (Math.hypot(x, z) + r > Sh.r + 1e-9 || y - ICO0 * r * Sh.squashY < -1e-9 || y + ICO0 * r * Sh.squashY > Sh.h + 1e-9) f.push(`shrub lump ${[x, y, z, r]} outside r ${Sh.r} / h ${Sh.h}`);
+    const ti = v.tint || {}; if (!eq(ti.tree && ti.tree.value, V.VEG_T1B.treeValue) || !eq(ti.shrub && ti.shrub.value, V.VEG_T1B.shrubValue)) f.push(`tint values ${JSON.stringify(ti)}`);
+    const b = v.blob || {}; if (b.treeK !== V.VEG_T1B.blobTreeK || b.shrubK !== V.VEG_T1B.blobShrubK || b.size !== 64 || !(b.opacity > 0 && b.opacity <= 0.5)) f.push(`blob ${JSON.stringify(b)}`);
+    R.check('D PC.data.vegetation: the F4-T3 table unchanged; F6-T1b taper 0.6, lean 4 deg, the three Q-D2 tree lumps (inside canopyR, between canopyY0 and canopyY0 + canopyH), 2 shrub lumps squashed 0.7 inside r / h, tint values [0.88, 1.08] / [0.94, 1.06], blob 1.1 / 1.2 x radius, 64 px', f);
+  }
 }
 
 // ================= V. scatter =================
