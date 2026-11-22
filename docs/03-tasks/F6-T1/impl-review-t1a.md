@@ -77,3 +77,29 @@ T1a's scope is the pipeline and the world. Against the before-shots:
   - The 360x640 evening shot reads muddy brown overall. Look at the evening exposure and ground tint in the T1b retune.
 
 VERDICT: APPROVED
+
+## Addendum 1 (QA_FULL after the leak split, 5c15ceb)
+- **Result:** QA_FULL=1 green at 488.1 s, still over 480. The condition in finding 1 is not met yet.
+- **What passed:**
+  - leak-max release step 112.7 s (limit 240);
+  - C-4.8 solo 128 ms;
+  - `tests/durations-full.json` added.
+- **Next:** QA trims about 60 s of QA_FULL work, starting with f5-t3 (+32 s), to leave margin rather than just clear the 8 s. FS then reruns QA_FULL, and Addendum 2 records it.
+- **resetPhi 62:** it stays off f6t1 until that rerun.
+
+## Addendum 2 (QA trim, main 3db2b02)
+- **Moved:** QA moved about 70 s of QA_FULL rows into the release step: the f5-t3 C, tour pass and sweep rows; the f4-t1 360x640 and 640x360 rows; and f4-t2-s0-ui at 640x360. No check is lost.
+- **Release step:** QA measured 216 s (the stream alone took 113 to 133 s).
+  - Its limit is raised to 300 s, with a NOTE above 260 s. Two NOTE runs in a row go to the TL.
+  - It runs in every implementation-review gate and at release, whatever paths changed.
+- **Next:** FS reruns QA_FULL on f6t1 with the trim, and the condition in finding 1 is decided on that run.
+
+## Addendum 3 (gate on 42bd8ae): condition met
+- **QA_FULL=1:** green, 462.8 s (limit 480).
+- **Release step:** green, 176.1 s (limit 300).
+- **C-4.8 solo:** 112 ms (budget 400).
+- **Default runs:** 405.0 and 400.6 s.
+
+The condition in finding 1 is met, so the verdict below stands unconditionally. resetPhi 62 may now go onto f6t1 as T1b's first commit.
+
+VERDICT: APPROVED
