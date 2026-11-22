@@ -63,8 +63,8 @@ Everything lives on disk under /home/claude/plotcraft (cloud sessions: /home/use
 
 ## Known limits owned by Designer F5-T3b (after F5-T3a; detail in docs/03-tasks/F5-T3/impl-notes.md)
 - Legend at 1280x800 wraps to 2 lines (46 px) when Parking, Pool and "* set by you" all show; "* by you" does not fix it, PM text kept. Accepted unless the phone/desktop pass says otherwise.
-- Zero rooms: PC.house.build returns null, stage 5 shows "3D view unavailable" (FS/PM: block Next from stage 3 or a dedicated empty-house message).
 - Tour: eyes-on frames at stops and leg quartiles not taken (r128 frame capture too slow in CI); numbers only (verify/tour.mjs). Do it in the real-device pass.
 - Stage-3 warnings chip vs a label at the default fit: not reproduced in the sweep; re-check on the phone screenshots.
 - Stage-3 640x360 blocking message: no clamp (Approve stays in view at 4.5 lines); revisit only if a longer note text appears.
+- Not T3b (known limits, F5-T3/outcome.md §8): zero-room house has no 3D (A-9 refusal, unreachable via UI); run-time headroom ~0.2 s (419.8 s).
 - Phone-only tuning waits for device evidence (CTO condition a): closing radius, gesture thresholds, pixel ratio, shadow map size, occl.bottom for the phone bottom dock.
