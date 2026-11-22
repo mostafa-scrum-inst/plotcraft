@@ -5,10 +5,10 @@
      its look point, the Reset target = the plot centre; ties by plan order), then the overview again.
    - Room eye: 0.6 x max(w, d) + 2 m from the room centre away from the footprint centre (street side, +Z, when the
      room is central), at max(baseY, 0) + storeyH + 2.5; a basement room: 1.5 m towards the footprint centre at
-     storeyH + 4. Look: the room centre at floorY + 0.5 (as the finder).
+     storeyH + 2.5 (F5-T3a pacing: TOUR.bEyeUp). Look: the room centre at floorY + 0.5 (as the finder).
    - Eye floor: (canopyY0 + canopyH) x scale max of PC.data.vegetation + TOUR.treeGap: every eye is at it or above.
    - Nudge: a point closer than 0.5 m to the one before is moved 0.5 m away along the leg (+X when they coincide).
-   - Times: rooms + 1 legs; the two overview legs 4 s, room-to-room legs 3.5 s (normal speed; TL ruling Q2). */
+   - Times: rooms + 1 legs; the two overview legs 4.5 s (F5-T3a pacing), room-to-room legs 3.5 s (normal speed; TL ruling Q2). */
 (function (PC) {
   'use strict';
   function K() { return PC.C.TOUR; }

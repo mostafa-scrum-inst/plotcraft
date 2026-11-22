@@ -100,6 +100,13 @@ async function edit(vp) {
   await k.shot('5-approved');
   // an edit on the approved floor returns it to Draft, told once
   h = await k.handle('r4', 'e');
+  // F5-T3a (TL ruling 5): the e handle pill sits on the stair block (x 3.5-6); the selected room's handles are hit
+  // first and the stair is never a hit target, so the drag below is a resize, not a pan
+  const onStair = await page.evaluate(([hx, hy]) => { const s = PC.debug.state(), f = PC.debug.site().footprint, c = PC.layout.core(f.w, f.d, PC.levels.stairsExist(s), s.ans.stairPos, PC.levels.liftExists(s)).stair;
+    const a = PC.debug.toScreen('plan', f.u + c.x, f.v + c.y), b = PC.debug.toScreen('plan', f.u + c.x + c.w, f.v + c.y + c.h);
+    const x = hx, y = hy;   // both in client px
+    return x + 9 > Math.min(a[0], b[0]) && x - 9 < Math.max(a[0], b[0]) && y > Math.min(a[1], b[1]) && y < Math.max(a[1], b[1]); }, [h.x, h.y]);
+  T.ok(onStair, `${tag} the Kitchen's e handle pill overlaps the stair block`);
   await G.drag([h.x, h.y], [h.x - 1.2 * m, h.y]); await settled(page);           // raw 2.3: the Dining edge 2.5
   s = await k.state();
   T.eq([s.plans.G.rooms.find((r) => r.id === 'r4').w, s.plans.G.approved, await k.tabs(), await k.text('plan-msg')], [2.5, false, ['Draft', 'Draft'], 'Ground floor is back to Draft. Approve it again when you are done.'], `${tag} edit on an approved floor: back to Draft, told once`);

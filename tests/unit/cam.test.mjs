@@ -158,3 +158,20 @@ test('limits Y floor (ruling Q1): lowest floorY with a basement (-pitch + 0.2), 
   const p = C.clamp(C.pan({ ...r, target: [0, -3, 0] }, 40, 10, 0.05), L);
   assert.equal(p.target[1], 0, 'a pan / target below ground on a no-basement house still floors at 0');
 });
+
+test('viewOffset (F5-T3a lens shift, TL ruling 2): the 6 setViewOffset arguments, null when nothing is covered; visibleAspect for the radius fits', () => {
+  const C = PC.cam;
+  assert.deepEqual(plain(C.viewOffset(1280, 800, { right: 336, bottom: 0 })), [1616, 800, 336, 0, 1280, 800]);
+  // principal point: the full frame's centre (1616 / 2) seen from x = 336 is at 472 = (1280 - 336) / 2
+  const v = C.viewOffset(1280, 800, { right: 336 }); assert.equal(v[0] / 2 - v[2], (1280 - 336) / 2);
+  for (const o of [null, undefined, {}, { right: 0 }, { right: -5 }, { right: 0, bottom: 200 }]) assert.equal(C.viewOffset(1280, 800, o), null, JSON.stringify(o));
+  assert.equal(C.viewOffset(0, 800, { right: 336 }), null);
+  assert.equal(C.viewOffset(300, 800, { right: 336 }), null, 'covering the whole width: no shift');
+  assert.deepEqual(plain(C.viewOffset(1280, 800, { right: 335.6 })), [1616, 800, 336, 0, 1280, 800], 'whole px');
+  assert.equal(C.visibleAspect(1280, 800, { right: 336 }), 944 / 800);
+  assert.equal(C.visibleAspect(1280, 800, null), 1280 / 800);
+  assert.equal(C.visibleAspect(0, 0, null), 1);
+  // a narrower visible aspect never shrinks the reset radius
+  const h = PC.house.build(sampleApproved(PC));
+  assert.ok(C.resetRadius(h, C.visibleAspect(1280, 800, { right: 336 })) >= C.resetRadius(h, 1280 / 800));
+});

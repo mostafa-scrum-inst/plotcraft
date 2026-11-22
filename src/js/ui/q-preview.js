@@ -3,7 +3,7 @@
    or, in tap mode "Back / side", switch that edge's class (F2-S4). */
 (function (PC) {
   'use strict';
-  var ui = PC.ui = PC.ui || {}, view = null, api = null, labels = [], dragNorth = null, focusEdge = null;
+  var ui = PC.ui = PC.ui || {}, view = null, api = null, labels = [], ticks = [], area = null, dragNorth = null, focusEdge = null;
   var PAD = { t: 26, r: 30, b: 26, l: 30 }, DIAL = 20;
 
   function site() { return PC.site.analyse(api.state()); }
@@ -73,6 +73,57 @@
   // Labels that are always drawn: the street edge ("front") and every overridden edge ("side*"), however short the
   // edge. Free spots first (outside, then inside the edge); forced only as a last resort, and never over the
   // compass or a floating control (TL plan-review ruling 6).
+  // One edge label with the normal culling (as draw2d.edgeLabels): none when the edge is too short for it or no
+  // spot beside it is free. Returns true when drawn.
+  function edgeLabel(v, a, b, text, avoid) {
+    var D = ui.draw2d, g = v.ctx, o = { avoid: avoid }, vis = D.clipToView(v, v.toScreen(a), v.toScreen(b), 2);
+    if (!vis) return false;
+    g.font = PC.data.palette2d.font.label;
+    var tw = g.measureText(text).width, p = vis[0], q = vis[1], dx = q[0] - p[0], dy = q[1] - p[1], l = Math.sqrt(dx * dx + dy * dy);
+    if (l < tw + 20) return false;
+    var off = 13 + Math.abs(dy / l) * (tw / 2 - 4), along = [0.5, 0.35, 0.65, 0.22, 0.78], k, s2;
+    for (k = 0; k < along.length; k++) for (s2 = 1; s2 >= -1; s2 -= 2) {
+      var sx = p[0] + dx * along[k] - dy / l * off * s2, sy = p[1] + dy * along[k] + dx / l * off * s2;
+      if (D.labelFree(v, D.labelRect(v, text, sx, sy, o), labels, o)) { D.label(v, text, sx, sy, labels, o); return true; }
+    }
+    return false;
+  }
+  // The "*" tick of an overridden edge whose label was culled: 6 px across the edge at its midpoint, on the inner
+  // side, in the edge's class colour, 2 px wide.
+  function ovTick(v, pts, i, color) {
+    var n = pts.length, a = v.toScreen(pts[i]), b = v.toScreen(pts[(i + 1) % n]), dx = b[0] - a[0], dy = b[1] - a[1], l = Math.sqrt(dx * dx + dy * dy) || 1;
+    var m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], nx = -dy / l, ny = dx / l, scr = pts.map(function (p) { return v.toScreen(p); });
+    if (!PC.geom.pointInPoly([m[0] + nx * 3, m[1] + ny * 3], scr)) { nx = -nx; ny = -ny; }
+    var g = v.ctx;
+    g.save(); g.setLineDash([]); g.lineCap = 'butt'; g.lineWidth = 2; g.strokeStyle = color;
+    g.beginPath(); g.moveTo(m[0], m[1]); g.lineTo(m[0] + nx * 6, m[1] + ny * 6); g.stroke(); g.restore();
+    ticks.push({ edge: i, x: m[0], y: m[1], dx: nx, dy: ny });
+  }
+  // The footprint area label (F5-T3a, Designer spec): the lighter area font / colour; on two lines ("108" / "m²",
+  // 14 px apart) when one line is wider than the footprint less 8 px; outside the footprint on the street side
+  // (centred, 4 px off its street edge, no leader) when two lines do not fit either.
+  function areaLabel(v, fp, text, avoid) {
+    var D = ui.draw2d, P = PC.data.palette2d, o = { avoid: avoid, font: P.font.area, color: P.label.area };
+    var cs = [[fp.u, fp.v], [fp.u + fp.w, fp.v], [fp.u + fp.w, fp.v + fp.d], [fp.u, fp.v + fp.d]].map(function (p) { return v.toScreen(p); });
+    var xs = cs.map(function (p) { return p[0]; }), w = Math.max.apply(null, xs) - Math.min.apply(null, xs);
+    var c = v.toScreen([fp.u + fp.w / 2, fp.v + fp.d / 2]), sp = text.lastIndexOf(' '), lines = [text.slice(0, sp), text.slice(sp + 1)];
+    if (D.labelRect(v, text, c[0], c[1], o).w <= w - 8) { area = D.label(v, text, c[0], c[1], labels, o) ? { mode: 'one', lines: [text] } : null; return; }
+    var wide = Math.max(D.labelRect(v, lines[0], 0, 0, o).w, D.labelRect(v, lines[1], 0, 0, o).w);
+    if (wide <= w - 8) {
+      var r0 = D.labelRect(v, lines[0], c[0], c[1] - 7, o), r1 = D.labelRect(v, lines[1], c[0], c[1] + 7, o);
+      r0.h = r1.h = 14; r0.y = c[1] - 14; r1.y = c[1];
+      if (D.labelFree(v, r0, labels, o) && D.labelFree(v, r1, labels, o)) {
+        D.label(v, lines[0], c[0], c[1] - 7, null, o); D.label(v, lines[1], c[0], c[1] + 7, null, o);
+        labels.push(r0, r1); area = { mode: 'two', lines: lines };
+      } else area = null;
+      return;
+    }
+    // outside, street side: the street edge is v = fp.v (frame L); outward = from the centre to that edge's midpoint
+    var m = v.toScreen([fp.u + fp.w / 2, fp.v]), dx = m[0] - c[0], dy = m[1] - c[1], l = Math.sqrt(dx * dx + dy * dy) || 1, r = D.labelRect(v, text, 0, 0, o);
+    dx /= l; dy /= l;
+    var off = 4 + Math.abs(dx) * r.w / 2 + Math.abs(dy) * r.h / 2, x = m[0] + dx * off, y = m[1] + dy * off;
+    area = D.label(v, text, x, y, labels, o) ? { mode: 'outside', lines: [text], x: x, y: y } : null;
+  }
   function forcedLabel(v, a, b, text, avoid) {
     var D = ui.draw2d, vis = D.clipToView(v, v.toScreen(a), v.toScreen(b), 2), o = { avoid: avoid };
     if (!vis) return;
@@ -106,8 +157,11 @@
 
   function draw(v) {
     var s = site(), D = ui.draw2d, P = PC.data.palette2d, state = api.state(), unit = state.ans.unit;
-    labels = [];
+    labels = []; ticks = []; area = null;
     D.clear(v);
+    // F5-T3a: the Parking / Pool legend entries only when the drawing has them (PM round 14)
+    ui.$('site-legend-parking').hidden = !(s && s.parking);
+    ui.$('site-legend-pool').hidden = !(s && s.pool);
     if (!s) return;
     var pts = s.ptsL, n = pts.length, i;
     var avoid = [dialRect()].concat(overlays()), ov = state.ans.edgeOv || {};
@@ -122,13 +176,13 @@
     }
     if (focusEdge !== null && focusEdge < n)                // the edge focused in the Q6 edge list (F2-S4 keyboard)
       D.path(v, [pts[focusEdge], pts[(focusEdge + 1) % n]], { stroke: P.edge.focus, width: P.line.edgeFocus });
-    // Labels, most important first: street, overridden edges (always shown), the footprint area, the other edges.
+    // Labels, most important first: street (always shown), overridden edges, the footprint area, the other edges.
+    // F5-T3a (A-15 as updated): an overridden edge's "*" label follows the normal culling; when it is culled, a "*"
+    // tick marks the edge's midpoint (the Q6 edge list stays the full reference).
     forcedLabel(v, pts[s.edge], pts[(s.edge + 1) % n], 'front', avoid);
-    for (i = 0; i < n; i++) if (ov[i] && i !== s.edge) forcedLabel(v, pts[i], pts[(i + 1) % n], s.edgeClass[i] + '*', avoid);
-    if (s.footprint) {
-      var c = v.toScreen([s.footprint.u + s.footprint.w / 2, s.footprint.v + s.footprint.d / 2]);
-      D.label(v, PC.units.fmtArea(s.footprint.area, unit), c[0], c[1], labels, { avoid: avoid });
-    }
+    for (i = 0; i < n; i++) if (ov[i] && i !== s.edge && !edgeLabel(v, pts[i], pts[(i + 1) % n], s.edgeClass[i] + '*', avoid))
+      ovTick(v, pts, i, P.edge[s.edgeClass[i]]);
+    if (s.footprint) areaLabel(v, s.footprint, PC.units.fmtArea(s.footprint.area, unit), avoid);
     D.edgeLabels(v, pts, true, function (len, k) { return k === s.edge || (ov[k] && k !== s.edge) ? null : s.edgeClass[k]; }, labels, { avoid: avoid });
     drawCompass(v, dragNorth !== null ? dragNorth : PC.frames.northL(state));
   }
@@ -182,6 +236,8 @@
       });
       Object.assign(PC.debug, {
         siteLabels: function () { view.drawNow(); return labels.slice(); },
+        siteTicks: function () { view.drawNow(); return ticks.slice(); },
+        siteArea: function () { view.drawNow(); return area; },
         // Edge highlighted from the Q6 edge list, or null.
         siteFocusEdge: function () { return focusEdge; },
         // North angle in L the compass arrow shows now (during a drag: the one under the finger).

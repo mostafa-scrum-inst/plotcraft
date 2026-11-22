@@ -31,7 +31,7 @@
     Mesh: O3D.concat(['geometry', 'material']),
     InstancedMesh: O3D.concat(['geometry', 'material', 'setMatrixAt', 'instanceMatrix', 'count']),
     'InstancedMesh.instanceMatrix': ['needsUpdate'],
-    PerspectiveCamera: O3D.concat(['fov', 'aspect', 'near', 'far', 'updateProjectionMatrix']),
+    PerspectiveCamera: O3D.concat(['fov', 'aspect', 'near', 'far', 'updateProjectionMatrix', 'setViewOffset', 'clearViewOffset']),
     DirectionalLight: O3D.concat(['color', 'intensity', 'target', 'shadow']),
     'DirectionalLight.shadow': ['mapSize', 'camera', 'bias', 'normalBias'],
     'DirectionalLight.shadow.camera': ['left', 'right', 'top', 'bottom', 'near', 'far', 'updateProjectionMatrix'],
@@ -283,6 +283,15 @@
       [o.fov, o.aspect, o.near, o.far].forEach(function (v) { if (!num(v)) fail('PerspectiveCamera(fov, aspect, near, far) takes numbers'); });
       hide(o, 'projUpdates', 0);
       o.updateProjectionMatrix = function () { this.projUpdates++; };
+      // r128: setViewOffset(fullWidth, fullHeight, x, y, width, height) sets .view (enabled) and updates the projection;
+      // clearViewOffset() disables it. The mock keeps the same record (hidden: the app never reads .view).
+      hide(o, 'view', null);
+      o.setViewOffset = function (fw, fh, x, y, w, h) {
+        if (arguments.length !== 6 || ![fw, fh, x, y, w, h].every(num) || !(fw > 0 && fh > 0 && w > 0 && h > 0)) fail('setViewOffset(fullWidth, fullHeight, x, y, width, height) takes 6 numbers, sizes > 0');
+        raw(this).view = { enabled: true, fullWidth: fw, fullHeight: fh, offsetX: x, offsetY: y, width: w, height: h };
+        this.projUpdates++;
+      };
+      o.clearViewOffset = function () { if (raw(this).view) raw(this).view.enabled = false; this.projUpdates++; };
       hide(o, '__setter', function (k, v) { if (['fov', 'aspect', 'near', 'far'].indexOf(k) >= 0 && !(num(v) && v > 0)) fail('PerspectiveCamera.' + k + ' must be a positive number'); });
       return wrap(o, 'PerspectiveCamera');
     }),

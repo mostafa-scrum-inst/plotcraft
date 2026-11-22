@@ -11,6 +11,7 @@ import { mkdirSync } from 'node:fs';
 import { launch, open, suite, VIEWPORTS } from '../helpers/browser.mjs';
 import { ROOT, loadCore } from '../helpers/load.mjs';
 import { maxHouse } from '../helpers/houses.mjs';
+import { projectPx } from '../helpers/project.mjs';
 import { FACTORIES, MATHS } from '../helpers/three-factories.mjs';
 
 const T = suite('e2e view3d-real'), browser = await launch(), SHOTS = process.argv.includes('--shots');
@@ -73,11 +74,16 @@ async function highlight(page, tag) {
     const i = PC.debug.scene(), gl = i.renderer.getContext(), m = i.world.getObjectByName('highlight');
     const read = () => { i.renderNow(); const W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, px = new Uint8Array(W * H * 4); gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px); return px; };
     const on = read(); m.visible = false; const off = read(); m.visible = true; i.renderNow();
-    let k = 0, orange = 0;
-    for (let j = 0; j < on.length; j += 4) if (on[j] !== off[j] || on[j + 1] !== off[j + 1] || on[j + 2] !== off[j + 2]) { k++; if (on[j] > 120 && on[j] - on[j + 1] > 40 && on[j] - on[j + 2] > 70) orange++; }
-    return { k, orange, caption: document.querySelector('[data-pc="v3-caption-text"]').textContent };
+    let k = 0, orange = 0, minX = Infinity, maxX = -Infinity;
+    const W = gl.drawingBufferWidth, c = document.querySelector('[data-pc="v3-canvas"]').getBoundingClientRect(), sc = c.width / W;
+    for (let j = 0; j < on.length; j += 4) if (on[j] !== off[j] || on[j + 1] !== off[j + 1] || on[j + 2] !== off[j + 2]) { k++; const x = (j / 4) % W; minX = Math.min(minX, x); maxX = Math.max(maxX, x); if (on[j] > 120 && on[j] - on[j + 1] > 40 && on[j] - on[j + 2] > 70) orange++; }
+    const occl = i.occl.right;
+    return { k, orange, caption: document.querySelector('[data-pc="v3-caption-text"]').textContent, minX: Math.round(c.left + minX * sc), maxX: Math.round(c.left + maxX * sc),
+      panelLeft: occl > 0 ? Math.round(document.querySelector('[data-pc="v3-panel"]').getBoundingClientRect().left) : null };
   });
   T.ok(n.orange >= 40 && n.orange >= 0.6 * n.k && n.caption === 'Living · Ground floor', `${tag} highlight drawn on the real r128: ${n.orange} orange of ${n.k} changed pixels; caption "${n.caption}"`);
+  // F5-T3a (TL ruling 2): at desktop width the changed highlight pixels lie left of the floating panel (lens shift)
+  if (n.panelLeft !== null) T.ok(n.k > 0 && n.maxX < n.panelLeft, `${tag} highlight bbox x ${n.minX}-${n.maxX} css px, left of the panel at ${n.panelLeft}`);
   await page.evaluate(() => { const s = document.querySelector('[data-pc="v3-room"]'); s.value = ''; s.dispatchEvent(new Event('change', { bubbles: true })); PC.view3d.resetView(); });
   await page.waitForFunction(() => !PC.debug.scene().frame && !PC.view3d.selected());
 }
@@ -265,6 +271,23 @@ async function conformance(page, tag) {
   T.eq(real.out.length, M.maths.length, `${tag} maths probe length`);
   real.out.forEach((r, i) => { if (!(Math.abs(r - M.maths[i]) <= 1e-9 * Math.max(1, Math.abs(r)))) bad.push(`#${i}: real ${r} mock ${M.maths[i]}`); });
   T.none(bad.slice(0, 8), `${tag} mock maths equals r128 (Color, Matrix4.compose, makeTranslation, Vector3, CatmullRomCurve3 x4 + 2-point) to 1e-9`);
+  // F5-T3a lens shift: tests/helpers/project.mjs (used by the mock three tests) equals r128's projection with and
+  // without setViewOffset, and clearViewOffset restores the plain projection
+  const lens = await page.evaluate((src) => {
+    const proj = (0, eval)('(' + src + ')'), T3 = window.THREE, out = [];
+    for (const [W, H, o] of [[1280, 800, 336], [1280, 800, 0], [944, 700, 120]]) {
+      const cam = new T3.PerspectiveCamera(45, W / H, 0.5, 500), eye = [14, 9, 21], tgt = [1, 0.7, -2], vo = o ? [W + o, H, o, 0, W, H] : null;
+      cam.position.set(eye[0], eye[1], eye[2]); cam.lookAt(tgt[0], tgt[1], tgt[2]);
+      if (vo) { cam.aspect = vo[0] / vo[1]; cam.setViewOffset(vo[0], vo[1], vo[2], vo[3], vo[4], vo[5]); } else cam.clearViewOffset();
+      cam.updateProjectionMatrix(); cam.updateMatrixWorld();
+      for (const p of [tgt, [6, 0, 3], [-5, 2.5, -7], [0, 0, 0]]) {
+        const v = new T3.Vector3(p[0], p[1], p[2]).project(cam), mine = proj(eye, tgt, 45, W, H, vo, p);
+        out.push(Math.abs((v.x + 1) / 2 * W - mine[0]), Math.abs((1 - v.y) / 2 * H - mine[1]));
+      }
+    }
+    return Math.max(...out);
+  }, projectPx.toString());
+  T.ok(lens < 1e-6, `${tag} projectPx equals r128 Vector3.project with setViewOffset / clearViewOffset (max error ${lens.toExponential(1)} px)`);
 }
 
 try {

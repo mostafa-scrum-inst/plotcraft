@@ -7,7 +7,8 @@
    the eye is 1 m or more above ground.
    F5-T1 room finder (A-14): roomOf(house, id), roomGroups(house) (levels lowest first, rooms in plan order, plan names)
    and forRoom(house, id, current, limits): target = room centre at floorY + 0.5, theta kept, phi 35 degrees (15 for a
-   basement room, plan review item 1), radius = clamp(1.6 x max(w, d) + storeyH, 6, 3 x house.radius), then clamped. */
+   basement room, plan review item 1), radius = clamp(1.6 x max(w, d) + storeyH, 6, 3 x house.radius), then clamped.
+   F5-T3a desktop framing: viewOffset(W, H, occl) (a lens shift into the uncovered rectangle) and visibleAspect. */
 (function (PC) {
   'use strict';
   var D = Math.PI / 180;
@@ -39,6 +40,21 @@
           z0: Math.min.apply(null, zs), z1: Math.max.apply(null, zs) },
         eyeMin: k.eyeMin
       };
+    },
+    // Desktop framing under the floating panel (TL F5-T3a plan review ruling 2, A-12): a lens shift. The 6 arguments
+    // of r128's PerspectiveCamera.setViewOffset(fullW, fullH, x, y, w, h) that put the principal point at the centre
+    // of the uncovered rectangle x in [0, W - o] (o = occl.right px), with the vertical scale and fov unchanged (the
+    // camera's aspect is then fullW / fullH); null when nothing is covered (clearViewOffset). occl.bottom is held at 0
+    // until F5-T3b (CTO condition a) and is ignored here.
+    viewOffset: function (W, H, occl) {
+      var o = occl && occl.right > 0 ? Math.round(occl.right) : 0;
+      if (!(W > 0 && H > 0) || !o || o >= W) return null;
+      return [W + o, H, o, 0, W, H];
+    },
+    // The aspect of the uncovered rectangle, used for the radius fits (reset, limits, the tour plan).
+    visibleAspect: function (W, H, occl) {
+      var v = C.viewOffset(W, H, occl);
+      return W > 0 && H > 0 ? (W - (v ? v[2] : 0)) / H : 1;
     },
     reset: function (house, aspect) {
       return { target: [0, 0, 0], radius: C.resetRadius(house, aspect), theta: K().resetTheta * D, phi: K().resetPhi * D };

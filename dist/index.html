@@ -1853,8 +1853,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       finderLift: 0.5, finderK: 1.6, finderRMin: 6, finderPhi: 35, finderPhiB: 15, flightMs: 1200, dtMax: 100 },
     // F5-T2 drone tour (A-14 as built, plan review): leg times in s at normal speed, speed factors, eye construction
     // (m), the tree gap over the canopy tops (eye floor from PC.data.vegetation), the A-14 nudge, the lead-in flight
-    TOUR: { overviewLeg: 4, roomLeg: 3.5, speeds: { slow: 0.6, normal: 1, fast: 1.8 }, eyeOut: 2, eyeOutK: 0.6, eyeUp: 2.5,
-      bEyeIn: 1.5, bEyeUp: 4, centralEps: 0.5, treeGap: 0.5, floorSoft: 1, phiSoft: 3, minGap: 0.5, leadInMs: 1200, leadInSkip: 0.5 },
+    TOUR: { overviewLeg: 4.5, roomLeg: 3.5, speeds: { slow: 0.6, normal: 1, fast: 1.8 }, eyeOut: 2, eyeOutK: 0.6, eyeUp: 2.5,
+      bEyeIn: 1.5, bEyeUp: 2.5, centralEps: 0.5, treeGap: 0.5, floorSoft: 1, phiSoft: 3, minGap: 0.5, leadInMs: 1200, leadInSkip: 0.5 },
     VIEW3D: { maxDpr: 2, shadowMap: 1024, shadowBias: -0.0005, shadowNormalBias: 0.02, sunDist: 2.5, shadowK: 2.5, shadowR: 1.2 },
     FOOTPRINT_ROUND: 0.5, FOOTPRINT_MAX_RATIO: 2, FOOTPRINT_STRETCH_RATIO: 3, FOOTPRINT_STRETCH_EXTRA: 0.5, BACK_ANGLE: 40
   };
@@ -4143,7 +4143,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
    the eye is 1 m or more above ground.
    F5-T1 room finder (A-14): roomOf(house, id), roomGroups(house) (levels lowest first, rooms in plan order, plan names)
    and forRoom(house, id, current, limits): target = room centre at floorY + 0.5, theta kept, phi 35 degrees (15 for a
-   basement room, plan review item 1), radius = clamp(1.6 x max(w, d) + storeyH, 6, 3 x house.radius), then clamped. */
+   basement room, plan review item 1), radius = clamp(1.6 x max(w, d) + storeyH, 6, 3 x house.radius), then clamped.
+   F5-T3a desktop framing: viewOffset(W, H, occl) (a lens shift into the uncovered rectangle) and visibleAspect. */
 (function (PC) {
   'use strict';
   var D = Math.PI / 180;
@@ -4175,6 +4176,21 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
           z0: Math.min.apply(null, zs), z1: Math.max.apply(null, zs) },
         eyeMin: k.eyeMin
       };
+    },
+    // Desktop framing under the floating panel (TL F5-T3a plan review ruling 2, A-12): a lens shift. The 6 arguments
+    // of r128's PerspectiveCamera.setViewOffset(fullW, fullH, x, y, w, h) that put the principal point at the centre
+    // of the uncovered rectangle x in [0, W - o] (o = occl.right px), with the vertical scale and fov unchanged (the
+    // camera's aspect is then fullW / fullH); null when nothing is covered (clearViewOffset). occl.bottom is held at 0
+    // until F5-T3b (CTO condition a) and is ignored here.
+    viewOffset: function (W, H, occl) {
+      var o = occl && occl.right > 0 ? Math.round(occl.right) : 0;
+      if (!(W > 0 && H > 0) || !o || o >= W) return null;
+      return [W + o, H, o, 0, W, H];
+    },
+    // The aspect of the uncovered rectangle, used for the radius fits (reset, limits, the tour plan).
+    visibleAspect: function (W, H, occl) {
+      var v = C.viewOffset(W, H, occl);
+      return W > 0 && H > 0 ? (W - (v ? v[2] : 0)) / H : 1;
     },
     reset: function (house, aspect) {
       return { target: [0, 0, 0], radius: C.resetRadius(house, aspect), theta: K().resetTheta * D, phi: K().resetPhi * D };
@@ -4256,10 +4272,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
      its look point, the Reset target = the plot centre; ties by plan order), then the overview again.
    - Room eye: 0.6 x max(w, d) + 2 m from the room centre away from the footprint centre (street side, +Z, when the
      room is central), at max(baseY, 0) + storeyH + 2.5; a basement room: 1.5 m towards the footprint centre at
-     storeyH + 4. Look: the room centre at floorY + 0.5 (as the finder).
+     storeyH + 2.5 (F5-T3a pacing: TOUR.bEyeUp). Look: the room centre at floorY + 0.5 (as the finder).
    - Eye floor: (canopyY0 + canopyH) x scale max of PC.data.vegetation + TOUR.treeGap: every eye is at it or above.
    - Nudge: a point closer than 0.5 m to the one before is moved 0.5 m away along the leg (+X when they coincide).
-   - Times: rooms + 1 legs; the two overview legs 4 s, room-to-room legs 3.5 s (normal speed; TL ruling Q2). */
+   - Times: rooms + 1 legs; the two overview legs 4.5 s (F5-T3a pacing), room-to-room legs 3.5 s (normal speed; TL ruling Q2). */
 (function (PC) {
   'use strict';
   function K() { return PC.C.TOUR; }
@@ -5539,9 +5555,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   three.tour = {
     // o: { onStop(stop, index), onEnd(reason) }. Returns false when there is nothing to tour.
     start: function (o) {
-      var V = PC.view3d, h = V.house(), size = V.info().size;
+      var V = PC.view3d, h = V.house(), inf = V.info();
       if (!h || !V.pose()) return false;
-      var plan = PC.tourplan.build(h, size[0] && size[1] ? size[0] / size[1] : 1);
+      var plan = PC.tourplan.build(h, inf.aspect || 1);   // the visible aspect (F5-T3a lens shift)
       if (!plan) return false;
       if (V.selected() !== null) V.select(null);
       V.setRoof(false);
@@ -5619,7 +5635,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   var three = PC.three = PC.three || {};
   var S = {
     renderer: null, scene: null, camera: null, world: null, hemi: null, sun: null, mats: null, canvas: null,
-    house: null, builtKey: null, pose: null, limits: null, size: [0, 0],
+    house: null, builtKey: null, pose: null, limits: null, size: [0, 0], occl: { right: 0, bottom: 0 }, view: null,
     active: false, lost: false, dirty: false, frame: 0, building: 0, token: 0, onState: null,
     meshes: [], level: 'all', roof: false, renders: 0, builds: 0, restores: 0, looks: 0,
     look: { hour: 12, season: 'summer' },
@@ -5707,7 +5723,19 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     S.renderer.render(S.scene, cam);
     S.renders++;
   }
-  function aspect() { return S.size[0] && S.size[1] ? S.size[0] / S.size[1] : 1; }
+  // The radius fits use the aspect of the canvas part the panel leaves uncovered (F5-T3a, TL ruling 2).
+  function aspect() { return S.size[0] && S.size[1] ? PC.cam.visibleAspect(S.size[0], S.size[1], S.occl) : 1; }
+  // The lens shift: the projection centre in the uncovered rectangle; poses, pivot and clamps are unchanged.
+  function lens() {
+    var w = S.size[0], h = S.size[1], cam = S.camera;
+    if (!cam || !w || !h) return;
+    var v = PC.cam.viewOffset(w, h, S.occl);
+    if (v) { cam.aspect = v[0] / v[1]; cam.setViewOffset(v[0], v[1], v[2], v[3], v[4], v[5]); }
+    else { cam.aspect = w / h; cam.clearViewOffset(); }
+    S.view = v;
+    cam.updateProjectionMatrix();
+  }
+  function refit() { if (S.house) { S.limits = PC.cam.limits(S.house, aspect()); if (S.pose) S.pose = PC.cam.clamp(S.pose, S.limits); } }
   function resize(inFrame) {
     var c = S.canvas;
     if (!c || !S.renderer) return;
@@ -5720,8 +5748,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     S.renderer.setPixelRatio(dpr());
     S.renderer.setSize(w, h, false);
     S.size = [w, h];
-    S.camera.aspect = w / h; S.camera.updateProjectionMatrix();
-    if (S.house) { S.limits = PC.cam.limits(S.house, aspect()); if (S.pose) S.pose = PC.cam.clamp(S.pose, S.limits); }
+    lens(); refit();
     if (!inFrame) invalidate();
   }
 
@@ -5729,6 +5756,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     S.canvas = canvas;
     S.scene = new THREE.Scene();
     S.camera = new THREE.PerspectiveCamera(PC.C.CAM.fov, 1, PC.C.CAM.nearMin, 100);
+    lens();
     S.hemi = new THREE.HemisphereLight(three.col('#FFFFFF'), three.col('#FFFFFF'), 1); S.hemi.name = 'hemi';
     S.sun = new THREE.DirectionalLight(three.col('#FFFFFF'), 1); S.sun.name = 'sun';
     S.sun.castShadow = true;
@@ -5743,7 +5771,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       if (S.house) { S.builtKey = null; build(S.house); }
       invalidate();
     });
-    if (typeof ResizeObserver === 'function' && canvas.parentElement) new ResizeObserver(function () { resize(); }).observe(canvas.parentElement);
+    // the wrap and the canvas itself (F5-T3a: at 640x360 the canvas narrows beside the panel; a double fire is harmless)
+    if (typeof ResizeObserver === 'function' && canvas.parentElement) { var ro = new ResizeObserver(function () { resize(); }); ro.observe(canvas.parentElement); ro.observe(canvas); }
     else if (typeof addEventListener === 'function') addEventListener('resize', function () { resize(); });
     if (typeof document !== 'undefined' && document.addEventListener) {
       document.addEventListener('visibilitychange', function () { if (visible()) invalidate(); else cancelFrame(); });
@@ -5848,6 +5877,13 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       if (S.house && S.mats) { lights(S.house); invalidate(); }
     },
     look: function () { return { hour: S.look.hour, season: S.look.season }; },
+    // F5-T3a: canvas px covered by overlays ({ right }; bottom held at 0): re-fits lens + limits, marks dirty.
+    setOcclusion: function (o) {
+      var r = o && o.right > 0 ? Math.round(o.right) : 0;
+      if (r === S.occl.right) return;
+      S.occl = { right: r, bottom: 0 };
+      lens(); refit(); invalidate();
+    },
     resetView: function () { if (!S.house) return; stopAnim('reset'); S.pose = PC.cam.reset(S.house, aspect()); invalidate(); },
     setOnInput: function (fn) { S.onInput = fn; },
     // F5-T1: the animation driver, flights and the room selection (A-12, A-14 as built).
@@ -5869,7 +5905,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
         building: !!S.building, frame: !!S.frame, dirty: S.dirty, renders: S.renders, builds: S.builds, restores: S.restores,
         meshCount: S.meshes.length + (S.highlight ? 1 : 0), meshes: S.meshes.concat(S.highlight ? [S.highlight] : []),
         flight: S.anim && S.anim.kind === 'flight' ? { from: PC.cam.copy(S.anim.from), to: PC.cam.copy(S.anim.to), t: S.anim.t, ms: S.anim.ms } : null,
-        animating: !!S.anim, selected: S.selected, highlight: S.highlight, highlightsMade: S.hlMade, level: S.level, roof: S.roof, look: { hour: S.look.hour, season: S.look.season }, looks: S.looks, size: S.size.slice(), renderNow: function () { if (S.house && !S.lost) render(); } };
+        animating: !!S.anim, selected: S.selected, highlight: S.highlight, highlightsMade: S.hlMade, level: S.level, roof: S.roof, look: { hour: S.look.hour, season: S.look.season }, looks: S.looks, size: S.size.slice(), occl: { right: S.occl.right, bottom: S.occl.bottom }, viewOffset: S.view ? S.view.slice() : null, aspect: aspect(), renderNow: function () { if (S.house && !S.lost) render(); } };
     }
   };
 })(globalThis.PC = globalThis.PC || {});
@@ -5896,32 +5932,40 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 </script>
 <script>/* js/ui/storage.js */
 /* PC.ui.storage: the only file that touches localStorage (A-3). Every access is guarded; on any failure the
-   adapter turns into a no-op with available = false. PC.ui.autosave: debounced draft writer (A-4). */
+   adapter turns into a no-op with available = false. A full quota at start (read
+   works, the probe write fails) is the read-only state: the stored draft is still offered (F5-T3a, TL ruling 4).
+   PC.ui.autosave: debounced draft writer (A-4); one toast when saving stops mid-session (PM round 14). */
 (function (PC) {
   'use strict';
   var ui = PC.ui = PC.ui || {};
 
+  // available = saving works (the probe write succeeded and no write failed since). canRead alone is the read-only
+  // state of a full quota (F5-T3a, TL ruling 4): a stored draft is still offered for Resume, nothing is ever written.
   var S = ui.storage = {
-    available: false,
+    available: false, canRead: false, canWrite: false,
     probe: function () {
+      var ls = null;
+      try { ls = window.localStorage; ls.getItem('plotcraft.probe'); S.canRead = true; } catch (e) { S.canRead = false; }
       try {
-        var ls = window.localStorage, k = 'plotcraft.probe';
+        if (!ls) throw new Error('no storage');
+        var k = 'plotcraft.probe';
         ls.setItem(k, '1'); ls.removeItem(k);
-        S.available = true;
-      } catch (e) { S.available = false; }
+        S.canWrite = true;
+      } catch (e) { S.canWrite = false; }
+      S.available = S.canWrite;
       return S.available;
     },
     get: function (key) {
-      if (!S.available) return null;
-      try { return window.localStorage.getItem(key); } catch (e) { S.available = false; return null; }
+      if (!S.canRead) return null;
+      try { return window.localStorage.getItem(key); } catch (e) { off(); return null; }
     },
     set: function (key, text) {
-      if (!S.available) return false;
-      try { window.localStorage.setItem(key, text); return true; } catch (e) { S.available = false; return false; }
+      if (!S.canWrite) return false;
+      try { window.localStorage.setItem(key, text); return true; } catch (e) { off(); return false; }
     },
     remove: function (key) {
-      if (!S.available) return false;
-      try { window.localStorage.removeItem(key); return true; } catch (e) { S.available = false; return false; }
+      if (!S.canWrite) return false;
+      try { window.localStorage.removeItem(key); return true; } catch (e) { off(); return false; }
     },
 
     // The draft (A-4). PC.draft.KEYS is the one list of draft keys, current first: read the first one present,
@@ -5944,10 +5988,15 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     keepRejected: function (raw) { return typeof raw === 'string' && S.set(S.REJECTED_KEY, raw); }
   };
   var oldGone = false;
+  // Any failure after the probe turns the adapter off entirely (F1 behaviour, unchanged).
+  function off() { S.canRead = S.canWrite = S.available = false; }
 
   var timer = null, dirty = false;
   var A = ui.autosave = {
     DELAY: 400,
+    // PM round 14, word for word; shown once per session when saving stops after it worked.
+    STOPPED: 'Saving has stopped: this browser\'s storage is full or blocked. Your work stays on screen but will be lost when you close or reload the page.',
+    stoppedToast: false,
     start: function () {
       PC.store.subscribe(function () { dirty = true; A.schedule(); });
       document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') A.flush(); });
@@ -5965,7 +6014,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       var s = PC.store.get(), was = S.available;
       if (PC.draft.isEmpty(s)) S.removeDraft();
       else S.writeDraft(PC.draft.serialize(s, Date.now()));
-      if (was && !S.available && ui.start) ui.start.render();   // storage just failed: show the note
+      if (was && !S.available) {                                 // storage just failed: the note, the chip, one toast
+        if (ui.start) ui.start.render();
+        if (!A.stoppedToast && ui.toast) { A.stoppedToast = true; ui.toast(A.STOPPED, { kind: 'warn', ms: 8000 }); }
+      }
     }
   };
 })(globalThis.PC = globalThis.PC || {});
@@ -6048,12 +6100,13 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     var i = toasts.indexOf(t); if (i >= 0) toasts.splice(i, 1);
   }
   // Short message above the action bar. The same text while still visible only restarts its timer.
+  // opts: { ms, kind, units } (units: the text quotes a measurement; dropped on a unit change).
   ui.toast = function (text, opts) {
     var ms = (opts && opts.ms) || 3500, kind = (opts && opts.kind) || 'info';
     toasts.filter(function (x) { return !x.el.isConnected; }).forEach(dropToast);
     var t = toasts.filter(function (x) { return x.text === text; })[0];
     if (!t) {
-      t = { text: text, el: ui.tpl('tpl-toast'), timer: null };
+      t = { text: text, el: ui.tpl('tpl-toast'), timer: null, units: !!(opts && opts.units) };
       ui.$('toast-text', t.el).textContent = text;
       t.el.setAttribute('data-kind', kind);
       ui.$('toast-region').appendChild(t.el);
@@ -6063,6 +6116,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     t.timer = setTimeout(function () { dropToast(t); }, ms);
     return t.el;
   };
+
+  // F5-T3a (F1 review item 7): a toast raised with { units: true } quotes a measurement in the unit of its moment;
+  // the shell calls this when the display unit changes, so no toast keeps showing the old unit.
+  ui.toast.dropUnits = function () { toasts.filter(function (x) { return x.units; }).forEach(dropToast); };
 
   /* ---- banners (one per id, in the banner slot) ---- */
   var banners = {};
@@ -6130,6 +6187,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     call(shown, 'enter');
   }
 
+  var lastUnit = null;
   function render(state, prev, meta) {
     if (!ready) return;
     var s = PC.store.get(), st = PC.stages.status(s);
@@ -6138,6 +6196,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     renderStepper(s, st);
     renderBar(s, st);
     ui.show(ui.$('sample-strip'), s.sampleClean && STRIP_STAGES.indexOf(s.stage) >= 0);
+    if (lastUnit !== null && lastUnit !== s.ans.unit) ui.toast.dropUnits();   // F5-T3a: no toast in the old unit
+    lastUnit = s.ans.unit;
     ui.$('unit-m').checked = s.ans.unit === 'm';
     ui.$('unit-ft').checked = s.ans.unit === 'ft';
     if (controllers[s.stage]) ui.banner.hide(STATIC_ID);
@@ -6160,7 +6220,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   function stepTap(n) {
     var s = PC.store.get();
     if (n === s.stage) return;
-    if (!PC.store.go(n)) ui.toast(PC.stages.status(s)[n].reason);
+    if (!PC.store.go(n)) ui.toast(PC.stages.status(s)[n].reason, { units: true });   // may quote the minimum area
   }
 
   ui.stages = ui.stages || {};
@@ -6194,7 +6254,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 
 </script>
 <script>/* js/ui/start.js */
-/* PC.ui.start: start panel (Resume draft / Start new / Load sample / no-save note), pending-draft guard, Skip to 3D. */
+/* PC.ui.start: start panel (Resume draft / Start new / Load sample / no-save note), the header no-save chip (F5-T3a),
+   pending-draft guard, Skip to 3D. In the read-only state (full quota: reads work, writes do not) a stored draft is
+   still offered; nothing is written (storage.set is a no-op), Start new still asks first. */
 (function (PC) {
   'use strict';
   var ui = PC.ui = PC.ui || {};
@@ -6215,7 +6277,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     ui.show(ui.$('start-panel'), s.plot.pts.length === 0);
     ui.show(ui.$('resume-box'), !!pending);
     ui.show(ui.$('note-nosave'), !ui.storage.available);
+    ui.show(ui.$('nosave-chip'), !ui.storage.available);   // F5-T3a: the header chip, on every stage
   }
+  // PM round 14, word for word.
+  var NOSAVE_TOAST = 'Drafts are not saved on this device. Your work will be lost when you close or reload the page.';
 
   function confirmDiscard() {
     return ui.dialog.confirm({
@@ -6292,6 +6357,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       ui.on(ui.$('btn-startnew'), 'click', startNew);
       ui.on(ui.$('btn-sample'), 'click', loadSample);
       ui.on(ui.$('btn-skip3d'), 'click', skip);
+      ui.on(ui.$('nosave-chip'), 'click', function () { ui.toast(NOSAVE_TOAST, { kind: 'warn' }); });
       PC.store.subscribe(render);
       render();
     }
@@ -6809,7 +6875,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     // The area label goes first (it has the best spot), then the edge lengths around it.
     if (closed) {
       var sc = v.toScreen(PC.geom.innerPoint(pts));
-      D.label(v, PC.units.fmtArea(Math.abs(PC.geom.area(pts)), u), sc[0], sc[1], labels, opt);
+      D.label(v, PC.units.fmtArea(Math.abs(PC.geom.area(pts)), u), sc[0], sc[1], labels, Object.assign({}, opt, { font: P.font.area, color: P.label.area }));   // F5-T3a: lighter area label
     }
     if (live) D.edgeLabels(v, live, false, fmt, labels, { color: P.plot.live, avoid: opt.avoid });
     D.edgeLabels(v, pts, closed, fmt, labels, opt);
@@ -7106,7 +7172,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
    or, in tap mode "Back / side", switch that edge's class (F2-S4). */
 (function (PC) {
   'use strict';
-  var ui = PC.ui = PC.ui || {}, view = null, api = null, labels = [], dragNorth = null, focusEdge = null;
+  var ui = PC.ui = PC.ui || {}, view = null, api = null, labels = [], ticks = [], area = null, dragNorth = null, focusEdge = null;
   var PAD = { t: 26, r: 30, b: 26, l: 30 }, DIAL = 20;
 
   function site() { return PC.site.analyse(api.state()); }
@@ -7176,6 +7242,57 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   // Labels that are always drawn: the street edge ("front") and every overridden edge ("side*"), however short the
   // edge. Free spots first (outside, then inside the edge); forced only as a last resort, and never over the
   // compass or a floating control (TL plan-review ruling 6).
+  // One edge label with the normal culling (as draw2d.edgeLabels): none when the edge is too short for it or no
+  // spot beside it is free. Returns true when drawn.
+  function edgeLabel(v, a, b, text, avoid) {
+    var D = ui.draw2d, g = v.ctx, o = { avoid: avoid }, vis = D.clipToView(v, v.toScreen(a), v.toScreen(b), 2);
+    if (!vis) return false;
+    g.font = PC.data.palette2d.font.label;
+    var tw = g.measureText(text).width, p = vis[0], q = vis[1], dx = q[0] - p[0], dy = q[1] - p[1], l = Math.sqrt(dx * dx + dy * dy);
+    if (l < tw + 20) return false;
+    var off = 13 + Math.abs(dy / l) * (tw / 2 - 4), along = [0.5, 0.35, 0.65, 0.22, 0.78], k, s2;
+    for (k = 0; k < along.length; k++) for (s2 = 1; s2 >= -1; s2 -= 2) {
+      var sx = p[0] + dx * along[k] - dy / l * off * s2, sy = p[1] + dy * along[k] + dx / l * off * s2;
+      if (D.labelFree(v, D.labelRect(v, text, sx, sy, o), labels, o)) { D.label(v, text, sx, sy, labels, o); return true; }
+    }
+    return false;
+  }
+  // The "*" tick of an overridden edge whose label was culled: 6 px across the edge at its midpoint, on the inner
+  // side, in the edge's class colour, 2 px wide.
+  function ovTick(v, pts, i, color) {
+    var n = pts.length, a = v.toScreen(pts[i]), b = v.toScreen(pts[(i + 1) % n]), dx = b[0] - a[0], dy = b[1] - a[1], l = Math.sqrt(dx * dx + dy * dy) || 1;
+    var m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], nx = -dy / l, ny = dx / l, scr = pts.map(function (p) { return v.toScreen(p); });
+    if (!PC.geom.pointInPoly([m[0] + nx * 3, m[1] + ny * 3], scr)) { nx = -nx; ny = -ny; }
+    var g = v.ctx;
+    g.save(); g.setLineDash([]); g.lineCap = 'butt'; g.lineWidth = 2; g.strokeStyle = color;
+    g.beginPath(); g.moveTo(m[0], m[1]); g.lineTo(m[0] + nx * 6, m[1] + ny * 6); g.stroke(); g.restore();
+    ticks.push({ edge: i, x: m[0], y: m[1], dx: nx, dy: ny });
+  }
+  // The footprint area label (F5-T3a, Designer spec): the lighter area font / colour; on two lines ("108" / "m²",
+  // 14 px apart) when one line is wider than the footprint less 8 px; outside the footprint on the street side
+  // (centred, 4 px off its street edge, no leader) when two lines do not fit either.
+  function areaLabel(v, fp, text, avoid) {
+    var D = ui.draw2d, P = PC.data.palette2d, o = { avoid: avoid, font: P.font.area, color: P.label.area };
+    var cs = [[fp.u, fp.v], [fp.u + fp.w, fp.v], [fp.u + fp.w, fp.v + fp.d], [fp.u, fp.v + fp.d]].map(function (p) { return v.toScreen(p); });
+    var xs = cs.map(function (p) { return p[0]; }), w = Math.max.apply(null, xs) - Math.min.apply(null, xs);
+    var c = v.toScreen([fp.u + fp.w / 2, fp.v + fp.d / 2]), sp = text.lastIndexOf(' '), lines = [text.slice(0, sp), text.slice(sp + 1)];
+    if (D.labelRect(v, text, c[0], c[1], o).w <= w - 8) { area = D.label(v, text, c[0], c[1], labels, o) ? { mode: 'one', lines: [text] } : null; return; }
+    var wide = Math.max(D.labelRect(v, lines[0], 0, 0, o).w, D.labelRect(v, lines[1], 0, 0, o).w);
+    if (wide <= w - 8) {
+      var r0 = D.labelRect(v, lines[0], c[0], c[1] - 7, o), r1 = D.labelRect(v, lines[1], c[0], c[1] + 7, o);
+      r0.h = r1.h = 14; r0.y = c[1] - 14; r1.y = c[1];
+      if (D.labelFree(v, r0, labels, o) && D.labelFree(v, r1, labels, o)) {
+        D.label(v, lines[0], c[0], c[1] - 7, null, o); D.label(v, lines[1], c[0], c[1] + 7, null, o);
+        labels.push(r0, r1); area = { mode: 'two', lines: lines };
+      } else area = null;
+      return;
+    }
+    // outside, street side: the street edge is v = fp.v (frame L); outward = from the centre to that edge's midpoint
+    var m = v.toScreen([fp.u + fp.w / 2, fp.v]), dx = m[0] - c[0], dy = m[1] - c[1], l = Math.sqrt(dx * dx + dy * dy) || 1, r = D.labelRect(v, text, 0, 0, o);
+    dx /= l; dy /= l;
+    var off = 4 + Math.abs(dx) * r.w / 2 + Math.abs(dy) * r.h / 2, x = m[0] + dx * off, y = m[1] + dy * off;
+    area = D.label(v, text, x, y, labels, o) ? { mode: 'outside', lines: [text], x: x, y: y } : null;
+  }
   function forcedLabel(v, a, b, text, avoid) {
     var D = ui.draw2d, vis = D.clipToView(v, v.toScreen(a), v.toScreen(b), 2), o = { avoid: avoid };
     if (!vis) return;
@@ -7209,8 +7326,11 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 
   function draw(v) {
     var s = site(), D = ui.draw2d, P = PC.data.palette2d, state = api.state(), unit = state.ans.unit;
-    labels = [];
+    labels = []; ticks = []; area = null;
     D.clear(v);
+    // F5-T3a: the Parking / Pool legend entries only when the drawing has them (PM round 14)
+    ui.$('site-legend-parking').hidden = !(s && s.parking);
+    ui.$('site-legend-pool').hidden = !(s && s.pool);
     if (!s) return;
     var pts = s.ptsL, n = pts.length, i;
     var avoid = [dialRect()].concat(overlays()), ov = state.ans.edgeOv || {};
@@ -7225,13 +7345,13 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     }
     if (focusEdge !== null && focusEdge < n)                // the edge focused in the Q6 edge list (F2-S4 keyboard)
       D.path(v, [pts[focusEdge], pts[(focusEdge + 1) % n]], { stroke: P.edge.focus, width: P.line.edgeFocus });
-    // Labels, most important first: street, overridden edges (always shown), the footprint area, the other edges.
+    // Labels, most important first: street (always shown), overridden edges, the footprint area, the other edges.
+    // F5-T3a (A-15 as updated): an overridden edge's "*" label follows the normal culling; when it is culled, a "*"
+    // tick marks the edge's midpoint (the Q6 edge list stays the full reference).
     forcedLabel(v, pts[s.edge], pts[(s.edge + 1) % n], 'front', avoid);
-    for (i = 0; i < n; i++) if (ov[i] && i !== s.edge) forcedLabel(v, pts[i], pts[(i + 1) % n], s.edgeClass[i] + '*', avoid);
-    if (s.footprint) {
-      var c = v.toScreen([s.footprint.u + s.footprint.w / 2, s.footprint.v + s.footprint.d / 2]);
-      D.label(v, PC.units.fmtArea(s.footprint.area, unit), c[0], c[1], labels, { avoid: avoid });
-    }
+    for (i = 0; i < n; i++) if (ov[i] && i !== s.edge && !edgeLabel(v, pts[i], pts[(i + 1) % n], s.edgeClass[i] + '*', avoid))
+      ovTick(v, pts, i, P.edge[s.edgeClass[i]]);
+    if (s.footprint) areaLabel(v, s.footprint, PC.units.fmtArea(s.footprint.area, unit), avoid);
     D.edgeLabels(v, pts, true, function (len, k) { return k === s.edge || (ov[k] && k !== s.edge) ? null : s.edgeClass[k]; }, labels, { avoid: avoid });
     drawCompass(v, dragNorth !== null ? dragNorth : PC.frames.northL(state));
   }
@@ -7285,6 +7405,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       });
       Object.assign(PC.debug, {
         siteLabels: function () { view.drawNow(); return labels.slice(); },
+        siteTicks: function () { view.drawNow(); return ticks.slice(); },
+        siteArea: function () { view.drawNow(); return area; },
         // Edge highlighted from the Q6 edge list, or null.
         siteFocusEdge: function () { return focusEdge; },
         // North angle in L the compass arrow shows now (during a drag: the one under the finger).
@@ -7815,9 +7937,12 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     ui.$('q-stairs-box').hidden = !stairs; ui.$('q-stairs-none').hidden = stairs;
     ui.qrooms.render(s);
     ui.$('q-roof-note').hidden = !(roofNote && s.ans.usableRoof);
-    ui.$('q-pool-size-note').textContent = PC.C.SIZES.map(function (k) { var p = PC.C.POOL[k]; return k + ' ' + U.fmtDims(p.w, p.d, unit); }).join(' · ');
+    // PM round 14: "S 3 × 6 · M 4 × 8 · L 5 × 10 m" / "S 9.8 × 19.7 · M 13.1 × 26.2 · L 16.4 × 32.8 ft" (the unit once)
+    ui.$('q-pool-size-note').textContent = PC.C.SIZES.map(function (k) { var p = PC.C.POOL[k]; return k + ' ' + poolDim(p.w, unit) + ' \u00D7 ' + poolDim(p.d, unit); }).join(' · ') + ' ' + U.lenUnit(unit);
   }
 
+  // metres whole when whole (3, not 3.0), feet to one decimal (PM round 14)
+  function poolDim(m, unit) { var x = PC.units.toDisplay(m, unit); return unit === 'ft' ? x.toFixed(1) : String(Math.round(x * 10) / 10); }
   function render(s) {
     if (!F) return;
     if (!s.ans.usableRoof) roofNote = false;
@@ -8491,6 +8616,17 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     renderLevels();
     PC.view3d.open(house, ui.$('v3-canvas'), onState);
     if (house) PC.view3d.setLevel(level);
+    occlusion();
+  }
+  // F5-T3a desktop framing (TL ruling 2): the canvas width covered by the floating panel card, measured, so the lens
+  // shift follows the CSS. 0 when the panel is collapsed, docked across the bottom (it spans the canvas width) or
+  // beside the canvas (640x360 side by side); occl.bottom stays 0 until F5-T3b (CTO condition a).
+  function occlusion() {
+    if (!open) return;
+    var p = ui.$('v3-panel'), c = ui.$('v3-canvas').getBoundingClientRect(), r = p.getBoundingClientRect(), o = 0;
+    if (!p.classList.contains('is-collapsed') && r.width > 0 && c.width > 0 && r.left > c.left + 1 && r.left < c.right && r.top < c.bottom && r.bottom > c.top)
+      o = c.right - r.left;
+    PC.view3d.setOcclusion({ right: o, bottom: 0 });
   }
   function hhmm(h) {
     var m = Math.round(h * 60), hh = Math.floor(m / 60), mm = m % 60;
@@ -8541,7 +8677,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
         var p = ui.$('v3-panel'), collapsed = !p.classList.contains('is-collapsed');
         p.classList.toggle('is-collapsed', collapsed);
         ui.$('v3-panel-toggle').setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        occlusion();
       });
+      if (typeof addEventListener === 'function') addEventListener('resize', occlusion);
       TABS.forEach(function (t) { ui.on(ui.$('v3-tab-' + t), 'click', function () { tab(t); }); });
       Object.assign(PC.debug = PC.debug || {}, {
         house: function () { return house; },

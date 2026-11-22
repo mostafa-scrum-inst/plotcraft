@@ -62,7 +62,7 @@ async function defaultsAndGroups(vp) {
   T.eq([await k.val('q-parking-cars'), await hook('q-parking-covered').isChecked(), await hook('q-pool').isChecked(), await k.checked('q-pool-size')], ['1', false, false, 'S'], `${tag} defaults: parking and pool`);
   T.ok(await page.locator('[data-pc="q-pool-size"] input').first().isDisabled(), `${tag} pool size is disabled while the pool is off`);
   T.eq([await hook('q-wall').isChecked(), await k.checked('q-gate'), await hook('q-seating').isChecked()], [true, 'centre', false], `${tag} defaults: extras`);
-  T.eq(await k.text('q-pool-size-note'), 'S 3.0 × 6.0 m' + DOT + 'M 4.0 × 8.0 m' + DOT + 'L 5.0 × 10.0 m', `${tag} pool sizes from the constants`);
+  T.eq(await k.text('q-pool-size-note'), 'S 3 × 6' + DOT + 'M 4 × 8' + DOT + 'L 5 × 10 m', `${tag} pool sizes from the constants (PM round 14 format)`);
   T.eq(await page.evaluate(() => document.querySelectorAll('[data-stage="2"] [data-q="18"], [data-stage="2"] [data-q="19"]').length), 0, `${tag} Q18 and Q19 are not on this stage`);
   const heads = await page.evaluate(() => Object.fromEntries([...document.querySelectorAll('[data-stage="2"] [data-q]')].map((q) => [q.dataset.q, q.querySelector('h4').textContent.trim()])));
   for (const [q, text] of Object.entries(HEADINGS)) T.eq(heads[q], text, `${tag} Q${q} text matches the brief`);
@@ -113,7 +113,7 @@ async function fieldsAndUnits(vp) {
   await k.radio('q-unit', 'ft');
   let s = await k.state();
   T.eq([s.ans.unit, s.ans.setbacks.front, await k.val('q-setback-front'), await k.text('q-setback-front-unit'), await hook('unit-ft').isChecked()], ['ft', 3.5, '11.5', 'ft', true], `${tag} unit switch converts the display and stores nothing`);
-  T.eq(await k.text('q-pool-size-note'), 'S 9.8 × 19.7 ft' + DOT + 'M 13.1 × 26.2 ft' + DOT + 'L 16.4 × 32.8 ft', `${tag} pool sizes in feet`);
+  T.eq(await k.text('q-pool-size-note'), 'S 9.8 × 19.7' + DOT + 'M 13.1 × 26.2' + DOT + 'L 16.4 × 32.8 ft', `${tag} pool sizes in feet (PM round 14 format)`);
   T.eq([await k.text('sum-plot'), await k.text('q-street-value')], ['6286 sq ft', 'Edge 1 of 5' + DOT + '65.6 ft'], `${tag} summary and readouts in feet`);
   await k.type('q-setback-front', '10');
   T.eq([(await k.state()).ans.setbacks.front, await k.val('q-setback-front')], [3.048, '10.0'], `${tag} 10 ft is stored as 3.048 m`);
@@ -220,7 +220,8 @@ async function previewAndConflicts(vp) {
   // 15 preview: fitted, labelled, locked
   T.ok(await fitted(), `${tag} preview: the whole plot is on the canvas`);
   let L = (await page.evaluate(() => PC.debug.siteLabels())).map((l) => l.text);
-  T.ok(L.includes('front') && L.includes('side') && L.includes('143 m' + M2), `${tag} preview: edge classes and footprint area labelled (${L})`);
+  // F5-T3a: a narrow footprint takes its area on two lines ("143" / "m²")
+  T.ok(L.includes('front') && L.includes('side') && (L.includes('143 m' + M2) || (L.includes('143') && L.includes('m' + M2))), `${tag} preview: edge classes and footprint area labelled (${L})`);
   const v0 = await view(), box = await hook('site-canvas').boundingBox(), c = [box.x + box.width / 2, box.y + box.height / 2];
   await k.G.drag(c, [c[0] + 40, c[1] + 20]);
   if (vp.touch) await k.G.two([c[0] - 20, c[1]], [c[0] + 20, c[1]], [c[0] - 60, c[1]], [c[0] + 60, c[1]]);

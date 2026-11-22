@@ -16,7 +16,7 @@ const T = suite('e2e view3d'), browser = await launch();
 const countRaf = () => { const o = window.requestAnimationFrame.bind(window); window.__raf = 0; window.requestAnimationFrame = (cb) => { window.__raf++; return o(cb); }; };
 const quiet = (page) => page.waitForTimeout(300);
 const ready = (page) => page.waitForFunction(() => { const i = PC.debug.scene(); return i.renders > 0 && !i.frame && !i.building; });
-const info = (page) => page.evaluate(() => { const i = PC.debug.scene(); return { renders: i.renders, builds: i.builds, size: i.size, active: i.active, frame: i.frame, aspect: i.camera.aspect }; });
+const info = (page) => page.evaluate(() => { const i = PC.debug.scene(); return { renders: i.renders, builds: i.builds, size: i.size, active: i.active, frame: i.frame, aspect: i.camera.aspect, vo: i.viewOffset }; });
 const cam = (page) => page.evaluate(() => PC.debug.cam());
 const scroll = (page) => page.evaluate(() => [window.scrollX, window.scrollY, document.scrollingElement.scrollTop, window.visualViewport ? window.visualViewport.scale : 1]);
 const DISABLED = ['v3-tour-pause', 'v3-tour-stop'];   // F5-T2: live only while a tour runs
@@ -115,7 +115,13 @@ async function phone() {
   await page.setViewportSize({ width: 640, height: 360 });
   await page.waitForFunction(() => { const c = document.querySelector('[data-pc="v3-canvas"]'), i = PC.debug.scene(); return i.size[0] === c.clientWidth && i.size[1] === c.clientHeight && !i.frame; });
   const rot = await info(page);
-  T.ok(Math.abs(rot.aspect - rot.size[0] / rot.size[1]) < 1e-9 && rot.size[0] > rot.size[1], `${tag} 640x360: aspect ${rot.aspect.toFixed(3)} follows the canvas`);
+  T.ok(Math.abs(rot.aspect - (rot.vo ? rot.vo[0] / rot.vo[1] : rot.size[0] / rot.size[1])) < 1e-9 && rot.size[0] > rot.size[1], `${tag} 640x360: aspect ${rot.aspect.toFixed(3)} follows the canvas (with the F5-T3a lens shift when the panel covers it: ${JSON.stringify(rot.vo)})`);
+  // F5-T3a: collapsing / expanding the panel at 640x360 resizes the canvas (side by side), the renderer follows
+  const follows = () => page.waitForFunction(() => { const c = document.querySelector('[data-pc="v3-canvas"]'), i = PC.debug.scene(); return i.size[0] === c.clientWidth && !i.frame; }, null, { timeout: 3000 }).then(() => true, () => false);
+  const w0 = (await info(page)).size[0];
+  await act('v3-panel-toggle'); const f1 = await follows(), w1 = (await info(page)).size[0];
+  await act('v3-panel-toggle'); const f2 = await follows(), w2 = (await info(page)).size[0];
+  T.ok(f1 && f2 && w2 === w0, `${tag} 640x360 panel toggle: the renderer follows the canvas (${w0} -> ${w1} -> ${w2} px)`);
   T.none(problems(), `${tag} no errors`);
   await o.ctx.close();
 }
@@ -148,8 +154,17 @@ async function desktop() {
   T.ok(p.radius > p0.radius, `${tag} - zooms out`);
   T.eq(await scroll(page), [0, 0, 0, 1], `${tag} arrow keys on the canvas do not scroll the page`);
   await act('v3-reset'); await ready(page);
-  const rs = await page.evaluate(() => { const i = PC.debug.scene(); return [PC.debug.cam(), PC.cam.reset(PC.debug.house(), i.size[0] / i.size[1])]; });
-  T.eq(rs[0], rs[1], `${tag} Reset view = the reset pose for this canvas`);
+  const rs = await page.evaluate(() => { const i = PC.debug.scene(); return [PC.debug.cam(), PC.cam.reset(PC.debug.house(), i.aspect)]; });
+  T.eq(rs[0], rs[1], `${tag} Reset view = the reset pose for the canvas part the panel leaves uncovered`);
+  // F5-T3a lens shift (TL ruling 2): the floating card covers canvas.right - panel.left; collapsed, nothing
+  const lensOf = () => page.evaluate(() => { const c = document.querySelector('[data-pc="v3-canvas"]').getBoundingClientRect(), p = document.querySelector('[data-pc="v3-panel"]').getBoundingClientRect(), i = PC.debug.scene();
+    return { o: Math.round(c.right - p.left), w: Math.round(c.width), h: Math.round(c.height), vo: i.viewOffset, aspect: i.camera.aspect, occl: i.occl.right }; });
+  let L = await lensOf();
+  T.ok(L.o > 300 && L.occl === L.o && JSON.stringify(L.vo) === JSON.stringify([L.w + L.o, L.h, L.o, 0, L.w, L.h]) && Math.abs(L.aspect - (L.w + L.o) / L.h) < 1e-9, `${tag} lens shift under the expanded panel: covered ${L.o} px, setViewOffset ${JSON.stringify(L.vo)}`);
+  await act('v3-panel-toggle'); await ready(page); L = await lensOf();
+  T.ok(L.occl === 0 && L.vo === null && Math.abs(L.aspect - L.w / L.h) < 1e-9, `${tag} panel collapsed: no lens shift, aspect ${L.aspect.toFixed(3)}`);
+  await act('v3-panel-toggle'); await ready(page);
+  L = await lensOf(); T.ok(L.o > 300 && L.occl === L.o && L.vo && L.vo[2] === L.o, `${tag} panel expanded again: lens shift back (${L.occl} px)`);
   // F4-T2: the Roof switch by keyboard (Space toggles the focused switch)
   await hook('v3-roof').focus(); await page.keyboard.press('Space'); await ready(page);
   T.eq(await page.evaluate(() => [document.querySelector('[data-pc="v3-roof"]').checked, PC.debug.scene().world.getObjectByName('roof').visible]), [true, true], `${tag} Space on Roof: roof shown`);

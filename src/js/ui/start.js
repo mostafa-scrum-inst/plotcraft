@@ -1,4 +1,6 @@
-/* PC.ui.start: start panel (Resume draft / Start new / Load sample / no-save note), pending-draft guard, Skip to 3D. */
+/* PC.ui.start: start panel (Resume draft / Start new / Load sample / no-save note), the header no-save chip (F5-T3a),
+   pending-draft guard, Skip to 3D. In the read-only state (full quota: reads work, writes do not) a stored draft is
+   still offered; nothing is written (storage.set is a no-op), Start new still asks first. */
 (function (PC) {
   'use strict';
   var ui = PC.ui = PC.ui || {};
@@ -19,7 +21,10 @@
     ui.show(ui.$('start-panel'), s.plot.pts.length === 0);
     ui.show(ui.$('resume-box'), !!pending);
     ui.show(ui.$('note-nosave'), !ui.storage.available);
+    ui.show(ui.$('nosave-chip'), !ui.storage.available);   // F5-T3a: the header chip, on every stage
   }
+  // PM round 14, word for word.
+  var NOSAVE_TOAST = 'Drafts are not saved on this device. Your work will be lost when you close or reload the page.';
 
   function confirmDiscard() {
     return ui.dialog.confirm({
@@ -96,6 +101,7 @@
       ui.on(ui.$('btn-startnew'), 'click', startNew);
       ui.on(ui.$('btn-sample'), 'click', loadSample);
       ui.on(ui.$('btn-skip3d'), 'click', skip);
+      ui.on(ui.$('nosave-chip'), 'click', function () { ui.toast(NOSAVE_TOAST, { kind: 'warn' }); });
       PC.store.subscribe(render);
       render();
     }

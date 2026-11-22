@@ -153,9 +153,12 @@
     ui.$('q-stairs-box').hidden = !stairs; ui.$('q-stairs-none').hidden = stairs;
     ui.qrooms.render(s);
     ui.$('q-roof-note').hidden = !(roofNote && s.ans.usableRoof);
-    ui.$('q-pool-size-note').textContent = PC.C.SIZES.map(function (k) { var p = PC.C.POOL[k]; return k + ' ' + U.fmtDims(p.w, p.d, unit); }).join(' · ');
+    // PM round 14: "S 3 × 6 · M 4 × 8 · L 5 × 10 m" / "S 9.8 × 19.7 · M 13.1 × 26.2 · L 16.4 × 32.8 ft" (the unit once)
+    ui.$('q-pool-size-note').textContent = PC.C.SIZES.map(function (k) { var p = PC.C.POOL[k]; return k + ' ' + poolDim(p.w, unit) + ' \u00D7 ' + poolDim(p.d, unit); }).join(' · ') + ' ' + U.lenUnit(unit);
   }
 
+  // metres whole when whole (3, not 3.0), feet to one decimal (PM round 14)
+  function poolDim(m, unit) { var x = PC.units.toDisplay(m, unit); return unit === 'ft' ? x.toFixed(1) : String(Math.round(x * 10) / 10); }
   function render(s) {
     if (!F) return;
     if (!s.ans.usableRoof) roofNote = false;

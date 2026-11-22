@@ -74,3 +74,26 @@ test('draft keys (A-4, F2-T3): read v2 else v1; the first v2 write removes v1; r
   assert.equal(S.readDraft(), 'x');
   S.removeDraft(); assert.equal(S.readDraft(), null);
 });
+
+// F5-T3a (TL ruling 4): the probe split into canRead / canWrite; read works + write fails = the read-only state
+test('the four probe combinations: canRead / canWrite / available', () => {
+  const mk = (read, write) => { const ls = memory(); ls.m.set('plotcraft.draft.v2', 'x');
+    if (!read) ls.getItem = () => { throw new Error('read denied'); };
+    if (!write) ls.setItem = () => { throw new Error('QuotaExceededError'); };
+    const PCx = loadWith(['js/core/ns.js', 'js/ui/storage.js'], { window: { localStorage: ls } });
+    PCx.draft = { KEYS: ['plotcraft.draft.v2', 'plotcraft.draft.v1'] };
+    return { ls, S: PCx.ui.storage }; };
+  for (const [read, write] of [[true, true], [true, false], [false, true], [false, false]]) {
+    const { ls, S } = mk(read, write);
+    S.probe();
+    assert.deepEqual([S.canRead, S.canWrite, S.available], [read, write, write], `read ${read} write ${write}`);
+    if (read && !write) {
+      // read-only: the stored text is readable, nothing is ever written or removed
+      assert.equal(S.get('plotcraft.draft.v2'), 'x');
+      let writes = 0; ls.setItem = () => { writes++; }; ls.removeItem = () => { writes++; };
+      assert.equal(S.set('k', 'v'), false); assert.equal(S.remove('plotcraft.draft.v2'), false); S.removeDraft(); assert.equal(S.writeDraft('{}'), false); assert.equal(S.readDraft(), 'x', 'the draft is offered');
+      assert.equal(writes, 0, 'no write in the read-only state');
+      assert.equal(S.get('plotcraft.draft.v2'), 'x', 'reads keep working');
+    }
+  }
+});
