@@ -137,6 +137,15 @@ colour retune and the sky golden regeneration) is not in this commit. `roofOnOpe
 
 - By the ruling, QA trims its own QA_FULL rows next, starting with f5-t3.
 
+## 2c. After QA's trim (3db2b02, 60a1d27): the T1a gate numbers
+
+- **QA_FULL=1** on 8c548e9: **green, 462.8 s (≤ 480)**.
+  - C-4.8 solo: **112 ms** (124, 112, 120); build to "ready" 8 ms.
+  - `tests/durations-full.json` rewritten.
+- **Release step** (`--only leak-max`) on df3803d: **green, 176.1 s** (limit 300 s, NOTE above 260 s).
+  - It runs the 200-op maximum-house stream plus the rows QA moved out of QA_FULL.
+- **Default full runs:** 405.0 s and 400.6 s (§0). QA's trim moved only QA_FULL rows, so those stand.
+
 ## 3. On-demand shadow map (TL Q-T8 follow-up, CTO conditions)
 
 - **`shadowsDirty()`** sets `renderer.shadowMap.needsUpdate` and counts `info().shadowUpdates`. It runs:
