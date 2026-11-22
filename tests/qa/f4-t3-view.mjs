@@ -48,7 +48,7 @@ const t0 = Date.now(), TIMES = [];
 // F6-T1 (impl-notes §6, plan §3): the full tier's shadow map is 2048 on fine pointers (it was <= 1024).
 // F6-T1 run-time moves (TL Q-T8, docs/03-tasks/F6-T1/qa-full-moves.md): A's 0 / 6 / 18 / 24 h edge looks and E (640x360,
 // 768x1024) run with QA_FULL=1 only (the 16 preset looks stay in the default run).
-const FULL = !!process.env.QA_FULL, F6 = !!(PC.texgen || (PC.C.VIEW3D && PC.C.VIEW3D.tiers)), MAPMAX = F6 ? 2048 : 1024, NEW6 = F6 ? 3 : 0 /* paving, northNeedle, sky (impl-notes §1 meshes; flat-roof sample) */, EDGE_H = FULL ? [0, 6, 18, 24] : [];
+const FULL = !!process.env.QA_FULL, F6 = !!(PC.texgen || (PC.C.VIEW3D && PC.C.VIEW3D.tiers)), MAPMAX = F6 ? 2048 : 1024, T1BV = !!PC.C.CONTACT, NEW6 = (F6 ? 3 : 0) + (T1BV ? 1 : 0) /* paving, northNeedle, sky (impl-notes §1 meshes; flat-roof sample); T1b groundRing */, EDGE_H = FULL ? [0, 6, 18, 24] : [];
 const cut = (a, n = 8) => a.slice(0, n).concat(a.length > n ? [`... ${a.length} in all`] : []);
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const RAF = () => { const raf = window.requestAnimationFrame.bind(window); window.__raf = 0; window.requestAnimationFrame = (cb) => { window.__raf++; return raf(cb); }; };
@@ -89,7 +89,11 @@ function lookProblems(g, hour, season, tag) {
   if (!close3(sun.target, tgt, 1e-6)) f.push(`${tag}: sun target ${sun.target.map((x) => x.toFixed(3))} != footprint centre ${tgt.map((x) => x.toFixed(3))}`);
   if (Math.abs(len - PC.C.VIEW3D.sunDist * g.house.radius) > 1e-6 || !close3(d.map((x) => x / len), L.sunDir, 1e-6)) f.push(`${tag}: sun at ${d.map((x) => (x / len).toFixed(4))} x ${len.toFixed(2)}, mine ${L.sunDir.map((x) => x.toFixed(4))} x ${(PC.C.VIEW3D.sunDist * g.house.radius).toFixed(2)}`);
   if (g.mats.groundPlot && !close3(g.mats.groundPlot, H.lin(L.groundColor), 2e-5)) f.push(`${tag}: plot ground not ${L.groundColor}`);
-  if (!g.mats.groundOuter || !close3(g.mats.groundOuter, H.lin(T3.siteColors.groundOuter), 2e-5)) f.push(`${tag}: groundOuter changed`);
+  // F6-T1b winter meadow (e775004): groundOuter follows the season's meadow colour; summer = siteColors.groundOuter, winter
+  // #E4E8EA (FS / Designer), spring / autumn = the table's meadow key. Before it: groundOuter never changes.
+  const MEAD = (SKY.seasons.summer || {}).meadow !== undefined, mw = !MEAD ? T3.siteColors.groundOuter : season === 'summer' ? T3.siteColors.groundOuter : season === 'winter' ? '#E4E8EA' : SKY.seasons[season].meadow;
+  if (MEAD && (SKY.seasons.summer.meadow.toUpperCase() !== T3.siteColors.groundOuter.toUpperCase() || SKY.seasons.winter.meadow.toUpperCase() !== '#E4E8EA')) f.push(`${tag}: meadow table summer ${SKY.seasons.summer.meadow} / winter ${SKY.seasons.winter.meadow}`);
+  if (!g.mats.groundOuter || !close3(g.mats.groundOuter, H.lin(mw), 2e-5)) f.push(`${tag}: groundOuter ${MEAD ? `not the ${season} meadow ${mw}` : 'changed'}`);
   if (g.mats.trunks && !close3(g.mats.trunks, H.lin(T3.siteColors.trunk), 2e-5)) f.push(`${tag}: trunk colour changed`);
   if (g.mats.canopies) { if (!close3(g.mats.canopies, H.lin(L.canopyColor), 2e-5)) f.push(`${tag}: canopy not ${L.canopyColor}`); if (g.vis.canopies !== L.canopyVisible) f.push(`${tag}: canopies visible ${g.vis.canopies}`); }
   if (g.mats.shrubs && !close3(g.mats.shrubs, H.lin(L.shrubColor), 2e-5)) f.push(`${tag}: shrub not ${L.shrubColor}`);
@@ -212,15 +216,24 @@ if (HAS.look) await guard('A 1280x800', async () => {
 });
 
 // ================= B. vegetation meshes =================
-const INST = (veg) => { const w = PC.debug.scene().world, h = PC.debug.scene().house, c = h.center, out = { meshes: 0, names: [], inst: {}, model: { trees: h.site.trees.length, shrubs: h.site.shrubs.length }, f: [] };
+const INST = (veg) => { const T1B = !!PC.C.CONTACT; const w = PC.debug.scene().world, h = PC.debug.scene().house, c = h.center, out = { meshes: 0, names: [], inst: {}, model: { trees: h.site.trees.length, shrubs: h.site.shrubs.length }, f: [] };
   w.updateMatrixWorld(true);
   w.traverse((o) => { if (!o.isMesh) return; out.meshes++; if (!o.isInstancedMesh) return; out.names.push(o.name); const g = o.geometry, P = g.attributes.position;
-    out.inst[o.name] = { count: o.count, culled: o.frustumCulled, cast: o.castShadow, recv: o.receiveShadow, type: g.type, par: g.parameters, parent: o.parent && o.parent.name };
+    out.inst[o.name] = { count: o.count, culled: o.frustumCulled, cast: o.castShadow, recv: o.receiveShadow, type: g.type, par: g.parameters, parent: o.parent && o.parent.name, indexed: !!g.index, icol: !!o.instanceColor };
+    if (o.name === 'blobs') return;
     const kind = o.name === 'shrubs' ? 'shrubs' : 'trees', list = h.site[kind], spec = o.name === 'trunks' ? [veg.tree.trunkR, 0, veg.tree.trunkH] : o.name === 'canopies' ? [veg.tree.canopyR, veg.tree.canopyY0, veg.tree.canopyY0 + veg.tree.canopyH] : [veg.shrub.r, 0, veg.shrub.h];
     const M = new THREE.Matrix4(), p = new THREE.Vector3(); let bad = 0;
     for (let k = 0; k < o.count; k++) { o.getMatrixAt(k, M); M.premultiply(o.matrixWorld); const it = list[k]; if (!it) { bad++; continue; } const cx = it[0] - c[0], cz = -(it[1] - c[1]), s = it[2]; let rMax = 0, y0 = Infinity, y1 = -Infinity, rOut = 0;
       for (let j = 0; j < P.count; j++) { p.fromBufferAttribute(P, j).applyMatrix4(M); const r = Math.hypot(p.x - cx, p.z - cz); rMax = Math.max(rMax, r); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
-      if (Math.abs(rMax - spec[0] * s) > 1e-4 || Math.abs(y0 - spec[1] * s) > 1e-4 || Math.abs(y1 - spec[2] * s) > 1e-4) { if (bad < 3) out.f.push(`${o.name} #${k}: radius ${rMax.toFixed(3)} Y ${y0.toFixed(3)}..${y1.toFixed(3)}, model (${it.map((x) => x.toFixed(2))}) wants ${(spec[0] * s).toFixed(3)} / ${(spec[1] * s).toFixed(3)}..${(spec[2] * s).toFixed(3)}`); bad++; } }
+      // F6-T1b (plan §6.3, designer-plan E1 / E2): trunks lean <= leanDeg about the base, so they reach at most trunkH x s and
+      // dip at most trunkR x s x sin(lean); canopy / shrub lumps sit inside the old envelope (radius, Y range) with no rotation
+      let off;
+      if (!T1B) off = Math.abs(rMax - spec[0] * s) > 1e-4 || Math.abs(y0 - spec[1] * s) > 1e-4 || Math.abs(y1 - spec[2] * s) > 1e-4;
+      else if (o.name === 'trunks') { const up = new THREE.Vector3(0, 1, 0).transformDirection(M), lean = Math.acos(Math.min(1, up.y)) * 180 / Math.PI, sl = Math.sin(veg.tree.leanDeg * Math.PI / 180);
+        off = lean > veg.tree.leanDeg + 1e-3 || y0 < -spec[0] * s * sl - 1e-3 || y0 > 1e-4 || y1 > spec[2] * s + spec[0] * (veg.tree.taper || 1) * s * sl + 1e-4 || y1 < spec[2] * s * Math.cos(veg.tree.leanDeg * Math.PI / 180) - 1e-3 || rMax > spec[0] * s + spec[2] * s * sl + 1e-3; }
+      else { const e = M.elements, rot = Math.abs(e[1]) + Math.abs(e[2]) + Math.abs(e[4]) + Math.abs(e[6]) + Math.abs(e[8]) + Math.abs(e[9]);
+        off = rot > 1e-6 || rMax > spec[0] * s + 1e-4 || y0 < spec[1] * s - 1e-4 || y1 > spec[2] * s + 1e-4; }
+      if (off) { if (bad < 3) out.f.push(`${o.name} #${k}: radius ${rMax.toFixed(3)} Y ${y0.toFixed(3)}..${y1.toFixed(3)}, model (${it.map((x) => x.toFixed(2))}) wants ${(spec[0] * s).toFixed(3)} / ${(spec[1] * s).toFixed(3)}..${(spec[2] * s).toFixed(3)}`); bad++; } }
     if (bad > 3) out.f.push(`${o.name}: ${bad} instances off`); });
   return out; };
 function instProblems(r, tag) {
@@ -231,8 +244,14 @@ function instProblems(r, tag) {
     if (it.count !== want[n]) f.push(`${tag}: ${n} count ${it.count} != model ${want[n]}`);
     if (it.culled !== false) f.push(`${tag}: ${n} frustumCulled ${it.culled}`);
     if (!it.cast || it.recv) f.push(`${tag}: ${n} cast ${it.cast} receive ${it.recv}`);
-    if (it.type !== segs[n][0] || !it.par || it.par[segs[n][1]] !== segs[n][2]) f.push(`${tag}: ${n} geometry ${it.type} ${JSON.stringify(it.par)}`); }
-  if (r.names.some((n) => !['trunks', 'canopies', 'shrubs'].includes(n))) f.push(`${tag}: instanced meshes ${r.names}`);
+    if (!T1BV) { if (it.type !== segs[n][0] || !it.par || it.par[segs[n][1]] !== segs[n][2]) f.push(`${tag}: ${n} geometry ${it.type} ${JSON.stringify(it.par)}`); }
+    else if (n === 'trunks') { const T = PC.data.vegetation.tree, p = it.par || {};   // F6-T1b: tapered cylinder, 6 segments
+      if (it.type !== 'CylinderGeometry' || p.radialSegments !== V.VEG_TABLE.tree.trunkSeg || Math.abs(p.radiusTop - V.VEG_TABLE.tree.trunkR * V.VEG_T1B.taper) > 1e-9 || Math.abs(p.radiusBottom - V.VEG_TABLE.tree.trunkR) > 1e-9 || T.taper !== V.VEG_T1B.taper) f.push(`${tag}: trunks geometry ${it.type} ${JSON.stringify(p)}`); }
+    else if (it.type !== 'BufferGeometry' || it.indexed || !it.icol) f.push(`${tag}: ${n} geometry ${it.type} indexed ${it.indexed} instanceColor ${it.icol} (F6-T1b: non-indexed lumps with per-instance colour)`); }
+  const okNames = ['trunks', 'canopies', 'shrubs', ...(T1BV ? ['blobs'] : [])];
+  if (r.names.some((n) => !okNames.includes(n))) f.push(`${tag}: instanced meshes ${r.names}`);
+  if (T1BV) { const b = r.inst.blobs, nItems = r.model.trees + r.model.shrubs;   // plan §6.2 item 4: one blob per shrub and tree (not winter here)
+    if (nItems ? !b || b.count !== nItems || b.cast || b.recv : b) f.push(`${tag}: blobs ${b ? `count ${b.count}, cast ${b.cast}, receive ${b.recv}` : 'missing'} for ${nItems} items`); }
   return f;
 }
 if (HAS.scatter) await guard('B vegetation', async () => {
@@ -241,7 +260,7 @@ if (HAS.scatter) await guard('B vegetation', async () => {
   if (!r.model.trees || !r.model.shrubs) f.push(`sample: ${r.model.trees} trees, ${r.model.shrubs} shrubs`);
   await S.shot('B-sample-trees');
   await to5(S, 's.ans.vegPct = 0;'); r = await S.page.evaluate(INST, veg); f.push(...instProblems(r, '0 %')); if (r.names.length || r.meshes !== 12 + NEW6) f.push(`0 %: ${r.meshes} meshes, instanced ${r.names} (${12 + NEW6}, none)`);
-  if (m25 !== 12 + NEW6 + 3) f.push(`sample at 25 %: ${m25} meshes (12 + ${NEW6 ? NEW6 + ' F6 + ' : ''}3)`);
+  if (m25 !== 12 + NEW6 + 3 + (T1BV ? 1 : 0)) f.push(`sample at 25 %: ${m25} meshes (12 + ${NEW6 ? NEW6 + ' F6 + ' : ''}3${T1BV ? ' + blobs' : ''})`);
   await to5(S, "s.plot.pts = [[0, 0], [100, 0], [100, 100], [0, 100]]; s.ans.streetEdge = 0; s.ans.footprintPct = 15; s.ans.vegPct = 80; s.ans.floors = 3; s.ans.basement = true; s.ans.lift = true; s.ans.usableRoof = true; s.ans.roofType = 'terrace'; s.ans.pool = { on: true, size: 'L' }; s.ans.parking = { cars: 4, covered: true }; s.ans.extras = { wall: true, gate: 'right', seating: true }; s.ans.pairs = []; s.ans.rooms = []; let n = 1; for (const l of ['B', 'G', '1', '2']) for (const ty of ['bedroom', 'bathroom', 'kitchen', 'living', 'dining', 'majlis', 'office', 'maid', 'storage', 'laundry']) s.ans.rooms.push({ id: 'r' + n++, type: ty, level: l, size: 'S', area: null, master: false }); s.ans.nextRoomId = n;");
   r = await S.page.evaluate(INST, veg); f.push(...instProblems(r, '100 x 100 m at 80 %, 40 rooms'));
   if (r.model.trees !== 120 || r.model.shrubs !== 200 || r.meshes > 40) f.push(`maximum: ${r.model.trees} trees, ${r.model.shrubs} shrubs, ${r.meshes} meshes (120 / 200 / <= 40)`);
