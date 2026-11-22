@@ -116,6 +116,12 @@ async function phone() {
   await page.waitForFunction(() => { const c = document.querySelector('[data-pc="v3-canvas"]'), i = PC.debug.scene(); return i.size[0] === c.clientWidth && i.size[1] === c.clientHeight && !i.frame; });
   const rot = await info(page);
   T.ok(Math.abs(rot.aspect - (rot.vo ? rot.vo[0] / rot.vo[1] : rot.size[0] / rot.size[1])) < 1e-9 && rot.size[0] > rot.size[1], `${tag} 640x360: aspect ${rot.aspect.toFixed(3)} follows the canvas (with the F5-T3a lens shift when the panel covers it: ${JSON.stringify(rot.vo)})`);
+  // F5-T3a: collapsing / expanding the panel at 640x360 resizes the canvas (side by side), the renderer follows
+  const follows = () => page.waitForFunction(() => { const c = document.querySelector('[data-pc="v3-canvas"]'), i = PC.debug.scene(); return i.size[0] === c.clientWidth && !i.frame; }, null, { timeout: 3000 }).then(() => true, () => false);
+  const w0 = (await info(page)).size[0];
+  await act('v3-panel-toggle'); const f1 = await follows(), w1 = (await info(page)).size[0];
+  await act('v3-panel-toggle'); const f2 = await follows(), w2 = (await info(page)).size[0];
+  T.ok(f1 && f2 && w2 === w0, `${tag} 640x360 panel toggle: the renderer follows the canvas (${w0} -> ${w1} -> ${w2} px)`);
   T.none(problems(), `${tag} no errors`);
   await o.ctx.close();
 }

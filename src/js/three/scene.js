@@ -159,8 +159,7 @@
       if (S.house) { S.builtKey = null; build(S.house); }
       invalidate();
     });
-    // the wrap and the canvas itself: at 640x360 the canvas narrows beside the expanded panel (F5-T3a, Designer CSS)
-    // while the wrap keeps its size; a double fire is harmless (resize() returns early on an unchanged size)
+    // the wrap and the canvas itself (F5-T3a: at 640x360 the canvas narrows beside the panel; a double fire is harmless)
     if (typeof ResizeObserver === 'function' && canvas.parentElement) { var ro = new ResizeObserver(function () { resize(); }); ro.observe(canvas.parentElement); ro.observe(canvas); }
     else if (typeof addEventListener === 'function') addEventListener('resize', function () { resize(); });
     if (typeof document !== 'undefined' && document.addEventListener) {
@@ -266,8 +265,7 @@
       if (S.house && S.mats) { lights(S.house); invalidate(); }
     },
     look: function () { return { hour: S.look.hour, season: S.look.season }; },
-    // F5-T3a: the canvas area covered by overlays, in CSS px ({ right, bottom }; bottom held at 0). Re-fits the lens
-    // and the limits and marks the frame dirty; the pose moves only if the new limits clamp it.
+    // F5-T3a: canvas px covered by overlays ({ right }; bottom held at 0): re-fits lens + limits, marks dirty.
     setOcclusion: function (o) {
       var r = o && o.right > 0 ? Math.round(o.right) : 0;
       if (r === S.occl.right) return;
