@@ -160,3 +160,8 @@ If the runs are still over: QA measures f1-t1-layout 640x360 next, and any furth
 - The C-4.8 check itself (best of 3 ≤ 400 ms) runs as a solo step under QA_FULL=1, the release gate.
 - Measured: 324–390 ms solo; 590–720 ms inside a loaded run.
 - The budget is unchanged. The CTO was informed.
+
+**CTO conditions on C-4.8 (binding):**
+- The runner enforces the solo step, with no other browser jobs.
+- Every QA_FULL report records the solo number. Above 380 ms, the TL reviews before anything more is added to the build.
+- The 800 ms guard never counts as meeting the budget.
