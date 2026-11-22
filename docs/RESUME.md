@@ -47,10 +47,13 @@ Everything lives on disk under /home/claude/plotcraft (cloud sessions: /home/use
 - TL plan/impl/outcome APPROVED; QA PASSED 393.8 s. App v4 same URL; testing doc https://claude.ai/artifact/TVkPgkC5K4Fbah3cgtEVha (section 6 = phone check).
 - F4 feature review (PM + CTO) waits ONLY on the client phone answers (CD-6); hand-off pack, acceptance matrix and F5 debt list are in F4-T3/outcome-review.md.
 
-## Next batch (batch 12): F5-T1 room finder
-1. F5-T1 room finder (FS), then F5-T2 drone tour; F5-T3 Designer pass waits for the F4 review notes (phone answers).
-2. TL riders for F5 plan: max house 40 rooms; finder/tour must not reset look; highlight mesh counts toward 40-mesh budget (21 used); tour camera above tree tops (4.83 m). O-1 shadow tuning goes to F5-T3 sky-table data.
-3. Run the F4 feature review as soon as the phone answers arrive.
+## Batch 12 result: F5-T1 room finder DONE
+- Go to room dropdown (grouped by level), flyTo on shared animation driver (100 ms step cap), highlight mesh, caption "Room · Level", basement 15° pose. QA B-1 (groundOuter covered basement pit since F4-T1) fixed 88dd164 + leak check. QA round 2 PASSED 413.0 s. TL outcome APPROVED.
+- App v5 same URL; testing doc https://claude.ai/artifact/RqY92PserUTatAtqGGG5dJ
+
+## Next batch (batch 13): F5-T2 drone tour
+1. Plan APPROVED (docs/03-tasks/F5-T2/plan-review.md, PM round 13). FS implements in worktree /home/user/plotcraft-f5t2 (branch f5t2); QA prepares suites in main (budget <= 25 s; run headroom ~7 s).
+2. Then F5-T3 Designer pass (needs F4 review notes = client phone answers) and F4 + F5 feature reviews. Phone answers still outstanding.
 
 ## Known limits owned by Designer F5-T3
 Overridden-edge label pile-up; legend wraps at 1280x800 with "* set by you"; area label wider than narrow footprints; no Parking/Pool legend entries; pool-size note wrap at 360 px.
