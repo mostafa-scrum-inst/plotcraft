@@ -568,7 +568,7 @@ One tap on the first screen. It must pass every validation with **no warnings**,
 - Parking: 2 x 12.5 = 25 m2 (5 x 5 m) fits the 8 m front yard. Pool S 3 x 6 m with clearance needs 5 x 8 m, fits the 7 m back yard (14.75 − 5.25 = 9.5 m wide behind the house, 20 m wide overall).
 - Area budget: footprint 142.5 + vegetation 146 + parking 25 + pool 18 = 331.5 m2 <= 584 m2; footprint % + vegetation % = 50 <= 100. No conflict, no warning.
 
-**Reviewer path on a phone:** Load sample -> Skip to 3D -> (3D opens at noon, summer, "All" levels, roof off, overview) -> Start tour. At most 6 taps. The user can also step back from the sample into any stage and edit it like a normal project (which removes "Skip to 3D").
+**Reviewer path on a phone:** Load sample -> Skip to 3D -> (3D opens at noon, summer, "All" levels, Roof on (CD-9), overview) -> Start tour. At most 6 taps. The user can also step back from the sample into any stage and edit it like a normal project (which removes "Skip to 3D").
 
 ## 7. Traceability (question -> where asked -> where it shows)
 
