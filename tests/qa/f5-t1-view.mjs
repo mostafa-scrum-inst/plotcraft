@@ -79,16 +79,22 @@ const recStop = (S) => S.page.evaluate(() => { window.__recOn = false; return wi
 
 // expected pose for a pick from `cur`
 const expectPose = (h, L, id, cur) => F.myClamp(F.myRawPose(h, id, cur), L, h);
-// the flight's frames: duration, per-frame bound, eye height
-function flightProblems(rec, t0, final, tag, { full = true } = {}) {
+// the flight's frames (one entry per rAF timestamp, the last callback's pose). TL ruling (a): progress is the sum of the
+// capped steps (dt <= CAM.dtMax, A-12 anti-jump rule): it reaches the 1.2 s flight within 1.0-1.5 s of summed steps; the
+// wall clock is judged only when the mean frame time is <= 100 ms (SwiftShader: 130-250 ms, recorded as an observation)
+const DTMAX = (PC.C.CAM && PC.C.CAM.dtMax) || 100;
+function flightProblems(rec, tag, { full = true } = {}) {
+  const byTs = new Map(); for (const r of rec) byTs.set(r[0], r); const fr = [...byTs.values()].sort((a, b) => a[0] - b[0]);
   const f = [], moving = []; let prev = null;
-  for (const [ts, p] of rec) { if (prev && F.poseDist(prev[1], p) > 1e-9) moving.push([ts, prev[1], p, ts - prev[0]]); prev = [ts, p]; }
-  if (!moving.length) return [`${tag}: no frame moved`];
-  const path = moving.reduce((s, m) => s + F.poseDist(m[1], m[2]), 0), dur = (moving[moving.length - 1][0] - moving[0][0] + moving[0][3]) / 1000, mean = path / 1.2;
-  if (full && (dur < 1.0 || dur > 1.5)) f.push(`${tag}: flight ${dur.toFixed(2)} s (1.2 s planned)`);
-  for (const [ts, a, b, dt] of moving) { const st = F.poseDist(a, b); if (st > 2 * mean * Math.min(Math.max(dt, 1000 / 60), 100) / 1000 + 1e-3) { f.push(`${tag}: a ${st.toFixed(2)} m step in ${dt.toFixed(0)} ms (mean speed ${mean.toFixed(2)} m/s): jump`); break; } }
-  const low = rec.find(([, p]) => F.eyeOf(p)[1] < 1 - 1e-6); if (low) f.push(`${tag}: eye at ${F.eyeOf(low[1])[1].toFixed(3)} m during the flight`);
-  return { f, dur, path, frames: moving.length };
+  for (const [ts, p] of fr) { if (prev && F.poseDist(prev[1], p) > 1e-9) moving.push([ts, prev[1], p, ts - prev[0]]); prev = [ts, p]; }
+  if (!moving.length) return { f: [`${tag}: no frame moved`] };
+  const path = moving.reduce((s, m) => s + F.poseDist(m[1], m[2]), 0), summed = moving.reduce((s, m) => s + Math.min(DTMAX, m[3]), 0) / 1000,
+    wall = (moving[moving.length - 1][0] - moving[0][0] + moving[0][3]) / 1000, frameMs = moving.reduce((s, m) => s + m[3], 0) / moving.length, mean = path / 1.2;
+  if (full && (summed < 1.0 || summed > 1.5)) f.push(`${tag}: flight ${summed.toFixed(2)} s of summed capped steps (1.2 s planned)`);
+  if (full && frameMs <= 100 && (wall < 1.0 || wall > 1.5)) f.push(`${tag}: flight ${wall.toFixed(2)} s wall clock at ${frameMs.toFixed(0)} ms frames (1.2 s planned)`);
+  for (const [, a, b, dt] of moving) { const st = F.poseDist(a, b); if (st > 2 * mean * Math.min(Math.max(dt, 1000 / 60), DTMAX) / 1000 + 1e-3) { f.push(`${tag}: a ${st.toFixed(2)} m step in ${dt.toFixed(0)} ms (mean speed ${mean.toFixed(2)} m/s): jump`); break; } }
+  const low = fr.find(([, p]) => F.eyeOf(p)[1] < 1 - 1e-6); if (low) f.push(`${tag}: eye at ${F.eyeOf(low[1])[1].toFixed(3)} m during the flight`);
+  return { f, summed, wall, frameMs, path, frames: moving.length };
 }
 function selectedProblems(st, h, id, tag, before = null) {
   const f = [], { room: r, level: lv } = F.roomOf(h, id), want = F.captionOf(r.name, lv.id);
@@ -110,8 +116,12 @@ function selectedProblems(st, h, id, tag, before = null) {
 const clearedProblems = (st, tag) => { const f = []; if (st.caption !== null) f.push(`${tag}: caption "${st.caption}" still shown`); if (st.value !== '') f.push(`${tag}: select "${st.value}"`); if (st.hl && st.hl.visible) f.push(`${tag}: highlight still shown`); return f; };
 
 const browser = await launch();
+const OBS = [], LAP = []; let lapT = Date.now(); const lap = (n) => { const t = Date.now(); LAP.push(`${n} ${((t - lapT) / 1000).toFixed(1)}`); lapT = t; };
+const MAXMUT = "s.plot.pts = [[0, 0], [60, 0], [60, 50], [0, 50]]; s.ans.streetEdge = 0; s.ans.footprintPct = 40; s.ans.floors = 3; s.ans.basement = true; s.ans.lift = true; s.ans.usableRoof = true; s.ans.roofType = 'terrace'; s.ans.pool = { on: true, size: 'L' }; s.ans.parking = { cars: 4, covered: true }; s.ans.extras = { wall: true, gate: 'right', seating: true }; s.ans.pairs = []; s.ans.rooms = []; let n = 1; for (const l of ['B', 'G', '1', '2']) for (const ty of ['bedroom', 'bathroom', 'kitchen', 'living', 'dining', 'majlis', 'office', 'maid', 'storage', 'laundry']) s.ans.rooms.push({ id: 'r' + n++, type: ty, level: l, size: 'S', area: null, master: false }); s.ans.nextRoomId = n;";
 
-// ================= A. desk: select, picks, flight, cancel, clearing =================
+// ================= A. desk, one page (A-16): sample picks, flight, cancel, clearing; then the maximum house =================
+// Real r128 keeps 3 landed picks on the sample (ground by keyboard, first floor, a redirect) and one basement pick on the
+// maximum house (TL ruling, 30 s budget); every room of 4 houses is covered by f5-t1-model (forRoom / roomGroups in node).
 await guard('A 1280x800', async () => {
   const S = await session(browser, VP.desk, { three: 'real', init: [REC] }), T = 'A 1280x800 real';
   await to5(S); await S.page.evaluate(() => PC.view3d.setLook({ hour: 22, season: 'winter' })); await ready(S); await tourTab(S);
@@ -123,99 +133,96 @@ await guard('A 1280x800', async () => {
   if (sel.tour.length) f.push(`tour controls enabled ${sel.tour}`);
   R.check(`${T}: room select enabled, ${sel.h.toFixed(0)} px, "Go to room…" first, ${groups.length} optgroups lowest first (LEVEL_LABEL) with the plan names in plan order (14 rooms); tour controls still disabled`, f);
   await S.shot('A-select');
-  // keyboard pick
-  const g = [], L0 = await S.page.evaluate(LIGHTS), first = groups[0].rooms[0].id;
-  const cur0 = await S.page.evaluate(() => PC.view3d.pose());
+  lap('load');
+  // 1. keyboard pick (ground floor)
+  const g = [], L0 = await S.page.evaluate(LIGHTS), first = groups[0].rooms[0].id, cur0 = await S.page.evaluate(() => PC.view3d.pose());
   await S.page.focus('[data-pc="v3-room"]'); await S.page.evaluate(() => { window.__rec = []; window.__recOn = true; }); await S.page.keyboard.press('ArrowDown'); await landed(S);
   let rec = await recStop(S), st = await S.page.evaluate(STATE);
   if (st.value !== first) g.push(`ArrowDown on the focused select gives "${st.value}", not the first room ${first}`);
-  else { const fl = flightProblems(rec, 0, st.pose, 'keyboard pick'); g.push(...(fl.f || fl)); g.push(...selectedProblems(st, h, first, 'keyboard pick'));
+  else { const fl = flightProblems(rec, 'keyboard pick'); g.push(...fl.f, ...selectedProblems(st, h, first, 'keyboard pick'));
     const d = F.poseDiff(st.pose, expectPose(h, L, first, cur0)); if (d) g.push(`keyboard pick lands at ${d}`);
     if (st.focus !== 'v3-room') g.push(`focus on ${st.focus} after the pick`);
-    R.note(`A keyboard pick: ${fl.frames} moving frames over ${fl.dur && fl.dur.toFixed(2)} s, path ${fl.path && fl.path.toFixed(1)} m`); }
+    OBS.push(`keyboard pick: ${fl.frames} moving frames, mean frame ${fl.frameMs && fl.frameMs.toFixed(0)} ms, ${fl.summed && fl.summed.toFixed(2)} s summed capped steps, ${fl.wall && fl.wall.toFixed(2)} s wall clock${fl.frameMs > 100 ? ' (wall clock not judged: frames > 100 ms)' : ''}`); }
   if (!eq(await S.page.evaluate(LIGHTS), L0)) g.push('the look (lights / background / look()) changed by the pick');
-  const idle = async () => { await S.page.evaluate(() => { window.__raf = 0; }); await S.page.waitForTimeout(400); return S.page.evaluate(() => window.__raf); };
-  if (await idle()) g.push('frames requested after the flight (loop not idle)');
+  await S.page.evaluate(() => { window.__raf = 0; }); await S.page.waitForTimeout(300); if (await S.page.evaluate(() => window.__raf)) g.push('frames requested after the flight (loop not idle)');
   await S.shot('A-picked');
-  R.check(`${T}: keyboard pick (ArrowDown on the focused select): Roof off, the room's level (UI + scene), caption "${F.captionOf(groups[0].rooms[0].name, groups[0].level)}", tour buttons hidden, select keeps the room, focus stays; 1.0-1.5 s flight without a jump, eye >= 1 m, lands on my A-14 pose; highlight on the room (no shadows, #C2410C); look at 22:00 winter untouched; loop idle after`, cut(g));
-  // every room by selection, from the current pose each time
-  const p = []; let n = 0;
-  for (const gr of groups) for (const rm of gr.rooms) { if (rm.id === (await S.page.evaluate(() => document.querySelector('[data-pc="v3-room"]').value))) continue;
-    // Roof on through the switch (TL Q3: it clears the selection); the next pick must turn it off again (that path must not clear)
-    if (!(await S.page.evaluate(() => document.querySelector('[data-pc="v3-roof"]').checked))) { await S.act('v3-roof'); await S.settle(); p.push(...clearedProblems(await S.page.evaluate(STATE), `Roof on before ${rm.name}`)); }
-    const c = await chooseIn(S, rm.id); await landed(S); rec = await recStop(S); st = await S.page.evaluate(STATE); n++;
-    p.push(...selectedProblems(st, h, rm.id, rm.name)); const d = F.poseDiff(st.pose, expectPose(h, L, rm.id, c.before)); if (d) p.push(`${rm.name}: lands at ${d}`);
-    const fl = flightProblems(rec, 0, st.pose, rm.name); p.push(...(fl.f || fl)); }
-  R.check(`${T}: each of the other ${n} rooms picked in turn (Roof switched on before each, which clears the selection, TL Q3): the same rules, landing on my pose from the pose at the pick`, cut(p, 10));
-  // redirect mid-flight
-  const r = [], [ra, rb] = [groups[0].rooms[1].id, groups[groups.length - 1].rooms[2].id];
-  await chooseIn(S, ra); await S.page.waitForTimeout(500); const mid = await chooseIn(S, rb);
-  if (!mid.before || F.poseDist(mid.before, mid.after) > 0.2) r.push(`redirect: pose jumped by ${mid.before && F.poseDist(mid.before, mid.after).toFixed(2)} m at the second pick`);
-  await landed(S); rec = await recStop(S); st = await S.page.evaluate(STATE);
-  const fl2 = flightProblems(rec, 0, st.pose, 'after the redirect', { full: false }); r.push(...(fl2.f || fl2));
-  const d2 = F.poseDiff(st.pose, expectPose(h, L, rb, mid.before)); if (d2) r.push(`redirect lands at ${d2}`); r.push(...selectedProblems(st, h, rb, 'redirect'));
-  R.check(`${T}: a second pick 0.5 s into a flight redirects from the interpolated pose (no jump, theta of that moment kept) and lands on the second room`, cut(r));
-  // cancel: wheel, mouse down, key
-  const c = [], box = await S.page.evaluate(() => { const r = document.querySelector('[data-pc="v3-canvas"]').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; });
-  const target = (k) => groups[k % groups.length].rooms[(k + 3) % groups[k % groups.length].rooms.length].id;
-  await chooseIn(S, target(0)); await S.page.waitForTimeout(450);
-  const w = await S.page.evaluate(() => { const cv = document.querySelector('[data-pc="v3-canvas"]'), a = PC.view3d.pose(), r = cv.getBoundingClientRect(); cv.dispatchEvent(new WheelEvent('wheel', { deltaY: 100, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true, cancelable: true })); return { a, b: PC.view3d.pose(), flying: PC.view3d.flying() }; });
-  const k = Math.exp(100 * PC.C.CAM.wheelK);
-  if (w.flying) c.push('wheel: still flying');
-  if (Math.abs(w.b.radius - w.a.radius * k) > 1e-6 * w.a.radius || w.b.target.some((x, i) => Math.abs(x - w.a.target[i]) > 1e-9)) c.push(`wheel: radius ${w.a.radius.toFixed(3)} -> ${w.b.radius.toFixed(3)} (x ${k.toFixed(4)} = ${(w.a.radius * k).toFixed(3)} expected), target moved ${!w.b.target.every((x, i) => Math.abs(x - w.a.target[i]) < 1e-9)}: the delta did not act on the interpolated pose`);
-  await S.page.waitForTimeout(300); if (F.poseDist(await S.page.evaluate(() => PC.view3d.pose()), w.b) > 1e-9) c.push('wheel: the pose kept moving after the cancel');
-  let s2 = await S.page.evaluate(STATE); if (s2.caption === null) c.push('wheel cleared the selection (zoom keeps it)');
-  for (const [name, act] of [['mouse down', async () => { await S.page.mouse.move(...box); await S.page.mouse.down(); }], ['ArrowLeft on the canvas', async () => { await S.page.focus('[data-pc="v3-canvas"]'); await S.page.keyboard.press('ArrowLeft'); }]]) {
-    await chooseIn(S, target(name.length)); await S.page.waitForTimeout(450); await act(); const a = await S.page.evaluate(() => ({ p: PC.view3d.pose(), f: PC.view3d.flying() }));
-    await S.page.waitForTimeout(300); const b = await S.page.evaluate(() => PC.view3d.pose()); if (name === 'mouse down') await S.page.mouse.up();
-    if (a.f) c.push(`${name}: still flying`); if (F.poseDist(a.p, b) > 1e-9) c.push(`${name}: the pose kept moving`); }
-  await recStop(S);
-  // orbit keeps the selection
-  await S.page.mouse.move(...box); await S.page.mouse.down(); await S.page.mouse.move(box[0] + 80, box[1], { steps: 4 }); await S.page.mouse.up(); await S.settle(); s2 = await S.page.evaluate(STATE);
-  if (s2.caption === null || s2.value === '') c.push('an orbit drag cleared the selection');
-  R.check(`${T}: wheel, mouse down and an arrow key mid-flight cancel at once (wheel: interpolated radius x ${k.toFixed(4)}, target kept, no snap); the pose then stays; zoom and orbit keep the selection`, c);
-  // clearing
-  const cl = [], someRoom = () => groups[0].rooms[2].id;
-  const sel1 = async () => { await chooseIn(S, someRoom()); await landed(S); await recStop(S); };
-  await viewTab(S);
-  for (const [name, act] of [['"All"', () => S.act(pick('all'))], ['another level', () => S.act(pick(groups[groups.length - 1].level === F.roomOf(h, someRoom()).level.id ? groups[0].level : groups[groups.length - 1].level))], ['Reset view', () => S.act('v3-reset')], ['Roof on', () => S.act('v3-roof')],
-    ['"Go to room…"', () => S.page.selectOption('[data-pc="v3-room"]', '')], ['a rebuild (Q10 while open)', async () => { await S.page.evaluate(() => PC.store.commit((s) => { s.ans.exterior = s.ans.exterior === 'sand' ? 'terracotta' : 'sand'; })); await ready(S); }],
-    ['a context restore', async () => { const b0 = (await S.page.evaluate(STATE)).builds; await S.page.evaluate(() => { const gl = PC.debug.scene().renderer.getContext(); window.__lc = gl.getExtension('WEBGL_lose_context'); window.__lc.loseContext(); }); await S.until(() => S.page.evaluate(() => PC.debug.scene().lost), 3000); await S.page.evaluate(() => window.__lc.restoreContext()); await S.until(() => S.page.evaluate((b) => PC.debug.scene().builds > b, b0), 5000); await ready(S); }]]) {
-    await sel1(); const a = await S.page.evaluate(STATE); if (a.caption === null) { cl.push(`${name}: setup pick not shown`); continue; }
-    await act(); await S.settle(); cl.push(...clearedProblems(await S.page.evaluate(STATE), name));
-    if (name === 'Roof on') { await S.act('v3-roof'); await S.settle(); } }
-  // leaving stage 5 mid-flight
-  await chooseIn(S, someRoom()); await S.page.waitForTimeout(300); await S.page.evaluate(() => PC.store.go(4)); await S.settle(); const p4 = await S.page.evaluate(() => PC.view3d.pose());
-  await S.page.waitForTimeout(300); await S.page.evaluate(() => PC.store.go(5)); await ready(S); await S.page.waitForTimeout(400); const p5 = await S.page.evaluate(() => ({ p: PC.view3d.pose(), f: PC.view3d.flying() })); await recStop(S);
-  if (p5.f || F.poseDist(p4, p5.p) > 1e-6) cl.push(`leaving stage 5 mid-flight: flying ${p5.f} on return, pose moved ${F.poseDist(p4, p5.p).toFixed(3)} m`);
-  R.check(`${T}: "All", another level, Reset view, Roof on, "Go to room…", a rebuild and a context restore each clear the highlight, the caption and the select; leaving stage 5 mid-flight stops the flight for good`, cut(cl));
-  // re-selection: geometries constant (old highlight disposed), pixels
-  const gq = []; await sel1(); await S.page.evaluate(() => PC.debug.scene().renderNow()); const g0 = (await S.page.evaluate(STATE)).geoms;
-  for (const rm of groups[0].rooms.slice(3, 6)) { await chooseIn(S, rm.id); await landed(S); await recStop(S); }
-  await S.page.evaluate(() => PC.debug.scene().renderNow()); const g1 = (await S.page.evaluate(STATE)).geoms; if (g1 !== g0) gq.push(`renderer geometries ${g0} -> ${g1} over 3 re-selections`);
-  const shot = async () => S.page.evaluate(async (b64) => b64, (await S.page.locator('[data-pc="v3-canvas"]').screenshot()).toString('base64'));
+  lap('kbd');
+  R.check(`${T}: keyboard pick (ArrowDown on the focused select, ground floor): Roof off, the room's level (UI + scene), caption "${F.captionOf(groups[0].rooms[0].name, groups[0].level)}", tour buttons hidden, select keeps the room, focus stays; flight 1.0-1.5 s of summed capped steps without a jump, eye >= 1 m, lands on my A-14 pose; highlight on the room (no shadows, #C2410C); look at 22:00 winter untouched; loop idle after`, cut(g));
+  // 2. Roof on through the switch clears (TL Q3); a first-floor pick turns it off again without clearing; the highlight shows in the pixels
+  const p = [], up = groups[1].rooms[0];
+  await S.act('v3-roof'); await S.settle(); p.push(...clearedProblems(await S.page.evaluate(STATE), 'Roof on'));
+  let c = await chooseIn(S, up.id); await landed(S); rec = await recStop(S); st = await S.page.evaluate(STATE);
+  p.push(...selectedProblems(st, h, up.id, up.name), ...flightProblems(rec, up.name).f); let d = F.poseDiff(st.pose, expectPose(h, L, up.id, c.before)); if (d) p.push(`${up.name}: lands at ${d}`);
+  const shot = async () => (await S.page.locator('[data-pc="v3-canvas"]').screenshot()).toString('base64');
   const on = await shot(); await S.page.evaluate(() => { PC.debug.scene().world.getObjectByName('highlight').visible = false; PC.debug.scene().renderNow(); }); await S.settle(); const off = await shot();
   await S.page.evaluate(() => { PC.debug.scene().world.getObjectByName('highlight').visible = true; PC.debug.scene().renderNow(); }); await S.settle();
   const nd = await S.page.evaluate(([a, b]) => Promise.all([a, b].map((s) => new Promise((res) => { const im = new Image(); im.onload = () => { const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const x = c.getContext('2d'); x.drawImage(im, 0, 0); res(x.getImageData(0, 0, im.width, im.height).data); }; im.src = 'data:image/png;base64,' + s; }))).then(([p, q]) => { let n = 0; for (let k = 0; k < p.length; k += 4) if (Math.abs(p[k] - q[k]) + Math.abs(p[k + 1] - q[k + 1]) + Math.abs(p[k + 2] - q[k + 2]) > 30) n++; return n; }), [on, off]);
-  if (nd < 30) gq.push(`the highlight changes only ${nd} px of the frame`);
+  if (nd < 30) p.push(`the highlight changes only ${nd} px of the frame`);
   await S.shot('A-highlight');
-  R.check(`${T}: 3 re-selections keep the renderer's geometry count (old highlight disposed); the highlight shows in the real r128 frame (${nd} px)`, gq);
-  await S.end(T);
-});
-
-// ================= B. maximum house: 40 rooms, basement, budget =================
-await guard('B maximum', async () => {
-  const S = await session(browser, VP.desk, { three: 'real', init: [REC] }), T = 'B 1280x800 maximum house', f = [];
-  await to5(S, "s.plot.pts = [[0, 0], [60, 0], [60, 50], [0, 50]]; s.ans.streetEdge = 0; s.ans.footprintPct = 40; s.ans.floors = 3; s.ans.basement = true; s.ans.lift = true; s.ans.usableRoof = true; s.ans.roofType = 'terrace'; s.ans.pool = { on: true, size: 'L' }; s.ans.parking = { cars: 4, covered: true }; s.ans.extras = { wall: true, gate: 'right', seating: true }; s.ans.pairs = []; s.ans.rooms = []; let n = 1; for (const l of ['B', 'G', '1', '2']) for (const ty of ['bedroom', 'bathroom', 'kitchen', 'living', 'dining', 'majlis', 'office', 'maid', 'storage', 'laundry']) s.ans.rooms.push({ id: 'r' + n++, type: ty, level: l, size: 'S', area: null, master: false }); s.ans.nextRoomId = n;");
-  const h = await S.page.evaluate(HOUSE), L = await S.page.evaluate(LIMITS), groups = F.myGroups(h), sel = await S.page.evaluate(SELECT), m0 = (await S.page.evaluate(STATE)).meshes;
-  if (sel.groups.length !== 4 || sel.groups.reduce((s, g) => s + g.rooms.length, 0) !== 40 || !eq(sel.groups, groups.map((g) => ({ label: g.label, rooms: g.rooms })))) f.push(`select: ${sel.groups.length} groups, ${sel.groups.reduce((s, g) => s + g.rooms.length, 0)} rooms`);
-  for (const rm of [groups[0].rooms[0], groups[0].rooms[7], groups[2].rooms[4], groups[3].rooms[9]]) {
-    const c = await chooseIn(S, rm.id); await landed(S); await recStop(S); const st = await S.page.evaluate(STATE);
-    f.push(...selectedProblems(st, h, rm.id, rm.name)); const d = F.poseDiff(st.pose, expectPose(h, L, rm.id, c.before)); if (d) f.push(`${rm.name}: lands at ${d}`);
-    const lv = F.roomOf(h, rm.id).level; if (lv.id === 'B') { if (Math.abs(st.pose.phi - 15 * F.D2R) > 1e-6) f.push(`${rm.name}: basement phi ${(st.pose.phi / F.D2R).toFixed(2)} deg`); const pc = F.pitCrossing(h, st.pose); if (!pc.ok) f.push(`${rm.name}: the eye line meets ground level outside the footprint`); }
-    if (st.meshes !== m0 + 1 || st.meshes > 40) f.push(`${rm.name}: ${st.meshes} meshes (${m0} + 1 highlight, <= 40)`); }
-  await S.shot('B-basement');
-  R.check(`${T}: 40 options in 4 groups; picks on B / G / 1 / 2 follow the rules; a basement room opens the ground at phi 15 degrees with the eye line into the pit; meshes ${m0} + 1 <= 40`, cut(f));
+  lap('first');
+  R.check(`${T}: Roof on through the switch clears the selection (TL Q3); a first-floor pick (${up.name}) turns the Roof off without clearing and follows the rules of 1; the highlight shows in the real r128 frame (${nd} px)`, cut(p));
+  // 3. redirect mid-flight; the two re-selections keep the renderer's geometry count (old highlights disposed)
+  const r = [], [ra, rb] = [groups[0].rooms[1].id, groups[1].rooms[2].id];
+  await S.page.evaluate(() => PC.debug.scene().renderNow()); const g0 = (await S.page.evaluate(STATE)).geoms;
+  await chooseIn(S, ra); await S.page.waitForTimeout(500); const mid = await chooseIn(S, rb);
+  if (!mid.before || F.poseDist(mid.before, mid.after) > 0.2) r.push(`redirect: pose jumped by ${mid.before && F.poseDist(mid.before, mid.after).toFixed(2)} m at the second pick`);
+  await landed(S); rec = await recStop(S); st = await S.page.evaluate(STATE);
+  r.push(...flightProblems(rec, 'after the redirect', { full: false }).f);
+  d = F.poseDiff(st.pose, expectPose(h, L, rb, mid.before)); if (d) r.push(`redirect lands at ${d}`); r.push(...selectedProblems(st, h, rb, 'redirect'));
+  await S.page.evaluate(() => PC.debug.scene().renderNow()); const g1 = (await S.page.evaluate(STATE)).geoms; if (g1 !== g0) r.push(`renderer geometries ${g0} -> ${g1} over 2 re-selections`);
+  R.check(`${T}: a second pick 0.5 s into a flight redirects from the interpolated pose (no jump, theta of that moment kept) and lands on the second room; 2 re-selections keep the renderer's geometry count`, cut(r));
+  lap('redirect');
+  // 4. cancel: wheel, mouse down, key (flights not landed)
+  const cc = [], box = await S.page.evaluate(() => { const r = document.querySelector('[data-pc="v3-canvas"]').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; });
+  await chooseIn(S, groups[0].rooms[4].id); await S.page.waitForTimeout(250);
+  const w = await S.page.evaluate(() => { const cv = document.querySelector('[data-pc="v3-canvas"]'), a = PC.view3d.pose(), r = cv.getBoundingClientRect(); cv.dispatchEvent(new WheelEvent('wheel', { deltaY: 100, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true, cancelable: true })); return { a, b: PC.view3d.pose(), flying: PC.view3d.flying() }; });
+  const k = Math.exp(100 * PC.C.CAM.wheelK);
+  if (w.flying) cc.push('wheel: still flying');
+  if (Math.abs(w.b.radius - w.a.radius * k) > 1e-6 * w.a.radius || w.b.target.some((x, i) => Math.abs(x - w.a.target[i]) > 1e-9)) cc.push(`wheel: radius ${w.a.radius.toFixed(3)} -> ${w.b.radius.toFixed(3)} (x ${k.toFixed(4)} = ${(w.a.radius * k).toFixed(3)} expected), target moved ${!w.b.target.every((x, i) => Math.abs(x - w.a.target[i]) < 1e-9)}: the delta did not act on the interpolated pose`);
+  await S.page.waitForTimeout(150); if (F.poseDist(await S.page.evaluate(() => PC.view3d.pose()), w.b) > 1e-9) cc.push('wheel: the pose kept moving after the cancel');
+  let s2 = await S.page.evaluate(STATE); if (s2.caption === null) cc.push('wheel cleared the selection (zoom keeps it)');
+  for (const [name, act, id] of [['mouse down', async () => { await S.page.mouse.move(...box); await S.page.mouse.down(); }, groups[0].rooms[5].id], ['ArrowLeft on the canvas', async () => { await S.page.focus('[data-pc="v3-canvas"]'); await S.page.keyboard.press('ArrowLeft'); }, groups[1].rooms[3].id]]) {
+    await chooseIn(S, id); await S.page.waitForTimeout(250); await act(); const a = await S.page.evaluate(() => ({ p: PC.view3d.pose(), f: PC.view3d.flying() }));
+    await S.page.waitForTimeout(150); const b = await S.page.evaluate(() => PC.view3d.pose()); if (name === 'mouse down') await S.page.mouse.up();
+    if (a.f) cc.push(`${name}: still flying`); if (F.poseDist(a.p, b) > 1e-9) cc.push(`${name}: the pose kept moving`); }
+  await recStop(S);
+  await S.page.mouse.move(...box); await S.page.mouse.down(); await S.page.mouse.move(box[0] + 80, box[1], { steps: 4 }); await S.page.mouse.up(); await S.settle(); s2 = await S.page.evaluate(STATE);
+  if (s2.caption === null || s2.value === '') cc.push('an orbit drag cleared the selection');
+  R.check(`${T}: wheel, mouse down and an arrow key mid-flight cancel at once (wheel: interpolated radius x ${k.toFixed(4)}, target kept, no snap); the pose then stays; zoom and orbit keep the selection`, cc);
+  lap('cancel');
+  // 5. clearing (each from a fresh pick, flight still running)
+  const cl = [], someRoom = groups[0].rooms[2].id;
+  await viewTab(S);
+  for (const [name, act] of [['"All"', () => S.act(pick('all'))], ['another level', () => S.act(pick(groups[1].level))], ['Reset view', () => S.act('v3-reset')],
+    ['"Go to room…"', () => S.page.selectOption('[data-pc="v3-room"]', '')], ['a rebuild (Q10 while open)', async () => { await S.page.evaluate(() => PC.store.commit((s) => { s.ans.exterior = s.ans.exterior === 'sand' ? 'terracotta' : 'sand'; })); await ready(S); }],
+    ['a context restore', async () => { const b0 = (await S.page.evaluate(STATE)).builds; await S.page.evaluate(() => { const gl = PC.debug.scene().renderer.getContext(); window.__lc = gl.getExtension('WEBGL_lose_context'); window.__lc.loseContext(); }); await S.until(() => S.page.evaluate(() => PC.debug.scene().lost), 3000); await S.page.evaluate(() => window.__lc.restoreContext()); await S.until(() => S.page.evaluate((b) => PC.debug.scene().builds > b, b0), 5000); await ready(S); }]]) {
+    await chooseIn(S, someRoom); await S.settle(); const a = await S.page.evaluate(STATE); if (a.caption === null) { cl.push(`${name}: setup pick not shown`); continue; }
+    await act(); await S.settle(); const b = await S.page.evaluate(STATE); cl.push(...clearedProblems(b, name));
+    if (/Reset|rebuild|restore/.test(name) && b.flying) cl.push(`${name}: still flying`);
+    lap(name); }
+  await recStop(S);
+  lap('clearing');
+  // leaving stage 5 mid-flight
+  await chooseIn(S, someRoom); await S.page.waitForTimeout(300); await S.page.evaluate(() => PC.store.go(4)); await S.settle(); const p4 = await S.page.evaluate(() => PC.view3d.pose());
+  await S.page.evaluate(() => PC.store.go(5)); await ready(S); await S.page.waitForTimeout(300); const p5 = await S.page.evaluate(() => ({ p: PC.view3d.pose(), f: PC.view3d.flying() })); await recStop(S);
+  if (p5.f || F.poseDist(p4, p5.p) > 1e-6) cl.push(`leaving stage 5 mid-flight: flying ${p5.f} on return, pose moved ${F.poseDist(p4, p5.p).toFixed(3)} m`);
+  R.check(`${T}: "All", another level, Reset view, "Go to room…" (Roof on: check 2), a rebuild and a context restore each clear the highlight, the caption and the select (Reset / rebuild / restore also stop the flight); leaving stage 5 mid-flight stops the flight for good`, cut(cl));
+  lap('leave');
+  // 6. the maximum house in the same page: 40 rooms, a basement pick (landed), a second-floor pick, mesh budget
+  const T2 = 'A 1280x800 maximum house', m = [];
+  await to5(S, MAXMUT); await tourTab(S);
+  const hm = await S.page.evaluate(HOUSE), Lm = await S.page.evaluate(LIMITS), gm = F.myGroups(hm), sm = await S.page.evaluate(SELECT), m0 = (await S.page.evaluate(STATE)).meshes;
+  if (sm.groups.length !== 4 || sm.groups.reduce((s, g) => s + g.rooms.length, 0) !== 40 || !eq(sm.groups, gm.map((g) => ({ label: g.label, rooms: g.rooms })))) m.push(`select: ${sm.groups.length} groups, ${sm.groups.reduce((s, g) => s + g.rooms.length, 0)} rooms`);
+  const bm = gm[0].rooms[7]; c = await chooseIn(S, bm.id); await landed(S); rec = await recStop(S); st = await S.page.evaluate(STATE);
+  m.push(...selectedProblems(st, hm, bm.id, bm.name), ...flightProblems(rec, bm.name).f); d = F.poseDiff(st.pose, expectPose(hm, Lm, bm.id, c.before)); if (d) m.push(`${bm.name}: lands at ${d}`);
+  if (Math.abs(st.pose.phi - 15 * F.D2R) > 1e-6) m.push(`${bm.name}: basement phi ${(st.pose.phi / F.D2R).toFixed(2)} deg`);
+  if (!F.pitCrossing(hm, st.pose).ok) m.push(`${bm.name}: the eye line meets ground level outside the footprint`);
+  if (st.meshes !== m0 + 1 || st.meshes > 40) m.push(`${bm.name}: ${st.meshes} meshes (${m0} + 1 highlight, <= 40)`);
+  await S.shot('A-basement');
+  lap('maxbase');
+  const tm = gm[3].rooms[9]; await chooseIn(S, tm.id); await S.settle(); st = await S.page.evaluate(STATE); await recStop(S);
+  m.push(...selectedProblems(st, hm, tm.id, tm.name)); if (st.cap !== true) m.push(`${tm.name}: groundCap ${st.cap} after leaving the basement`); if (st.meshes !== m0 + 1) m.push(`${tm.name}: ${st.meshes} meshes`);
+  R.check(`${T2}: 40 options in 4 groups; a basement pick opens the ground (level B, groundCap hidden) at phi 15 degrees with the eye line into the pit and lands on my pose; a second-floor pick follows the rules; meshes ${m0} + 1 <= 40`, cut(m));
   await S.end(T);
 });
 
@@ -225,7 +232,7 @@ await guard('C 360x640', async () => {
   await to5(S); await tourTab(S); const h = await S.page.evaluate(HOUSE), sel = await S.page.evaluate(SELECT);
   if (sel.h < 44 - 0.5) f.push(`select ${sel.h} px high`);
   const master = h.levels.flatMap((l) => l.rooms.map((r) => [r, l])).find(([r]) => r.name === 'Master bedroom');
-  await S.page.selectOption('[data-pc="v3-room"]', master[0].id); await landed(S); await recStop(S);
+  await S.page.selectOption('[data-pc="v3-room"]', master[0].id); await S.settle(); await recStop(S);
   const st = await S.page.evaluate(STATE); f.push(...selectedProblems(st, h, master[0].id, 'Master bedroom'));
   const lay = await S.page.evaluate(() => { const c = document.querySelector('[data-pc="v3-caption"]').getBoundingClientRect(); return { l: c.left, r: c.right, w: innerWidth, sx: document.scrollingElement.scrollWidth, cw: document.documentElement.clientWidth }; });
   if (lay.l < -0.5 || lay.r > lay.w + 0.5 || lay.sx > lay.cw) f.push(`caption ${lay.l.toFixed(0)}..${lay.r.toFixed(0)} in a ${lay.w} px viewport, page scroll width ${lay.sx}`);
@@ -235,5 +242,7 @@ await guard('C 360x640', async () => {
 });
 
 await browser.close();
+for (const o of OBS) R.note(o);
+if (process.env.QA_LAPS) R.note(`laps: ${LAP.join(', ')}`);
 R.note(`sections: ${TIMES.join(', ')}; run ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 process.exit(R.done() ? 0 : 1);
