@@ -13,6 +13,9 @@
    pose, smoothstep through PC.cam.lerpPose, clamped every frame, exactly `to` at the end. An input cancels it BEFORE
    the controls apply their delta (controls api.interrupt, plan review item 2); close(), resetView() and a build
    (rebuild, context restore) cancel it too. Flights never touch the session look.
+   F5-T2 (plan review Q6): step(dt) returns { pose, done } and the driver assigns the pose; end(reason) is called
+   exactly once with done | input | close | reset | build | replaced | stop; while anim.paused no frames are requested
+   and the first frame after pauseAnimation(false) has dt 0. The tour (three/tour.js) is the second client.
    Selection (A-14): select(roomId | null) puts the one `highlight` mesh (PC.three.highlight, finder.js) on the room,
    disposing the previous geometry; a build and close() clear it and call the onSelect hook with null. */
 (function (PC) {
@@ -50,26 +53,37 @@
   function frame(ts) {
     S.frame = 0;
     if (!S.active || S.lost || !visible()) return;
-    if (S.anim) {
+    if (S.anim && !S.anim.paused) {
       var now = typeof ts === 'number' ? ts : 0, dt = S.animT === null ? 0 : Math.min(PC.C.CAM.dtMax, Math.max(0, now - S.animT));
       S.animT = now;
-      if (S.anim.step(dt)) stopAnim();
+      var r = S.anim.step(dt);
+      if (r && r.pose) S.pose = r.pose;
+      if (r && r.done) stopAnim('done');
       S.dirty = true;
     }
     if (!S.dirty) return;
     resize(true); S.dirty = false; render();
-    if (S.anim) { S.dirty = true; request(); }
+    if (S.anim && !S.anim.paused) { S.dirty = true; request(); }
   }
-  function animate(a) { S.anim = a; S.animT = null; invalidate(); }
-  function stopAnim() { S.anim = null; S.animT = null; }
+  function animate(a) { if (S.anim) stopAnim('replaced'); S.anim = a; S.animT = null; invalidate(); }
+  // Ends the running animation (if any) and calls its end(reason) exactly once (F5-T2 plan review Q6).
+  function stopAnim(reason) {
+    var a = S.anim;
+    S.anim = null; S.animT = null;
+    if (a && typeof a.end === 'function') a.end(reason || 'stop');
+  }
+  function pauseAnim(on) {
+    if (!S.anim) return;
+    S.anim.paused = !!on;
+    if (!on) { S.animT = null; invalidate(); }
+  }
   function flyTo(pose, ms) {
     if (!S.house || !S.pose || !S.limits || !pose) return false;
     var f = { kind: 'flight', from: PC.cam.copy(S.pose), to: PC.cam.clamp(pose, S.limits), ms: ms > 0 ? ms : PC.C.CAM.flightMs, t: 0 };
     f.step = function (dt) {
       f.t += dt;
       var k = Math.min(1, f.t / f.ms);
-      S.pose = k >= 1 ? PC.cam.copy(f.to) : PC.cam.clamp(PC.cam.lerpPose(f.from, f.to, k), S.limits);
-      return k >= 1;
+      return { pose: k >= 1 ? PC.cam.copy(f.to) : PC.cam.clamp(PC.cam.lerpPose(f.from, f.to, k), S.limits), done: k >= 1 };
     };
     animate(f);
     return true;
@@ -144,14 +158,14 @@
       set: function (p) { S.pose = PC.cam.clamp(p, S.limits); invalidate(); },
       size: function () { return S.size[0] ? S.size : [canvas.clientWidth || 1, canvas.clientHeight || 1]; },
       fov: PC.C.CAM.fov,
-      interrupt: function () { stopAnim(); },
+      interrupt: function () { stopAnim('input'); },
       onInput: function () { if (S.onInput) S.onInput(); }
     });
   }
 
   // Every geometry and material of the last build, exactly once (the meshes are tracked: nodes are not probed).
   function dispose() {
-    stopAnim();
+    stopAnim('build');
     clearSelection();
     S.meshes.forEach(function (m) { m.geometry.dispose(); });
     Object.keys(S.mats || {}).forEach(function (k) { S.mats[k].dispose(); });
@@ -227,7 +241,7 @@
       });
       return { ok: true };
     },
-    close: function () { S.active = false; S.building = 0; cancelFrame(); stopAnim(); clearSelection(); },
+    close: function () { S.active = false; S.building = 0; cancelFrame(); stopAnim('close'); clearSelection(); },
     invalidate: invalidate,
     setLevel: function (sel) { S.level = sel; applyVisibility(); invalidate(); },
     setRoof: function (on) { S.roof = !!on; applyVisibility(); invalidate(); },
@@ -238,11 +252,13 @@
       if (S.house && S.mats) { lights(S.house); invalidate(); }
     },
     look: function () { return { hour: S.look.hour, season: S.look.season }; },
-    resetView: function () { if (!S.house) return; stopAnim(); S.pose = PC.cam.reset(S.house, aspect()); invalidate(); },
+    resetView: function () { if (!S.house) return; stopAnim('reset'); S.pose = PC.cam.reset(S.house, aspect()); invalidate(); },
     setOnInput: function (fn) { S.onInput = fn; },
     // F5-T1: the animation driver, flights and the room selection (A-12, A-14 as built).
     animate: function (a) { if (S.house && a && typeof a.step === 'function') animate(a); },
-    stopAnimation: stopAnim,
+    stopAnimation: function () { stopAnim('stop'); },
+    pauseAnimation: pauseAnim,
+    animation: function () { return S.anim; },
     flyTo: flyTo,
     flying: function () { return !!(S.anim && S.anim.kind === 'flight'); },
     select: select,

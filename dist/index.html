@@ -1827,6 +1827,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       eyeMin: 1, resetK: 2.2, resetFit: 1.05, resetTheta: 30, resetPhi: 50, keyDeg: 5, keyZoom: 1.1, wheelK: 0.0015 ,
       // F5-T1 (A-14 + plan review item 1): finder pose, flight time, frame-delta cap
       finderLift: 0.5, finderK: 1.6, finderRMin: 6, finderPhi: 35, finderPhiB: 15, flightMs: 1200, dtMax: 100 },
+    // F5-T2 drone tour (A-14 as built, plan review): leg times in s at normal speed, speed factors, eye construction
+    // (m), the tree gap over the canopy tops (eye floor from PC.data.vegetation), the A-14 nudge, the lead-in flight
+    TOUR: { overviewLeg: 4, roomLeg: 3.5, speeds: { slow: 0.6, normal: 1, fast: 1.8 }, eyeOut: 2, eyeOutK: 0.6, eyeUp: 2.5,
+      bEyeIn: 1.5, bEyeUp: 4, centralEps: 0.5, treeGap: 0.5, floorSoft: 1, phiSoft: 3, minGap: 0.5, leadInMs: 1200, leadInSkip: 0.5 },
     VIEW3D: { maxDpr: 2, shadowMap: 1024, shadowBias: -0.0005, shadowNormalBias: 0.02, sunDist: 2.5, shadowK: 2.5, shadowR: 1.2 },
     FOOTPRINT_ROUND: 0.5, FOOTPRINT_MAX_RATIO: 2, FOOTPRINT_STRETCH_RATIO: 3, FOOTPRINT_STRETCH_EXTRA: 0.5, BACK_ANGLE: 40
   };
@@ -4186,6 +4190,11 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       };
     },
     copy: copy,
+    // The orbit pose whose eye is `eye` and whose target is `look` (F5-T2: the tour renders through the orbit pose).
+    fromEyeLook: function (eye, look) {
+      var dx = eye[0] - look[0], dy = eye[1] - look[1], dz = eye[2] - look[2], r = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1e-9;
+      return { target: [look[0], look[1], look[2]], radius: r, theta: Math.atan2(dx, dz), phi: Math.acos(Math.max(-1, Math.min(1, dy / r))) };
+    },
     // { room, level, label } for a room id of the house, or null.
     roomOf: function (house, id) {
       for (var i = 0; i < house.levels.length; i++) {
@@ -4210,6 +4219,103 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       var radius = clampN(k.finderK * Math.max(r.w, r.d) + house.storeyH, k.finderRMin, k.rMaxK * house.radius);
       var phi = (lv.index < 0 ? k.finderPhiB : k.finderPhi) * D, theta = current ? current.theta : k.resetTheta * D;
       return C.clamp({ target: target, radius: radius, theta: theta, phi: phi }, L);
+    }
+  };
+})(globalThis.PC = globalThis.PC || {});
+
+</script>
+<script>/* js/core/tourplan.js */
+/* PC.tourplan: the F5-T2 drone tour plan (A-14 as built; F5-T2 plan + plan review). Pure, frame T, seconds.
+   build(house, aspect) -> { stops: [{ kind: 'overview' | 'room', id, level, eye, look, t }], duration, eyeFloor } | null
+   - Stops: the overview (the Reset pose for the canvas aspect), then each level from the lowest, every room once in
+     nearest-neighbour order (XZ distance from the previous stop's look point to the room centre: after an overview
+     its look point, the Reset target = the plot centre; ties by plan order), then the overview again.
+   - Room eye: 0.6 x max(w, d) + 2 m from the room centre away from the footprint centre (street side, +Z, when the
+     room is central), at max(baseY, 0) + storeyH + 2.5; a basement room: 1.5 m towards the footprint centre at
+     storeyH + 4. Look: the room centre at floorY + 0.5 (as the finder).
+   - Eye floor: (canopyY0 + canopyH) x scale max of PC.data.vegetation + TOUR.treeGap: every eye is at it or above.
+   - Nudge: a point closer than 0.5 m to the one before is moved 0.5 m away along the leg (+X when they coincide).
+   - Times: rooms + 1 legs; the two overview legs 4 s, room-to-room legs 3.5 s (normal speed; TL ruling Q2). */
+(function (PC) {
+  'use strict';
+  function K() { return PC.C.TOUR; }
+  function dist(a, b) { return Math.sqrt((a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1]) + (a[2] - b[2]) * (a[2] - b[2])); }
+  function nudge(list, gap) {
+    for (var i = 1; i < list.length; i++) {
+      var a = list[i - 1], b = list[i], d = dist(a, b);
+      if (d >= gap) continue;
+      var u = d > 1e-9 ? [(b[0] - a[0]) / d, (b[1] - a[1]) / d, (b[2] - a[2]) / d] : [1, 0, 0];
+      list[i] = [a[0] + u[0] * gap, a[1] + u[1] * gap, a[2] + u[2] * gap];
+    }
+  }
+
+  var T = PC.tourplan = {
+    eyeFloor: function () {
+      var v = PC.data.vegetation;
+      return (v.tree.canopyY0 + v.tree.canopyH) * v.scale[1] + K().treeGap;
+    },
+    // Eye and look of one room stop (exported for tests).
+    roomStop: function (house, lv, r) {
+      var k = K(), fp = house.footprint, cu = house.center[0], cv = house.center[1];
+      var c = [r.u + r.w / 2 - cu, -(r.v + r.d / 2 - cv)], f = [fp.u + fp.w / 2 - cu, -(fp.v + fp.d / 2 - cv)];
+      var dx = c[0] - f[0], dz = c[1] - f[1], l = Math.sqrt(dx * dx + dz * dz), dir = l < k.centralEps ? [0, 1] : [dx / l, dz / l];
+      var floor = T.eyeFloor(), eye;
+      if (lv.index < 0) eye = [c[0] - dir[0] * k.bEyeIn, house.storeyH + k.bEyeUp, c[1] - dir[1] * k.bEyeIn];
+      else {
+        var out = k.eyeOutK * Math.max(r.w, r.d) + k.eyeOut;
+        eye = [c[0] + dir[0] * out, Math.max(lv.baseY, 0) + house.storeyH + k.eyeUp, c[1] + dir[1] * out];
+      }
+      eye[1] = Math.max(eye[1], floor);
+      return { eye: eye, look: [c[0], lv.baseY + PC.C.HOUSE.slab + PC.C.CAM.finderLift, c[1]] };
+    },
+    build: function (house, aspect) {
+      var k = K(), reset = PC.cam.reset(house, aspect), ovEye = PC.cam.position(reset), floor = T.eyeFloor();
+      ovEye[1] = Math.max(ovEye[1], floor);
+      var stops = [{ kind: 'overview', id: null, level: 'all', eye: ovEye, look: reset.target.slice() }], prev = reset.target;
+      house.levels.slice().sort(function (a, b) { return a.index - b.index; }).forEach(function (lv) {
+        var left = lv.rooms.slice();
+        while (left.length) {
+          var best = 0, bd = Infinity;
+          for (var i = 0; i < left.length; i++) {
+            var r = left[i], x = r.u + r.w / 2 - house.center[0] - prev[0], z = -(r.v + r.d / 2 - house.center[1]) - prev[2], d = x * x + z * z;
+            if (d < bd - 1e-9) { bd = d; best = i; }
+          }
+          var room = left.splice(best, 1)[0], s = T.roomStop(house, lv, room);
+          stops.push({ kind: 'room', id: room.id, level: lv.id, eye: s.eye, look: s.look });
+          prev = s.look;
+        }
+      });
+      if (stops.length < 2) return null;
+      stops.push({ kind: 'overview', id: null, level: 'all', eye: ovEye.slice(), look: reset.target.slice() });
+      var eyes = stops.map(function (s) { return s.eye; }), looks = stops.map(function (s) { return s.look; });
+      nudge(eyes, k.minGap); nudge(looks, k.minGap);
+      var t = 0;
+      stops.forEach(function (s, i) {
+        s.eye = eyes[i]; s.look = looks[i];
+        if (i) t += (i === 1 || i === stops.length - 1) ? k.overviewLeg : k.roomLeg;
+        s.t = t;
+      });
+      return { stops: stops, duration: t, eyeFloor: floor };
+    },
+    // The stop index the camera is flying towards at tour time tau (the last stop at the end).
+    target: function (plan, tau) {
+      var s = plan.stops;
+      for (var i = 1; i < s.length; i++) if (tau < s[i].t) return i;
+      return s.length - 1;
+    },
+    // The curve parameter (CatmullRomCurve3.getPoint, uniform per segment) at tour time tau: stop i at i / (n - 1);
+    // linear inside each leg except the first (eases in from rest) and the last (eases out to rest).
+    u: function (plan, tau) {
+      var s = plan.stops, n = s.length, i = Math.min(T.target(plan, tau), n - 1) - 1;
+      if (tau >= plan.duration) return 1;
+      if (tau <= 0) return 0;
+      var x = (tau - s[i].t) / (s[i + 1].t - s[i].t);
+      // the first leg starts and the last leg ends at rest (no start jerk, no dead stop at the final overview): a
+      // cubic time warp with slope 0 at the tour's ends and slope 1 where it meets the next / previous leg
+      if (i === 0 && n > 2) x = 2 * x * x - x * x * x;
+      else if (i === n - 2 && n > 2) x = x + x * x - x * x * x;
+      else if (n === 2) x = x * x * (3 - 2 * x);
+      return (i + x) / (n - 1);
     }
   };
 })(globalThis.PC = globalThis.PC || {});
@@ -5339,6 +5445,128 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 })(globalThis.PC = globalThis.PC || {});
 
 </script>
+<script>/* js/three/tour.js */
+/* PC.three.tour: the F5-T2 drone tour runtime (F5-S2; A-14 as built; F5-T2 plan + plan review). The second client of
+   the F5-T1 animation driver (PC.view3d.animate): one animation, cancelled by the same paths (an input before its
+   delta, close, Reset, a rebuild, a finder pick = 'replaced').
+   - Plan: PC.tourplan.build(house, aspect) at Start. Curves: two THREE.CatmullRomCurve3(points, false, 'catmullrom')
+     (eyes, looks), read with getPoint(u): u is linear in the tour time between stops (PC.tourplan.u), so stop i is
+     reached exactly at its time (TL ruling Q1).
+   - Tour time tau (s) advances by dt x the speed factor (slow 0.6, normal 1, fast 1.8); a speed change acts on the
+     next frame with no jump. Every frame: eye Y kept above the eye floor (tree tops + 0.5 m) by a soft floor (no
+     kink in the speed; within TOUR.floorSoft of the floor the eye is lifted smoothly), then
+     pose = PC.cam.clamp(PC.cam.fromEyeLook(eye, look), limits). The clamp does not bite at the stops (unit-tested).
+   - Lead-in: when the camera is not at the overview (more than TOUR.leadInSkip m from it), a TOUR.leadInMs smoothstep
+     flight to the overview pose comes first, so Start never cuts; tau starts after it.
+   - From the start of each leg, the stop being approached sets the level (a room's level; All at an overview), the
+     highlight (the room; none at an overview) and calls o.onStop(stop) for the caption (TL ruling Q3). Roof off at
+     Start. The tour never calls setLook.
+   - Pause: the driver requests no frames; Resume continues with dt 0. End: o.onEnd(reason) exactly once; the highlight
+     is cleared unless a finder pick replaced the tour (its own highlight) or the scene already cleared it.
+   - debugSeek(tau): test-only (PC.debug.tourSeek, TL ruling Q8); changes tau only. THREE only inside functions. */
+(function (PC) {
+  'use strict';
+  var three = PC.three = PC.three || {};
+  var T = null, speed = 'normal';
+
+  function v3(a) { return new THREE.Vector3(a[0], a[1], a[2]); }
+  function arr(v) { return [v.x, v.y, v.z]; }
+  function factor() { return PC.C.TOUR.speeds[speed] || 1; }
+
+  function applyStop(i) {
+    if (!T || T.cur === i) return;
+    T.cur = i;
+    var st = T.plan.stops[i], V = PC.view3d;
+    V.setLevel(st.level);
+    if (st.kind === 'room') V.select(st.id); else if (V.selected() !== null) V.select(null);
+    if (T.o.onStop) T.o.onStop(st, i);
+  }
+  // The stops' orbit poses as (theta unwrapped along the tour, phi, radius) points: the camera path is interpolated in
+  // pose space around the look curve, so it never swings through the vertical over a look point (the eye/look pair of
+  // curves did, after the steep overview leg into the basement) and matches each stop exactly.
+  function spherical(plan) {
+    var out = [], th = 0;
+    plan.stops.forEach(function (s, i) {
+      var p = PC.cam.fromEyeLook(s.eye, s.look);
+      if (i) { var d = (p.theta - th) % (2 * Math.PI); if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI; th += d; } else th = p.theta;
+      out.push(new THREE.Vector3(th, p.phi, p.radius));
+    });
+    return out;
+  }
+  // A soft floor: x above lo + m unchanged; below, lo + m e^((x - lo) / m - 1), always above lo, with the slope
+  // matching at lo + m, so the path has no kink where it would touch a limit.
+  function soft(x, lo, m) { return x < lo + m ? lo + m * Math.exp((x - lo) / m - 1) : x; }
+  function poseAt(tau) {
+    var u = PC.tourplan.u(T.plan, tau), l = arr(T.looks.getPoint(u)), q = T.sph.getPoint(u), K = PC.C.TOUR;
+    var L = PC.view3d.limits(), p = { target: l, theta: q.x, phi: q.y, radius: q.z };
+    // orbit radius (rMin) and phi near the vertical (phiMin; a basement stop's overhead eye passing over its look
+    // point swings round the axis smoothly), softly, so the hard clamp below does not kink the path
+    p.radius = soft(p.radius, L.rMin, K.floorSoft);
+    p.phi = soft(p.phi, L.phiMin, K.phiSoft * Math.PI / 180);
+    // then the eye floor over the tree tops, softly too, by moving the eye out along its own line of sight (a longer
+    // radius, the same theta and phi), so the limits above stay met and the clamp below never bites
+    var c = Math.cos(p.phi), y = l[1] + p.radius * c, y2 = soft(y, T.plan.eyeFloor, K.floorSoft);
+    if (y2 !== y && c > 1e-6) p.radius = (y2 - l[1]) / c;
+    return PC.cam.clamp(p, L);
+  }
+
+  three.tour = {
+    // o: { onStop(stop, index), onEnd(reason) }. Returns false when there is nothing to tour.
+    start: function (o) {
+      var V = PC.view3d, h = V.house(), size = V.info().size;
+      if (!h || !V.pose()) return false;
+      var plan = PC.tourplan.build(h, size[0] && size[1] ? size[0] / size[1] : 1);
+      if (!plan) return false;
+      if (V.selected() !== null) V.select(null);
+      V.setRoof(false);
+      var t = T = { plan: plan, o: o || {}, tau: 0, cur: -1, lead: null, ended: false,
+        sph: new THREE.CatmullRomCurve3(spherical(plan), false, 'catmullrom'),
+        looks: new THREE.CatmullRomCurve3(plan.stops.map(function (s) { return v3(s.look); }), false, 'catmullrom') };
+      var ov = poseAt(0), now = V.pose(), e0 = PC.cam.position(now), e1 = PC.cam.position(ov);
+      var off = Math.max(Math.hypot(e0[0] - e1[0], e0[1] - e1[1], e0[2] - e1[2]), Math.hypot(now.target[0] - ov.target[0], now.target[1] - ov.target[1], now.target[2] - ov.target[2]));
+      if (off > PC.C.TOUR.leadInSkip) t.lead = { from: now, to: ov, ms: PC.C.TOUR.leadInMs, t: 0 };
+      var anim = {
+        kind: 'tour', paused: false,
+        step: function (dt) {
+          if (t.lead) {
+            t.lead.t += dt;
+            var k = Math.min(1, t.lead.t / t.lead.ms), p = PC.cam.clamp(PC.cam.lerpPose(t.lead.from, t.lead.to, k), V.limits());
+            if (k >= 1) t.lead = null;
+            return { pose: p, done: false };
+          }
+          t.tau = Math.min(plan.duration, t.tau + dt / 1000 * factor());
+          applyStop(PC.tourplan.target(plan, t.tau));
+          return { pose: poseAt(t.tau), done: t.tau >= plan.duration };
+        },
+        end: function (reason) {
+          if (t.ended) return;
+          t.ended = true;
+          if (T === t) T = null;
+          if (reason !== 'replaced' && reason !== 'build' && reason !== 'close' && PC.view3d.selected() !== null) PC.view3d.select(null);
+          if (t.o.onEnd) t.o.onEnd(reason);
+        }
+      };
+      t.anim = anim;
+      V.animate(anim);
+      applyStop(t.lead ? 0 : 1);                 // the lead-in approaches the overview, the first leg the first room
+      return true;
+    },
+    pause: function () { if (T) PC.view3d.pauseAnimation(true); },
+    resume: function () { if (T) PC.view3d.pauseAnimation(false); },
+    stop: function () { if (T) PC.view3d.stopAnimation(); },
+    setSpeed: function (name) { if (PC.C.TOUR.speeds[name]) speed = name; },
+    speed: function () { return speed; },
+    running: function () { return !!T; },
+    state: function () {
+      return T ? { running: true, paused: !!T.anim.paused, speed: speed, tau: T.tau, duration: T.plan.duration, stop: T.cur, lead: !!T.lead, plan: T.plan }
+        : { running: false, paused: false, speed: speed };
+    },
+    // Test-only (TL ruling Q8): sets the tour time; the next frame shows it (stops follow as in a normal run).
+    debugSeek: function (tau) { if (!T) return false; T.lead = null; T.tau = Math.max(0, Math.min(T.plan.duration, tau)); PC.view3d.invalidate(); return true; }
+  };
+})(globalThis.PC = globalThis.PC || {});
+
+</script>
 <script>/* js/three/scene.js */
 /* PC.view3d: renderer, on-demand loop, resize, visibility, context loss, lights, open / close (A-10, F4-T1 plan §4).
    THREE only inside functions: the file loads without it, and PC.view3d.open() then reports 'unavailable'.
@@ -5355,6 +5583,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
    pose, smoothstep through PC.cam.lerpPose, clamped every frame, exactly `to` at the end. An input cancels it BEFORE
    the controls apply their delta (controls api.interrupt, plan review item 2); close(), resetView() and a build
    (rebuild, context restore) cancel it too. Flights never touch the session look.
+   F5-T2 (plan review Q6): step(dt) returns { pose, done } and the driver assigns the pose; end(reason) is called
+   exactly once with done | input | close | reset | build | replaced | stop; while anim.paused no frames are requested
+   and the first frame after pauseAnimation(false) has dt 0. The tour (three/tour.js) is the second client.
    Selection (A-14): select(roomId | null) puts the one `highlight` mesh (PC.three.highlight, finder.js) on the room,
    disposing the previous geometry; a build and close() clear it and call the onSelect hook with null. */
 (function (PC) {
@@ -5392,26 +5623,37 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   function frame(ts) {
     S.frame = 0;
     if (!S.active || S.lost || !visible()) return;
-    if (S.anim) {
+    if (S.anim && !S.anim.paused) {
       var now = typeof ts === 'number' ? ts : 0, dt = S.animT === null ? 0 : Math.min(PC.C.CAM.dtMax, Math.max(0, now - S.animT));
       S.animT = now;
-      if (S.anim.step(dt)) stopAnim();
+      var r = S.anim.step(dt);
+      if (r && r.pose) S.pose = r.pose;
+      if (r && r.done) stopAnim('done');
       S.dirty = true;
     }
     if (!S.dirty) return;
     resize(true); S.dirty = false; render();
-    if (S.anim) { S.dirty = true; request(); }
+    if (S.anim && !S.anim.paused) { S.dirty = true; request(); }
   }
-  function animate(a) { S.anim = a; S.animT = null; invalidate(); }
-  function stopAnim() { S.anim = null; S.animT = null; }
+  function animate(a) { if (S.anim) stopAnim('replaced'); S.anim = a; S.animT = null; invalidate(); }
+  // Ends the running animation (if any) and calls its end(reason) exactly once (F5-T2 plan review Q6).
+  function stopAnim(reason) {
+    var a = S.anim;
+    S.anim = null; S.animT = null;
+    if (a && typeof a.end === 'function') a.end(reason || 'stop');
+  }
+  function pauseAnim(on) {
+    if (!S.anim) return;
+    S.anim.paused = !!on;
+    if (!on) { S.animT = null; invalidate(); }
+  }
   function flyTo(pose, ms) {
     if (!S.house || !S.pose || !S.limits || !pose) return false;
     var f = { kind: 'flight', from: PC.cam.copy(S.pose), to: PC.cam.clamp(pose, S.limits), ms: ms > 0 ? ms : PC.C.CAM.flightMs, t: 0 };
     f.step = function (dt) {
       f.t += dt;
       var k = Math.min(1, f.t / f.ms);
-      S.pose = k >= 1 ? PC.cam.copy(f.to) : PC.cam.clamp(PC.cam.lerpPose(f.from, f.to, k), S.limits);
-      return k >= 1;
+      return { pose: k >= 1 ? PC.cam.copy(f.to) : PC.cam.clamp(PC.cam.lerpPose(f.from, f.to, k), S.limits), done: k >= 1 };
     };
     animate(f);
     return true;
@@ -5486,14 +5728,14 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       set: function (p) { S.pose = PC.cam.clamp(p, S.limits); invalidate(); },
       size: function () { return S.size[0] ? S.size : [canvas.clientWidth || 1, canvas.clientHeight || 1]; },
       fov: PC.C.CAM.fov,
-      interrupt: function () { stopAnim(); },
+      interrupt: function () { stopAnim('input'); },
       onInput: function () { if (S.onInput) S.onInput(); }
     });
   }
 
   // Every geometry and material of the last build, exactly once (the meshes are tracked: nodes are not probed).
   function dispose() {
-    stopAnim();
+    stopAnim('build');
     clearSelection();
     S.meshes.forEach(function (m) { m.geometry.dispose(); });
     Object.keys(S.mats || {}).forEach(function (k) { S.mats[k].dispose(); });
@@ -5569,7 +5811,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       });
       return { ok: true };
     },
-    close: function () { S.active = false; S.building = 0; cancelFrame(); stopAnim(); clearSelection(); },
+    close: function () { S.active = false; S.building = 0; cancelFrame(); stopAnim('close'); clearSelection(); },
     invalidate: invalidate,
     setLevel: function (sel) { S.level = sel; applyVisibility(); invalidate(); },
     setRoof: function (on) { S.roof = !!on; applyVisibility(); invalidate(); },
@@ -5580,11 +5822,13 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       if (S.house && S.mats) { lights(S.house); invalidate(); }
     },
     look: function () { return { hour: S.look.hour, season: S.look.season }; },
-    resetView: function () { if (!S.house) return; stopAnim(); S.pose = PC.cam.reset(S.house, aspect()); invalidate(); },
+    resetView: function () { if (!S.house) return; stopAnim('reset'); S.pose = PC.cam.reset(S.house, aspect()); invalidate(); },
     setOnInput: function (fn) { S.onInput = fn; },
     // F5-T1: the animation driver, flights and the room selection (A-12, A-14 as built).
     animate: function (a) { if (S.house && a && typeof a.step === 'function') animate(a); },
-    stopAnimation: stopAnim,
+    stopAnimation: function () { stopAnim('stop'); },
+    pauseAnimation: pauseAnim,
+    animation: function () { return S.anim; },
     flyTo: flyTo,
     flying: function () { return !!(S.anim && S.anim.kind === 'flight'); },
     select: select,
@@ -8094,12 +8338,20 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
    off, the room's level, highlight, 1.2 s flight), syncs the Roof switch and the level radios, and shows the caption
    "Room · Level" (caption(), shared with the F5-T2 tour; PM round 12). The select keeps the chosen room (PM Q7).
    The selection is cleared by any manual level change (All included), Reset view, Roof on, "Go to room…", and by
-   PC.view3d itself on a rebuild or close (onSelect(null)); orbit / zoom / pan keep it (TL ruling Q3). */
+   PC.view3d itself on a rebuild or close (onSelect(null)); orbit / zoom / pan keep it (TL ruling Q3).
+   Drone tour (F5-T2, F5-S2; A-14 as built; PM round 13): Start (clears the finder selection, Roof off) runs
+   PC.three.tour at the session speed (Normal on a page load; kept between tours and stage visits, not in the draft).
+   Pause / Resume (aria-pressed; the caption's pause button mirrors it) and Stop in the panel and in the caption, which
+   reads "Room · Level" or "Overview". Each stop sets the level radios and the Roof switch through .checked, which fires
+   no change event, so it never ends the tour (plan review item 4). A level radio, Reset view, Roof on and a finder
+   pick end the tour first; the Light tab and the speed radios do not. When it ends (Stop, a gesture, leaving stage 5,
+   a rebuild, the end) the camera, level and Roof stay; the caption and highlight are cleared and the select shows
+   "Go to room…" (PM Q12). */
 (function (PC) {
   'use strict';
   var ui = PC.ui = PC.ui || {};
   ui.stages = ui.stages || {};
-  var LATER = ['v3-tour-start', 'v3-tour-pause', 'v3-tour-stop'];
+  var LATER = [];                                 // every stage-5 control is live since F5-T2
   var PRESETS = ['morning', 'noon', 'evening', 'night'];
   var TABS = ['view', 'light', 'tour'];
   var open = false, house = null, level = 'all', levelsKey = '', roomsKey = '';
@@ -8149,10 +8401,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     var box = ui.$('v3-caption'), t = ui.$('v3-caption-text');
     while (t.firstChild) t.removeChild(t.firstChild);
     if (parts) {
-      var a = document.createElement('span'), b = document.createElement('span');
+      var a = document.createElement('span');
       a.className = 'pc-caption__room'; a.textContent = parts[0];
-      b.className = 'pc-caption__level'; b.textContent = ' · ' + parts[1];
-      t.appendChild(a); t.appendChild(b);
+      t.appendChild(a);
+      if (parts[1]) { var b = document.createElement('span'); b.className = 'pc-caption__level'; b.textContent = ' · ' + parts[1]; t.appendChild(b); }
     }
     ui.show(box, !!parts);
   }
@@ -8167,6 +8419,43 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     ui.$('v3-roof').checked = false;
     caption(PC.cam.caption(house, id));
   }
+  // ---- drone tour (F5-T2) ----
+  function renderTour() {
+    var st = PC.three.tour ? PC.three.tour.state() : { running: false, paused: false }, on = st.running, pz = on && st.paused;
+    ui.$('v3-tour-start').disabled = on;
+    ['v3-tour-pause', 'v3-tour-stop'].forEach(function (h) { ui.$(h).disabled = !on; });
+    ['v3-tour-pause', 'v3-caption-pause'].forEach(function (h) {
+      var b = ui.$(h);
+      b.setAttribute('aria-label', pz ? 'Resume tour' : 'Pause tour');
+      b.setAttribute('aria-pressed', pz ? 'true' : 'false');        // the caption's pause button mirrors the panel's
+    });
+    ['v3-caption-pause', 'v3-caption-stop'].forEach(function (h) { ui.show(ui.$(h), on); });
+    Array.prototype.slice.call(ui.$('v3-tour-speed').querySelectorAll('input')).forEach(function (i) { i.checked = i.value === PC.three.tour.speed(); });
+  }
+  function tourStop(stop) {
+    level = stop.level;
+    renderLevels();
+    ui.$('v3-roof').checked = false;
+    caption(stop.kind === 'room' ? PC.cam.caption(house, stop.id) : ['Overview']);
+  }
+  function tourEnd(reason) {
+    if (reason !== 'replaced') { ui.$('v3-room').value = ''; caption(null); }
+    renderTour();
+  }
+  function startTour() {
+    if (!house || PC.three.tour.running()) return;
+    clearRoom();
+    ui.$('v3-roof').checked = false;
+    PC.three.tour.start({ onStop: tourStop, onEnd: tourEnd });
+    renderTour();
+  }
+  function togglePause() {
+    var st = PC.three.tour.state();
+    if (!st.running) return;
+    if (st.paused) PC.three.tour.resume(); else PC.three.tour.pause();
+    renderTour();
+  }
+  function endTour() { if (PC.three.tour.running()) PC.three.tour.stop(); }
   function renderLevels() {
     Array.prototype.slice.call(ui.$('v3-level').querySelectorAll('input')).forEach(function (inp) { inp.checked = inp.value === level; });
   }
@@ -8200,15 +8489,22 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   ui.stages.view3d = {
     init: function () {
       LATER.forEach(function (h) { ui.$(h).disabled = true; });
-      Array.prototype.slice.call(ui.$('v3-tour-speed').querySelectorAll('input')).forEach(function (i) { i.disabled = true; });
       ui.on(ui.$('v3-level'), 'change', function (e) {
         if (!e.target || e.target.name !== 'v3-level' || !e.target.checked) return;
         level = e.target.value;
+        endTour();
         clearRoom();
         PC.view3d.setLevel(level);
       });
-      ui.on(ui.$('v3-roof'), 'change', function (e) { if (e.target.checked) clearRoom(); PC.view3d.setRoof(e.target.checked); });
-      ui.on(ui.$('v3-reset'), 'click', function () { clearRoom(); PC.view3d.resetView(); });
+      ui.on(ui.$('v3-roof'), 'change', function (e) { if (e.target.checked) { endTour(); clearRoom(); } PC.view3d.setRoof(e.target.checked); });
+      ui.on(ui.$('v3-reset'), 'click', function () { endTour(); clearRoom(); PC.view3d.resetView(); });
+      ui.on(ui.$('v3-tour-start'), 'click', startTour);
+      ui.on(ui.$('v3-tour-pause'), 'click', togglePause);
+      ui.on(ui.$('v3-caption-pause'), 'click', togglePause);
+      ui.on(ui.$('v3-tour-stop'), 'click', endTour);
+      ui.on(ui.$('v3-caption-stop'), 'click', endTour);
+      ui.on(ui.$('v3-tour-speed'), 'change', function (e) { if (e.target && e.target.name === 'v3-tour-speed' && e.target.checked) PC.three.tour.setSpeed(e.target.value); });
+      renderTour();
       ui.on(ui.$('v3-room'), 'change', function (e) { goRoom(e.target.value); });
       PC.view3d.setOnSelect(function (id) { if (id === null) unselected(); });
       ui.on(ui.$('v3-time'), 'input', function (e) { setLook({ hour: parseFloat(e.target.value) }); });
@@ -8224,11 +8520,13 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       Object.assign(PC.debug = PC.debug || {}, {
         house: function () { return house; },
         scene: function () { return PC.view3d.info(); },
-        cam: function () { return PC.view3d.pose(); }
+        cam: function () { return PC.view3d.pose(); },
+        // test-only (TL F5-T2 ruling Q8): set the running tour's time; no product code calls it
+        tourSeek: function (tau) { return PC.three.tour.debugSeek(tau); }
       });
       ui.shell.register(5, {
         enter: function () { open = true; renderLook(); show(PC.store.get()); },
-        leave: function () { open = false; PC.view3d.close(); },
+        leave: function () { open = false; PC.view3d.close(); renderTour(); },
         // a store change while the 3D view is open rebuilds only when the model really changed (house.key)
         render: function (s) {
           if (!open) return;

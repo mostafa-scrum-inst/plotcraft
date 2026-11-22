@@ -7,7 +7,8 @@ import { gestures } from '../helpers/touch.mjs';
 import { loadCore } from '../helpers/load.mjs';
 import { maxHouse } from '../helpers/houses.mjs';
 import { lookChecks } from '../helpers/look-checks.mjs';   // F4-T3 Light tab (folded in, TL Q7)
-import { finderChecks } from '../helpers/finder-checks.mjs';   // F5-T1 room finder (in these page loads, TL ruling Q4)
+import { finderChecks } from '../helpers/finder-checks.mjs';
+import { tourChecks, g1Draft } from '../helpers/tour-checks.mjs';   // F5-T2 drone tour (in these page loads)
 
 const T = suite('e2e view3d'), browser = await launch();
 // Counts the app's animation-frame requests. The tests below never call requestAnimationFrame themselves while
@@ -18,8 +19,8 @@ const ready = (page) => page.waitForFunction(() => { const i = PC.debug.scene();
 const info = (page) => page.evaluate(() => { const i = PC.debug.scene(); return { renders: i.renders, builds: i.builds, size: i.size, active: i.active, frame: i.frame, aspect: i.camera.aspect }; });
 const cam = (page) => page.evaluate(() => PC.debug.cam());
 const scroll = (page) => page.evaluate(() => [window.scrollX, window.scrollY, document.scrollingElement.scrollTop, window.visualViewport ? window.visualViewport.scale : 1]);
-const DISABLED = ['v3-tour-start', 'v3-tour-pause', 'v3-tour-stop'];   // F5-T2 (tour); the room finder is live since F5-T1
-const ENABLED = ['v3-room', 'v3-reset', 'v3-panel-toggle', 'v3-tab-view', 'v3-tab-light', 'v3-tab-tour', 'v3-roof',   // Roof enabled since F4-T2
+const DISABLED = ['v3-tour-pause', 'v3-tour-stop'];   // F5-T2: live only while a tour runs
+const ENABLED = ['v3-tour-start', 'v3-room', 'v3-reset', 'v3-panel-toggle', 'v3-tab-view', 'v3-tab-light', 'v3-tab-tour', 'v3-roof',   // Roof enabled since F4-T2
   'v3-time', 'v3-preset-morning', 'v3-preset-noon', 'v3-preset-evening', 'v3-preset-night', 'v3-season'];   // Light tab since F4-T3
 
 async function phone() {
@@ -40,18 +41,18 @@ async function phone() {
   T.ok(fill.same, `${tag} canvas rectangle = its wrap`);
   T.eq(fill.size, [...fill.client, false], `${tag} setSize(clientWidth, clientHeight, false)`);
   // controls: later tasks disabled, these enabled
-  T.eq(await page.evaluate((L) => L.map((h) => document.querySelector(`[data-pc="${h}"]`).disabled), DISABLED), DISABLED.map(() => true), `${tag} later-task controls disabled (tour; F5-T2)`);
-  T.ok(await page.evaluate(() => [...document.querySelectorAll('[data-pc="v3-tour-speed"] input')].every((i) => i.disabled)), `${tag} tour speed disabled`);
-  T.eq(await page.evaluate((L) => L.map((h) => document.querySelector(`[data-pc="${h}"]`).disabled), ENABLED), ENABLED.map(() => false), `${tag} room finder (F5-T1), Reset, panel toggle, tabs, Roof (F4-T2) and the Light tab (F4-T3) enabled`);
+  T.eq(await page.evaluate((L) => L.map((h) => document.querySelector(`[data-pc="${h}"]`).disabled), DISABLED), DISABLED.map(() => true), `${tag} tour Pause / Stop disabled while no tour runs (F5-T2)`);
+  T.ok(await page.evaluate(() => [...document.querySelectorAll('[data-pc="v3-tour-speed"] input')].every((i) => !i.disabled)), `${tag} tour speed live (F5-T2)`);
+  T.eq(await page.evaluate((L) => L.map((h) => document.querySelector(`[data-pc="${h}"]`).disabled), ENABLED), ENABLED.map(() => false), `${tag} tour Start (F5-T2), room finder (F5-T1), Reset, panel toggle, tabs, Roof (F4-T2) and the Light tab (F4-T3) enabled`);
   // Designer (TL F4-T1 condition 1): the disabled controls look disabled (muted set of .pc-btn:disabled: sunk / ink-3)
   T.eq(await page.evaluate(() => {
     const q = (h) => document.querySelector(`[data-pc="${h}"]`), cs = (e, p) => getComputedStyle(e, p), root = cs(document.documentElement);
     const v = (n) => { const d = document.createElement('i'); d.style.color = root.getPropertyValue(n); document.body.append(d); const c = cs(d).color; d.remove(); return c; };
     const sunk = v('--sunk'), ink3 = v('--ink-3');
     // F4-T3 (Designer plan 3): the check moves to the controls that stay disabled; the live Light controls are not muted
-    return [cs(q('v3-room')).backgroundColor === sunk && cs(q('v3-room')).color === ink3, cs(q('v3-tour-start')).cursor,
+    return [cs(q('v3-room')).backgroundColor === sunk && cs(q('v3-room')).color === ink3, cs(q('v3-tour-stop')).cursor,
       cs(q('v3-time')).cursor, cs(q('v3-time-out')).color === ink3, cs(q('v3-season')).backgroundColor === sunk, cs(q('v3-preset-noon').querySelector('.pc-i')).opacity];
-  }), [false, 'not-allowed', 'pointer', false, false, '1'], `${tag} tour drawn muted; room finder (F5-T1), slider, season and presets live`);   // thumb / track: pseudo-elements, see designer-fix.md shots
+  }), [false, 'not-allowed', 'pointer', false, false, '1'], `${tag} tour Stop drawn muted while idle; room finder (F5-T1), slider, season and presets live`);   // thumb / track: pseudo-elements, see designer-fix.md shots
   // level selector: PM round 9 labels, aria-labels, no overflow
   const lv = await page.evaluate(() => [...document.querySelectorAll('[data-pc="v3-level"] label')].map((l) => { const i = l.querySelector('input'), t = l.querySelector('.pc-seg__txt'); return [t.textContent, i.getAttribute('aria-label'), i.value, i.checked, i.disabled, t.scrollWidth <= t.clientWidth + 1]; }));
   T.eq(lv, [['All', 'All floors', 'all', true, false, true], ['Ground', 'Ground floor', 'G', false, false, true], ['First', 'First floor', '1', false, false, true]], `${tag} level labels, All selected on open, no overflow`);
@@ -109,6 +110,7 @@ async function phone() {
   await ready(page);
   T.eq((await info(page)).renders, hid.renders + 1, `${tag} visible again: exactly one frame`);
   await finderChecks(o, vp, T);
+  await tourChecks(o, vp, T);
   // rotation: the renderer follows the canvas and keeps the aspect
   await page.setViewportSize({ width: 640, height: 360 });
   await page.waitForFunction(() => { const c = document.querySelector('[data-pc="v3-canvas"]'), i = PC.debug.scene(); return i.size[0] === c.clientWidth && i.size[1] === c.clientHeight && !i.frame; });
@@ -163,6 +165,7 @@ async function desktop() {
   T.eq(after, [5, 2, 2], `${tag} Q19 Sparse: back on stage 5, approvals still 2 of 2`);
   T.ok((await info(page)).builds === b0 + 1 && (await pieces()) < n0, `${tag} ...rebuilt once with fewer pieces (${await pieces()} < ${n0})`);
   await finderChecks(o, vp, T);
+  await tourChecks(o, vp, T);
   T.none(problems(), `${tag} no errors`);
   await o.ctx.close();
 }
@@ -198,6 +201,7 @@ async function fiveLevels() {
   T.eq(r.text, ['All', 'Basement', 'Ground', 'First', 'Second'], `${tag} five options, full PM round 9 words`);
   T.eq(r.aria, ['All floors', 'Basement', 'Ground floor', 'First floor', 'Second floor'], `${tag} aria-labels`);
   T.eq([r.clipped, r.page], [0, true], `${tag} 5 options fit at 360 px (no fallback needed), no horizontal page scroll`);
+  await g1Draft(o, vp, T);   // F5-T2 G1 with a draft in place (the max house): 5 taps
   T.none(problems(), `${tag} no page errors`);
   await o.ctx.close();
 }

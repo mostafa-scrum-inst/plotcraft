@@ -78,6 +78,11 @@
       };
     },
     copy: copy,
+    // The orbit pose whose eye is `eye` and whose target is `look` (F5-T2: the tour renders through the orbit pose).
+    fromEyeLook: function (eye, look) {
+      var dx = eye[0] - look[0], dy = eye[1] - look[1], dz = eye[2] - look[2], r = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1e-9;
+      return { target: [look[0], look[1], look[2]], radius: r, theta: Math.atan2(dx, dz), phi: Math.acos(Math.max(-1, Math.min(1, dy / r))) };
+    },
     // { room, level, label } for a room id of the house, or null.
     roomOf: function (house, id) {
       for (var i = 0; i < house.levels.length; i++) {

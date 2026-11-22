@@ -113,6 +113,32 @@ async function basement(page, tag) {
   }, [firstHit]);
   T.ok(r.pick && /^(highlight|level-B)/.test(r.pick) && r.orange >= 40, `${tag} QA B-1: basement pick, first visible hit on the eye -> highlight ray "${r.pick}", ${r.orange} orange pixels`);
   T.ok(r.reset && r.reset.startsWith('level-B') && r.cap === false, `${tag} QA B-1: Reset + Basement, first visible hit towards the pit floor "${r.reset}" (not the ground)`);
+  // F5-T2 (TL plan review item 5, required): the tour on the maximum house, sought to the first and the last basement stop (just before
+  // it, while that room is the highlighted target) and paused: on the real r128 the first visible hit on the ray from
+  // the eye to the highlight is the highlight or level B, and the highlight draws orange pixels.
+  await page.evaluate(() => document.querySelector('[data-pc="v3-tour-start"]').click());
+  const bs = (await page.evaluate(() => PC.three.tour.state().plan.stops.map((s, k) => [k, s.level, s.t, s.id]).filter((s) => s[1] === 'B')))
+    .filter((s, k, a) => k === 0 || k === a.length - 1);   // the first and last basement stops (run-time headroom)
+  T.ok(bs.length === 2, `${tag} tour: first and last basement stops checked`);
+  for (const [k, , t, id] of bs) {
+    // paused, sought, resumed: the first frame after Resume has dt 0, so it shows exactly t - 0.3
+    await page.evaluate((t) => { PC.three.tour.pause(); PC.debug.tourSeek(t - 0.3); PC.three.tour.resume(); }, t);
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    const q = await page.evaluate(([fh]) => {
+      PC.three.tour.pause();
+      const hit = new Function('return ' + fh)(), i = PC.debug.scene(), gl = i.renderer.getContext(), m = i.world.getObjectByName('highlight');
+      if (!m) return { none: true, sel: PC.view3d.selected() };
+      m.geometry.computeBoundingBox(); const c = m.geometry.boundingBox.getCenter(new THREE.Vector3());
+      const read = () => { i.renderNow(); const W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, px = new Uint8Array(W * H * 4); gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px); return px; };
+      const on = read(); m.visible = false; const off = read(); m.visible = true; i.renderNow();
+      let orange = 0; for (let j = 0; j < on.length; j += 4) if ((on[j] !== off[j] || on[j + 1] !== off[j + 1]) && on[j] > 120 && on[j] - on[j + 1] > 40 && on[j] - on[j + 2] > 70) orange++;
+      const res = { pick: hit(i, c), orange, sel: PC.view3d.selected(), level: i.level, run: PC.three.tour.running() };
+      PC.three.tour.resume();
+      return res;
+    }, [firstHit]);
+    T.ok(q.run && q.sel === id && q.level === 'B' && q.pick && /^(highlight|level-B)/.test(q.pick) && q.orange >= 40, `${tag} tour basement stop ${k} (${id}): first visible hit "${q.pick}", ${q.orange} orange pixels, level ${q.level}, highlight ${q.sel}`);
+  }
+  await page.evaluate(() => PC.three.tour.stop());
 }
 function notBlank(res, back, msg) {
   const differ = res.out.filter((c) => c.some((v, k) => Math.abs(v - back[k]) > 12)).length;
