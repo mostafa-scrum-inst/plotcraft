@@ -51,9 +51,15 @@ Everything lives on disk under /home/claude/plotcraft (cloud sessions: /home/use
 - Go to room dropdown (grouped by level), flyTo on shared animation driver (100 ms step cap), highlight mesh, caption "Room · Level", basement 15° pose. QA B-1 (groundOuter covered basement pit since F4-T1) fixed 88dd164 + leak check. QA round 2 PASSED 413.0 s. TL outcome APPROVED.
 - App v5 same URL; testing doc https://claude.ai/artifact/RqY92PserUTatAtqGGG5dJ
 
-## Next batch (batch 13): F5-T2 drone tour
-1. Plan APPROVED (docs/03-tasks/F5-T2/plan-review.md, PM round 13). FS implements in worktree /home/user/plotcraft-f5t2 (branch f5t2); QA prepares suites in main (budget <= 25 s; run headroom ~7 s).
-2. Then F5-T3 Designer pass (needs F4 review notes = client phone answers) and F4 + F5 feature reviews. Phone answers still outstanding.
+## Batch 13 result: F5-T2 drone tour DONE
+- PC.tourplan + PC.three.tour on the F5-T1 driver; uniform Catmull-Rom curves (TL-accepted deviation), eye floor 5.33 m from vegetation table, 1.2 s lead-in, sample 53.5 s. QA PASSED 413.3 s (extra viewports moved behind QA_FULL=1; QA_FULL green 184.4 s). TL outcome APPROVED.
+- App v6 same URL; testing doc https://claude.ai/artifact/Fi6GyeFc5Cyyr4bejW5GUX
+- Run-time rule (TL): target 420 s; 420-440 re-run once; 2 in a row >420 or any >440 => trim before merge; hard cap 480 s. QA_FULL=1 list must be green before F5 feature review.
+
+## Next batch (batch 14): F5-T3a Designer pass (non-phone part)
+1. TL split F5-T3: T3a now (screens at 4 viewports, 3D panel layout incl. 42.5 % at 640x360, tour bar/caption placement, desktop framing under side panel = FS camera change with unit test, tour pacing + summer-evening shadow data, F1 polish not tied to phone); T3b after client phone answers.
+2. CTO asked (a53e7c8c7a110e595): go for T3a before device evidence; substitute for the phone gate if the client never answers -> client decision card. Answer in docs/04-feature-reviews/F4-cto-gate.md.
+3. Then F4 review, F5-T3b, F5 feature review, final release.
 
 ## Known limits owned by Designer F5-T3
 Overridden-edge label pile-up; legend wraps at 1280x800 with "* set by you"; area label wider than narrow footprints; no Parking/Pool legend entries; pool-size note wrap at 360 px.
