@@ -1,5 +1,5 @@
 // F6-T1 QA: the CTO's random-operation leak probe as a suite (cto-constraints.md rule 5.1; F4 review probe).
-// Real r128 (default stream 960x600, QA_FULL maximum-house stream 1280x800). A seeded stream of operations through the page's own controls and APIs:
+// Real r128 (default stream 960x600, release-step maximum-house stream 1280x800). A seeded stream of operations through the page's own controls and APIs:
 //   level radio, Roof switch, Light presets / season, finder pick, Reset, tour start / seek / stop, rebuilds (exterior and
 //   ceiling commits: a new house key), stage 5 -> 4 -> 5, WEBGL_lose_context lose / restore, window resize.
 // After every operation, once the view is ready:
@@ -10,7 +10,7 @@
 //     + one shadow map per shadow light (a removed but undisposed object shows as an excess at once);
 //   - per house key, the scene's own geometry / texture count is the same on every visit (no growth across rebuilds);
 //   - no page error, console error or THREE warning (S.end).
-// Default: 50 operations on the sample house (TL Q-T8 / plan §9.5). QA_FULL=1: 200 more on the maximum house.
+// Default: 50 operations on the sample house (TL Q-T8 / plan §9.5). QA_RELEASE=1 or --max-only: only the 200-op maximum-house stream (release step, <= 240 s; TL ruling F6-T1a gate).
 // Run: node tests/qa/f6-t1-leak.mjs [--no-shots] [--seed=N] [--ops=N] [--force]
 import { join } from 'node:path';
 import { ROOT, collector, launch } from './lib.mjs';
@@ -23,7 +23,10 @@ const R = collector('F6-T1 leak');
 import * as H from './f4-t1-ref.mjs';
 { const { PC } = H.loadPC3(); if (!((PC.C.VIEW3D && PC.C.VIEW3D.tiers) || PC.texgen) && !process.argv.includes('--force')) { R.note('skipped: PC.C.VIEW3D.tiers / PC.texgen absent (F6-T1 not merged); --force for a dry run'); process.exit(R.done() ? 0 : 1); } }
 const arg = (k, d) => { const a = process.argv.find((x) => x.startsWith(`--${k}=`)); return a ? Number(a.slice(k.length + 3)) : d; };
-const SEED = arg('seed', 20261122), OPS = arg('ops', 50), FULL = !!process.env.QA_FULL;
+const SEED = arg('seed', 20261122), OPS = arg('ops', 50);
+// TL ruling (F6-T1a gate, QA_FULL 545.6 s): the 200-op maximum-house stream (175 s) leaves QA_FULL=1 and is its own release
+// step, in its own process: QA_RELEASE=1 or --max-only runs only that stream (limit 240 s); every other run only the sample.
+const MAXONLY = !!process.env.QA_RELEASE || process.argv.includes('--max-only') || process.argv.includes('--leak-max'), MAX_S = 240;
 const session = sessions({ R, shots: join(ROOT, 'tests/qa/shots/F6-T1'), noShots: true });
 const t0 = Date.now(), TIMES = [];
 const cut = (a, n = 8) => a.slice(0, n).concat(a.length > n ? [`... ${a.length} in all`] : []);
@@ -65,7 +68,7 @@ const OP = ([k, x, y]) => {
 const WEIGHTS = [['level', 3], ['roof', 2], ['preset', 2], ['season', 1], ['pick', 3], ['reset', 1], ['tour', 2], ['rebuild', 2], ['reopen', 1], ['lose', 1], ['resize', 1]];
 const kindOf = (u) => { const tot = WEIGHTS.reduce((s, w) => s + w[1], 0); let a = u * tot; for (const [k, w] of WEIGHTS) { if (a < w) return k; a -= w; } return 'level'; };
 
-// TL Q-T8: the default 50-op stream runs at 960x600 (less fill per frame); the QA_FULL maximum-house stream at 1280x800
+// TL Q-T8: the default 50-op stream runs at 960x600 (less fill per frame); the release-step maximum-house stream at 1280x800
 const VP_DEF = { tag: '960x600', w: 960, h: 600, touch: false }, VP_FULL = { tag: '1280x800', w: 1280, h: 800, touch: false };
 async function probeRun(browser, label, mut, n, seed, vp = VP_FULL) {
   const S = await session(browser, vp, { three: 'real' }), f = [], rnd = V.rng(seed), seen = {}, kinds = {};
@@ -100,9 +103,11 @@ async function probeRun(browser, label, mut, n, seed, vp = VP_FULL) {
 
 const browser = await launch();
 try {
-  let t = Date.now(); await probeRun(browser, '960x600 real sample', '', OPS, SEED, VP_DEF); TIMES.push(`sample ${((Date.now() - t) / 1000).toFixed(1)} s`);
-  if (FULL) { t = Date.now(); await probeRun(browser, '1280x800 real maximum house (QA_FULL)', MAXMUT, 200, SEED + 1); TIMES.push(`maximum house ${((Date.now() - t) / 1000).toFixed(1)} s`); }
-  else R.note('the 200-operation maximum-house stream runs with QA_FULL=1 (TL Q-T8, plan §9.5)');
+  let t = Date.now();
+  if (!MAXONLY) { await probeRun(browser, '960x600 real sample', '', OPS, SEED, VP_DEF); TIMES.push(`sample ${((Date.now() - t) / 1000).toFixed(1)} s`); }
+  if (MAXONLY) { t = Date.now(); await probeRun(browser, '1280x800 real maximum house (release step)', MAXMUT, 200, SEED + 1); const s = (Date.now() - t) / 1000; TIMES.push(`maximum house ${s.toFixed(1)} s`);
+    R.check(`[leak-max] the 200-operation maximum-house stream runs in ${s.toFixed(1)} s <= ${MAX_S} s (TL release-step limit)`, s <= MAX_S ? [] : [`${s.toFixed(1)} s`]); }
+  else R.note('the 200-operation maximum-house stream is its own release step: QA_RELEASE=1 or --max-only, run-all --only leak-max (TL ruling, F6-T1a gate)');
 } finally { await browser.close(); }
 R.note(`timings: ${TIMES.join(', ')}; run ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 process.exit(R.done() ? 0 : 1);
