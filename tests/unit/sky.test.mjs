@@ -12,19 +12,19 @@ const near = (a, b, e, m) => a.forEach((x, i) => assert.ok(Math.abs(x - b[i]) <=
 // Designer plan section 2: background, sunColor, sunI, hemiSky, hemiGround, hemiI at the four presets x four seasons.
 const GOLD = `spring 8 #ABCDE6 #FEE5C3 0.567 #CDDFEE #878768 0.444
 spring 12 #96C7EA #FEF7E8 0.7 #D8E7F4 #939671 0.48
-spring 17.5 #E0AE87 #FEB679 0.5 #C4B2BB #736E53 0.39
+spring 17.5 #E0B088 #FEB77B 0.65 #C5B3BB #767355 0.32
 spring 22 #0F1A29 #A0B4D9 0.15 #7285AE #303843 0.3
 summer 8 #A6CAE6 #FFE4C1 0.567 #CADDEF #818263 0.444
 summer 12 #8EC3EA #FFF7E8 0.7 #D6E6F5 #8B906B 0.48
-summer 17.5 #DFAA81 #FFB273 0.5 #C1AEB8 #6E6A4E 0.39
+summer 17.5 #DFAA81 #FFB273 0.65 #C1AEB8 #6F6E4F 0.32
 summer 22 #0B1626 #9FB3D9 0.15 #7083AD #2F3741 0.3
 autumn 8 #B0C9DB #FEE0BB 0.567 #CFDAE3 #887E64 0.444
 autumn 12 #9EC3DC #FEF0DB 0.7 #DBE1E6 #958B6D 0.48
-autumn 17.5 #E1AD82 #FEB476 0.5 #C7B0B4 #756650 0.39
+autumn 17.5 #E2AE83 #FEB577 0.65 #C8B1B2 #786A50 0.32
 autumn 22 #131C29 #A2B4D7 0.15 #7485AC #313642 0.3
 winter 8 #ADCEE8 #F8E3C9 0.567 #CBDDEF #979083 0.444
 winter 12 #9CC9EC #F6F2EA 0.7 #D5E5F4 #A7A193 0.48
-winter 17.5 #DDB291 #F9B985 0.5 #C4B5C0 #81766B 0.39
+winter 17.5 #DDB496 #F7BB8B 0.65 #C4B7C3 #887E74 0.32
 winter 22 #141F2F #A1B5DA 0.15 #7487B0 #343A4A 0.3`.split('\n').map((l) => l.split(' '));
 
 test('Designer golden table: 16 rows exact (key lerp rounded, then season blend rounded); intensities = the key lerp to 1e-9', () => {
