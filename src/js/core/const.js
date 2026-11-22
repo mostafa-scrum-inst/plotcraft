@@ -59,6 +59,8 @@
     FURNISH: { inset: 0.15, overlap: 0.01, scales: [1, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6] },
     ROOF: { slab: 0.2, parapet: 0.3, parapetHigh: 1.0, parapetT: 0.15, pitchDeg: 30, pergolaH: 2.4, post: 0.15, beam: 0.1,
       beamStep: 0.6, stairHead: 2.4, liftHead: 1.2 },
+    // F6-T1a street strip outside the street edge (Designer plan D3): footpath, kerb, road widths in m
+    STREET: { path: 1.5, kerb: 0.15, road: 8 },
     SITE: { wallH: 1.2, wallT: 0.2, gateW: 3, post: 0.4, postH: 1.4, seat: 3, edgeClear: 0.3, pathHalf: 1,
       marker: { k: 0.06, min: 1.5, max: 3, spare: 0.5, step: 0.25 } },
     CAM: { fov: 45, nearMin: 0.5, nearK: 0.02, farK: 20, phiMin: 5, phiMax: 85, rMin: 4, rMaxK: 3, rMaxReset: 1.2,
@@ -69,7 +71,19 @@
     // (m), the tree gap over the canopy tops (eye floor from PC.data.vegetation), the A-14 nudge, the lead-in flight
     TOUR: { overviewLeg: 4.5, roomLeg: 3.5, speeds: { slow: 0.6, normal: 1, fast: 1.8 }, eyeOut: 2, eyeOutK: 0.6, eyeUp: 2.5,
       bEyeIn: 1.5, bEyeUp: 2.5, centralEps: 0.5, treeGap: 0.5, floorSoft: 1, phiSoft: 3, minGap: 0.5, leadInMs: 1200, leadInSkip: 0.5 },
-    VIEW3D: { maxDpr: 2, shadowMap: 1024, shadowBias: -0.0005, shadowNormalBias: 0.02, sunDist: 2.5, shadowK: 2.5, shadowR: 1.2 },
+    VIEW3D: { maxDpr: 2, shadowMap: 1024, shadowBias: -0.0005, shadowNormalBias: 0.02, sunDist: 2.5, shadowK: 2.5, shadowR: 1.2,
+      // F6-T1a (CTO C-4.5 .. C-4.7; plan section 2 and review): phones (coarse pointer) and the lite tier keep a 1024
+      // shadow map, fine pointers with maxTextureSize >= 4096 get shadowMapFine; maxDprCoarse caps coarse pointers.
+      // tier: per pointer kind, chosen once when the view first opens (a phone result switches phones to lite by data).
+      // roofOnOpen: stage 5 opens with the Roof on (client card pending; false restores the F4 default).
+      // Fog (full tier): near = limits.rMax + R, far = min(near + fogSpanK x R, 0.9 x outerK x R / 2) (TL required
+      // change 1). Sky dome radius skyK x camera.far, centred on the eye every frame (required change 2).
+      maxDprCoarse: 2, shadowMapFine: 2048, roofOnOpen: true, tier: { coarse: 'full', fine: 'full' },
+      tiers: {
+        full: { tex: 512, fog: true, fineShadow: true, maxDpr: 2, treeDetail: 1 },
+        lite: { tex: 256, fog: false, fineShadow: false, maxDpr: 1.5, treeDetail: 0 }
+      },
+      fogSpanK: 8, skyK: 0.9 },
     FOOTPRINT_ROUND: 0.5, FOOTPRINT_MAX_RATIO: 2, FOOTPRINT_STRETCH_RATIO: 3, FOOTPRINT_STRETCH_EXTRA: 0.5, BACK_ANGLE: 40
   };
 })(globalThis.PC = globalThis.PC || {});

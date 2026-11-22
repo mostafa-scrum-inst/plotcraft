@@ -81,14 +81,14 @@ test('close() then reopen with the same house inside the yield: exactly one buil
   assert.deepEqual([E.info().builds, E.R().renders], [1, 1]);
 });
 
-test('scene graph names, sample = 15 meshes (F4-T2: + 2 furniture, roofBatch, siteBatch, poolWater; F4-T3: trunks, canopies, shrubs), one shadow light with a 1024 map, lights = the F4-T1 noon goldens', () => {
+test('scene graph names, sample = 18 meshes (F4-T2: + 2 furniture, roofBatch, siteBatch, poolWater; F4-T3: trunks, canopies, shrubs; F6-T1a: sky, paving, northNeedle), one shadow light with a 2048 map (fine pointer), lights = the F4-T1 noon goldens', () => {
   const E = opened(), n = names(E), i = E.info();
-  for (const k of ['world', 'ground', 'groundOuter', 'groundPlot', 'groundCap', 'level-G', 'level-1', 'slab', 'walls', 'furniture', 'roof', 'roofBatch', 'site', 'siteBatch', 'poolWater', 'trunks', 'canopies', 'shrubs', 'hemi', 'sun']) assert.ok(n.includes(k), k);
-  assert.equal(i.meshCount, 15);
+  for (const k of ['world', 'ground', 'groundOuter', 'groundPlot', 'groundCap', 'level-G', 'level-1', 'slab', 'walls', 'furniture', 'roof', 'roofBatch', 'site', 'siteBatch', 'poolWater', 'trunks', 'canopies', 'shrubs', 'hemi', 'sun', 'sky', 'paving', 'northNeedle']) assert.ok(n.includes(k), k);
+  assert.equal(i.meshCount, 18);
   let shadow = 0; i.scene.traverse((x) => { if (x.name === 'sun' || x.name === 'hemi') { if (x.castShadow) shadow++; } });
   assert.equal(shadow, 1);
   const sun = i.scene.getObjectByName('sun');
-  assert.deepEqual([sun.shadow.mapSize.x, sun.shadow.mapSize.y], [1024, 1024]);
+  assert.deepEqual([sun.shadow.mapSize.x, sun.shadow.mapSize.y], [2048, 2048]);
   // the former noonLook goldens (TL F4-T3 Q8; tests/unit/sky.test.mjs): the opening look is unchanged
   const k = { hemiSky: '#D6E6F5', sunColor: '#FFF7E8', hemiI: 0.48, sunI: 0.7, background: '#8EC3EA' }, L = { hemiGround: '#8B906B' };
   assert.deepEqual(plain(E.info().look), { hour: 12, season: 'summer' });
@@ -105,10 +105,10 @@ test('scene graph names, sample = 15 meshes (F4-T2: + 2 furniture, roofBatch, si
   assert.ok(Math.abs(Math.asin(s[1]) - 72 * Math.PI / 180) < 1e-12);
 });
 
-test('G6 maximum house (3 floors + basement, 10 rooms, lift): no mock exception, <= 40 meshes (21 since F4-T3: + trunks, canopies, shrubs; 18 in F4-T2; 11 in F4-T1)', () => {
+test('G6 maximum house (3 floors + basement, 10 rooms, lift): no mock exception, <= 64 meshes (24 since F6-T1a: + sky, paving, northNeedle; 21 in F4-T3; 18 in F4-T2; 11 in F4-T1)', () => {
   const E = opened({ state: (PC) => maxHouse(PC), dpr: 3 });
-  assert.equal(E.info().meshCount, 21);
-  assert.ok(E.info().meshCount <= 40);
+  assert.equal(E.info().meshCount, 24);
+  assert.ok(E.info().meshCount <= 64);
   assert.equal(E.R().renders, 1);
   assert.equal(E.R().pixelRatio, 2);
 });
@@ -187,7 +187,7 @@ test('near plane follows the orbit radius; far = 20 x house radius', () => {
 
 test('context loss: preventDefault, no frames; restore rebuilds (old resources disposed once) and renders once', () => {
   const E = opened();
-  const geos = E.mock.created.geometries.slice(), mats = E.mock.created.materials.slice();
+  const geos = E.mock.created.geometries.slice(), mats = E.mock.created.materials.slice(), texs = E.mock.created.textures.slice(), gen = E.PC.texgen.generated;
   const ev = E.canvas.dispatch('webglcontextlost');
   assert.equal(ev.defaultPrevented, true);
   assert.equal(E.info().lost, true);
@@ -197,12 +197,17 @@ test('context loss: preventDefault, no frames; restore rebuilds (old resources d
   const renders = E.R().renders;
   E.canvas.dispatch('webglcontextrestored');
   assert.deepEqual([E.info().lost, E.info().builds, E.info().restores], [false, 2, 1]);
-  assert.equal(geos.length, 15);
+  assert.equal(geos.length, 18);
   assert.ok(geos.every((g) => g.disposed === 1), 'every first-build geometry disposed exactly once');
-  assert.ok(mats.length === 7 && mats.every((m) => m.disposed === 1), 'and every material (F4-T2: + poolWater; F4-T3: + trunk, canopy, shrub)');
+  assert.ok(mats.length === 10 && mats.every((m) => m.disposed === 1), 'and every material (F4-T2: + poolWater; F4-T3: + trunk, canopy, shrub; F6-T1a: + paving, ui, sky)');
+  // F6-T1a (CTO C-5.2): the textures are disposed once and re-created from the cached pixels (no regeneration)
+  const now = E.mock.created.textures.slice(texs.length);
+  assert.ok(texs.length === 3 && texs.every((t) => t.disposed === 1) && now.length === 3 && now.every((t) => t.disposed === 0 && t.uploads === 1));
+  assert.deepEqual(now.map((t) => t.image.data), texs.map((t) => t.image.data), 'the same cached pixel arrays');
+  assert.equal(E.PC.texgen.generated, gen, 'no pixel regeneration on restore');
   E.raf.flush();
   assert.equal(E.R().renders, renders + 1);
-  assert.equal(E.info().meshCount, 15);
+  assert.equal(E.info().meshCount, 18);
 });
 
 test('rebuild for a new key (Q10 changed) disposes everything of the first build exactly once; same key does not rebuild', () => {
@@ -222,7 +227,8 @@ test('rebuild for a new key (Q10 changed) disposes everything of the first build
 test('level selector and roof (A-10): visibility matrix incl. the basement opening', () => {
   const E = opened({ state: (PC) => maxHouse(PC) }), w = E.info().world, V = E.PC.view3d;
   const vis = () => Object.fromEntries(['level-B', 'level-G', 'level-1', 'level-2', 'groundCap', 'roof'].map((k) => [k, w.getObjectByName(k).visible]));
-  assert.deepEqual(vis(), { 'level-B': true, 'level-G': true, 'level-1': true, 'level-2': true, groundCap: true, roof: false }, 'opens on All, roof off');
+  assert.deepEqual(vis(), { 'level-B': true, 'level-G': true, 'level-1': true, 'level-2': true, groundCap: true, roof: true }, 'F6-T1a: opens on All, Roof on (roofOnOpen)');
+  V.setRoof(false); assert.equal(vis().roof, false);
   V.setLevel('1'); assert.deepEqual(vis(), { 'level-B': true, 'level-G': true, 'level-1': true, 'level-2': false, groundCap: true, roof: false });
   V.setLevel('G'); assert.deepEqual(vis(), { 'level-B': true, 'level-G': true, 'level-1': false, 'level-2': false, groundCap: true, roof: false });
   V.setLevel('B'); assert.deepEqual(vis(), { 'level-B': true, 'level-G': false, 'level-1': false, 'level-2': false, groundCap: false, roof: false });

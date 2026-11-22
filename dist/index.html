@@ -1848,6 +1848,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     FURNISH: { inset: 0.15, overlap: 0.01, scales: [1, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6] },
     ROOF: { slab: 0.2, parapet: 0.3, parapetHigh: 1.0, parapetT: 0.15, pitchDeg: 30, pergolaH: 2.4, post: 0.15, beam: 0.1,
       beamStep: 0.6, stairHead: 2.4, liftHead: 1.2 },
+    // F6-T1a street strip outside the street edge (Designer plan D3): footpath, kerb, road widths in m
+    STREET: { path: 1.5, kerb: 0.15, road: 8 },
     SITE: { wallH: 1.2, wallT: 0.2, gateW: 3, post: 0.4, postH: 1.4, seat: 3, edgeClear: 0.3, pathHalf: 1,
       marker: { k: 0.06, min: 1.5, max: 3, spare: 0.5, step: 0.25 } },
     CAM: { fov: 45, nearMin: 0.5, nearK: 0.02, farK: 20, phiMin: 5, phiMax: 85, rMin: 4, rMaxK: 3, rMaxReset: 1.2,
@@ -1858,7 +1860,19 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     // (m), the tree gap over the canopy tops (eye floor from PC.data.vegetation), the A-14 nudge, the lead-in flight
     TOUR: { overviewLeg: 4.5, roomLeg: 3.5, speeds: { slow: 0.6, normal: 1, fast: 1.8 }, eyeOut: 2, eyeOutK: 0.6, eyeUp: 2.5,
       bEyeIn: 1.5, bEyeUp: 2.5, centralEps: 0.5, treeGap: 0.5, floorSoft: 1, phiSoft: 3, minGap: 0.5, leadInMs: 1200, leadInSkip: 0.5 },
-    VIEW3D: { maxDpr: 2, shadowMap: 1024, shadowBias: -0.0005, shadowNormalBias: 0.02, sunDist: 2.5, shadowK: 2.5, shadowR: 1.2 },
+    VIEW3D: { maxDpr: 2, shadowMap: 1024, shadowBias: -0.0005, shadowNormalBias: 0.02, sunDist: 2.5, shadowK: 2.5, shadowR: 1.2,
+      // F6-T1a (CTO C-4.5 .. C-4.7; plan section 2 and review): phones (coarse pointer) and the lite tier keep a 1024
+      // shadow map, fine pointers with maxTextureSize >= 4096 get shadowMapFine; maxDprCoarse caps coarse pointers.
+      // tier: per pointer kind, chosen once when the view first opens (a phone result switches phones to lite by data).
+      // roofOnOpen: stage 5 opens with the Roof on (client card pending; false restores the F4 default).
+      // Fog (full tier): near = limits.rMax + R, far = min(near + fogSpanK x R, 0.9 x outerK x R / 2) (TL required
+      // change 1). Sky dome radius skyK x camera.far, centred on the eye every frame (required change 2).
+      maxDprCoarse: 2, shadowMapFine: 2048, roofOnOpen: true, tier: { coarse: 'full', fine: 'full' },
+      tiers: {
+        full: { tex: 512, fog: true, fineShadow: true, maxDpr: 2, treeDetail: 1 },
+        lite: { tex: 256, fog: false, fineShadow: false, maxDpr: 1.5, treeDetail: 0 }
+      },
+      fogSpanK: 8, skyK: 0.9 },
     FOOTPRINT_ROUND: 0.5, FOOTPRINT_MAX_RATIO: 2, FOOTPRINT_STRETCH_RATIO: 3, FOOTPRINT_STRETCH_EXTRA: 0.5, BACK_ANGLE: 40
   };
 })(globalThis.PC = globalThis.PC || {});
@@ -4374,11 +4388,13 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
      Colours: the key-frame lerp with mix (rounded per channel), then the day-weighted season blend with mix again
      (rounded again; TL F4-T3 plan review item 2, the Designer's golden table): day = min(1, K.sunI / noon sunI);
      sunColor / hemiSky / background toward season.tint by tintAmount x day; hemiGround toward season.ground by
-     groundBounce x day. Intensities are the key values. Vegetation and ground colours are the season's as they are. */
+     groundBounce x day. Intensities are the key values. Vegetation and ground colours are the season's as they are.
+     F6-T1a (additive): skyHorizon (= background), skyMid and skyZenith (the sky dome's 0 / 15 / 90 degree rows, each
+     key lerp then the same season blend as background) and exposure (the key lerp; renderer.toneMappingExposure). */
 (function (PC) {
   'use strict';
   var D = Math.PI / 180, MIN_Y = 0.15;
-  var COLS = ['background', 'sunColor', 'hemiSky', 'hemiGround'];
+  var COLS = ['background', 'sunColor', 'hemiSky', 'hemiGround', 'skyMid', 'skyZenith'];
 
   function hex2(n) { var s = n.toString(16).toUpperCase(); return s.length < 2 ? '0' + s : s; }
   function mix(a, b, k) {
@@ -4398,6 +4414,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     COLS.forEach(function (n) { k[n] = mix(a[n], b[n], t); });
     k.sunI = a.sunI + (b.sunI - a.sunI) * t;
     k.hemiI = a.hemiI + (b.hemiI - a.hemiI) * t;
+    k.exposure = a.exposure + (b.exposure - a.exposure) * t;
     return k;
   }
 
@@ -4426,6 +4443,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       sunColor: mix(K.sunColor, se.tint, w), sunIntensity: K.sunI,
       hemiSky: mix(K.hemiSky, se.tint, w), hemiGround: mix(K.hemiGround, se.ground, T.groundBounce * day), hemiIntensity: K.hemiI,
       background: mix(K.background, se.tint, w),
+      skyHorizon: mix(K.background, se.tint, w), skyMid: mix(K.skyMid, se.tint, w), skyZenith: mix(K.skyZenith, se.tint, w), exposure: K.exposure,
       canopyColor: se.canopy, canopyVisible: se.canopyVisible, shrubColor: se.shrub, groundColor: se.ground
     };
   }
@@ -4558,6 +4576,129 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 })(globalThis.PC = globalThis.PC || {});
 
 </script>
+<script>/* js/core/texgen.js */
+/* PC.texgen: procedural detail-texture pixels (F6-T1, CTO C-3.2; Designer plan B). Pure: numbers and typed arrays
+   only (core layer, no 3D library). make(kind, size[, spec, seed]) -> { w, h, data: Uint8Array(w x h x 4) }, RGBA.
+   - Colour kinds (grass, paving, tiles, meadow): neutral grey detail, value = base x (1 + sum of the kind's terms),
+     clamped to 0..1, alpha 255. The colour still comes from the look tables (C-3.3); the texture multiplies it.
+   - blob: radial alpha (RGB 0) for the contact-shadow quads (T1b), alpha = (1 - r)^1.5 with r = distance / half.
+   - Every term is periodic over the tile, so opposite edges continue (tileable): value noise on a wrapped lattice of
+     `cells` x `cells`, joints / rows on grids that divide the tile.
+   - Deterministic: mulberry32 seeded by seed (default: FNV-1a of the kind). get(kind, size) caches the pixels per
+     page session (C-3.2: generated once); `generated` counts real generations (the restore test reads it).
+   Specs are PC.data.textures (Designer-owned, data/textures.js). */
+(function (PC) {
+  'use strict';
+  // Local aliases: the inner loops must not look up globals (slow in sandboxed contexts such as the node tests).
+  var M = Math, floor = M.floor, round = M.round, min = M.min, max = M.max, pow = M.pow, hypot = M.hypot, imul = M.imul;
+  var F32 = Float32Array, U8 = Uint8Array;
+  function fnv(str) {
+    var h = 0x811c9dc5;
+    for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = imul(h, 0x01000193) >>> 0; }
+    return h;
+  }
+  function rng(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0;
+      var t = a;
+      t = imul(t ^ (t >>> 15), t | 1);
+      t ^= t + imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function smooth(t) { return t * t * (3 - 2 * t); }
+  // Periodic value noise in [-1, 1] over size x size px, `cells` lattice cells per side (wrapped).
+  function noise(size, cells, r) {
+    var lat = new F32(cells * cells), out = new F32(size * size), i, x, y;
+    for (i = 0; i < lat.length; i++) lat[i] = r() * 2 - 1;
+    for (y = 0; y < size; y++) {
+      var fy = y / size * cells, y0 = floor(fy), ty = smooth(fy - y0), y1 = (y0 + 1) % cells;
+      for (x = 0; x < size; x++) {
+        var fx = x / size * cells, x0 = floor(fx), tx = smooth(fx - x0), x1 = (x0 + 1) % cells;
+        var a = lat[y0 * cells + x0], b = lat[y0 * cells + x1], c = lat[y1 * cells + x0], d = lat[y1 * cells + x1];
+        out[y * size + x] = (a + (b - a) * tx) + ((c + (d - c) * tx) - (a + (b - a) * tx)) * ty;
+      }
+    }
+    return out;
+  }
+  function addNoise(f, size, octaves, r) {
+    (octaves || []).forEach(function (o) { var n = noise(size, o[0], r); for (var i = 0; i < f.length; i++) f[i] += n[i] * o[1]; });
+  }
+  // Per-cell random values in [-1, 1] for an integer grid (seeded once per kind).
+  function cellRand(n, r) { var a = new F32(n); for (var i = 0; i < n; i++) a[i] = r() * 2 - 1; return a; }
+
+  var KINDS = {
+    grass: function (S, size, r, f) {
+      addNoise(f, size, S.noise, r);
+      var n = round(size * size / S.bladeEvery);
+      for (var k = 0; k < n; k++) {
+        var x = floor(r() * size), y = floor(r() * size), s = (r() < 0.5 ? -1 : 1) * S.blades;
+        for (var j = 0; j < S.bladeLen; j++) f[((y + j) % size) * size + x] += s;
+      }
+    },
+    paving: function (S, size, r, f) {
+      var sp = size / S.slabs, per = cellRand(S.slabs * S.slabs, r);
+      for (var y = 0; y < size; y++) for (var x = 0; x < size; x++) {
+        var cx = floor(x / sp), cy = floor(y / sp), i = y * size + x;
+        f[i] += per[cy * S.slabs + cx] * S.slab + (r() * 2 - 1) * S.speckle;
+        if (x % sp === 0 || y % sp === 0) f[i] += S.joint;
+      }
+    },
+    tiles: function (S, size, r, f) {
+      var rh = size / S.rows, tw = size / S.perRow, per = cellRand(S.rows * S.perRow, r);
+      for (var y = 0; y < size; y++) {
+        var row = floor(y / rh), inRow = y - row * rh, off = row % 2 ? tw / 2 : 0;
+        for (var x = 0; x < size; x++) {
+          var xs = (x + off) % size, col = floor(xs / tw), i = y * size + x;
+          f[i] += per[row * S.perRow + col] * S.tile;
+          if (inRow >= rh - S.lineW) f[i] += S.line;
+          else if (xs - col * tw < 1) f[i] += S.joint;
+        }
+      }
+    },
+    meadow: function (S, size, r, f) { addNoise(f, size, S.noise, r); }
+  };
+
+  function make(kind, size, spec, seed) {
+    var S = spec || PC.data.textures[kind], data = new U8(size * size * 4), r = rng(seed === undefined ? fnv(kind) : seed), i;
+    if (!S) throw new Error('texgen: unknown kind ' + kind);
+    if (kind === 'blob') {
+      var half = size / 2;
+      for (var y = 0; y < size; y++) for (var x = 0; x < size; x++) {
+        var d = hypot(x + 0.5 - half, y + 0.5 - half) / half, a = d >= 1 ? 0 : pow(1 - d, S.power);
+        data[(y * size + x) * 4 + 3] = round(a * 255);
+      }
+      return { w: size, h: size, data: data };
+    }
+    var f = new F32(size * size);
+    KINDS[kind](S, size, r, f);
+    for (i = 0; i < f.length; i++) {
+      var v = round(min(1, max(0, S.base * (1 + f[i]))) * 255), o = i * 4;
+      data[o] = data[o + 1] = data[o + 2] = v; data[o + 3] = 255;
+    }
+    return { w: size, h: size, data: data };
+  }
+
+  var cache = {};
+  PC.texgen = {
+    KINDS: ['grass', 'paving', 'tiles', 'meadow', 'blob'],
+    generated: 0,
+    make: make,
+    get: function (kind, size) {
+      var k = kind + '@' + size;
+      if (!cache[k]) { cache[k] = make(kind, size); PC.texgen.generated++; }
+      return cache[k];
+    },
+    hash: function (t) {   // FNV-1a over the pixel bytes, 8 hex digits (determinism goldens)
+      var h = 0x811c9dc5;
+      for (var i = 0; i < t.data.length; i++) { h ^= t.data[i]; h = imul(h, 0x01000193) >>> 0; }
+      return ('0000000' + h.toString(16)).slice(-8);
+    }
+  };
+})(globalThis.PC = globalThis.PC || {});
+
+</script>
 <script>/* js/data/palette2d.js */
 /* 2D drawing palette (Designer-owned, F1-T1). sRGB strings usable directly as canvas styles.
    All line widths, dash lengths and font sizes are CSS pixels. */
@@ -4646,6 +4787,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
    - siteColors: fixed site colours. ground is the build-time plot grass and equals sky.seasons.summer.ground;
      groundOuter (outside the plot) is never seasonal; gate is for a gate leaf (posts use exteriors.trim);
      highlight is the F5 selection colour (the 2D selection orange).
+     F6-T1a: groundOuter is the meadow (Designer plan D3, meadow texture); asphalt is the street road; highlight and
+     northMarker are drawn unlit and not tone-mapped (read as the hex); every other hex is retuned under ACES.
    - vegetation (F4-T3, Designer plan section 1): sizes in metres at instance scale 1 and segment counts. Tree = trunk
      cylinder (trunkR, Y 0 to trunkH) + canopy cone (canopyR, canopyH, base at canopyY0); shrub = cone (r, h, base at
      Y 0); per-instance uniform scale in [scale[0], scale[1]]. Colours are not here: trunk = siteColors.trunk, canopy and
@@ -4669,9 +4812,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     hall: '#D9D6CE', stair: '#C5CBD0', lift: '#AEB7BB'
   };
   PC.data.siteColors = {
-    ground: '#7FAE55', groundOuter: '#B3B0A6', paving: '#CFC8BA', poolWater: '#3FA7C9', poolRim: '#E6E1D6',
+    ground: '#7FAE55', groundOuter: '#8E9E6A', paving: '#CFC8BA', poolWater: '#3FA7C9', poolRim: '#E6E1D6',
     boundaryWall: '#CDC4B2', gate: '#3B4652', carCanopy: '#A3ABB1', seating: '#9A7A55', trunk: '#5B4636',
-    northMarker: '#16212B', highlight: '#C2410C'
+    northMarker: '#16212B', highlight: '#C2410C', asphalt: '#55595C'
   };
   PC.data.vegetation = {
     tree: { trunkR: 0.12, trunkH: 2.6, canopyR: 1.35, canopyY0: 1.4, canopyH: 2.8, trunkSeg: 6, canopySeg: 8 },
@@ -4781,22 +4924,26 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
    seasons: elevMax = noon sun elevation in degrees; tint / tintAmount blend sunColor, hemiSky and background toward
    the season, weighted by daylight (A-13); canopy / shrub / ground are vegetation and plot-ground colours; winter has
    bare trees (canopyVisible false) with snow on shrubs and ground. Summer (tintAmount 0) is the untinted baseline.
-   groundBounce: weight of the season ground in hemiGround at full daylight (snow bounce). */
+   groundBounce: weight of the season ground in hemiGround at full daylight (snow bounce).
+   F6-T1a: background is also the sky dome's horizon row and the fog colour (raw, not tone-mapped: they read as the
+   hex); skyMid / skyZenith are the dome's 15 / 90 degree rows (read values too); exposure = toneMappingExposure (ACES).
+   The skyMid / skyZenith / exposure values are the Designer plan D1 / C1 table (6 h and 16 h interpolated by FS);
+   the Designer retunes them with background under ACES. */
 (function (PC) {
   'use strict';
   PC.data.sky = {
     keys: [
-      { h: 0, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30 },
-      { h: 4.5, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30 },
-      { h: 6, background: '#E8B08A', sunColor: '#FFB27A', sunI: 0.30, hemiSky: '#B6A6C8', hemiGround: '#5A5046', hemiI: 0.36 },
-      { h: 7.5, background: '#A9CBE6', sunColor: '#FFE2BC', sunI: 0.55, hemiSky: '#C9DCEE', hemiGround: '#7F7564', hemiI: 0.44 },
-      { h: 12, background: '#8EC3EA', sunColor: '#FFF7E8', sunI: 0.70, hemiSky: '#D6E6F5', hemiGround: '#8F8672', hemiI: 0.48 },
-      { h: 16, background: '#9CC5E4', sunColor: '#FFEBCF', sunI: 0.65, hemiSky: '#D2E0EE', hemiGround: '#8A7F69', hemiI: 0.46 },
-      { h: 17, background: '#D8B994', sunColor: '#FFC98A', sunI: 0.75, hemiSky: '#D9C7B8', hemiGround: '#7F6F5C', hemiI: 0.34 },
-      { h: 18, background: '#E59A6E', sunColor: '#FF9A5C', sunI: 0.55, hemiSky: '#A894B8', hemiGround: '#54463E', hemiI: 0.30 },
-      { h: 19.5, background: '#2C3556', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#6E7BA6', hemiGround: '#2A2A38', hemiI: 0.32 },
-      { h: 21, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30 },
-      { h: 24, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30 }
+      { h: 0, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30, skyMid: '#0F1A2E', skyZenith: '#060B16', exposure: 1.3 },
+      { h: 4.5, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30, skyMid: '#0F1A2E', skyZenith: '#060B16', exposure: 1.3 },
+      { h: 6, background: '#E8B08A', sunColor: '#FFB27A', sunI: 0.30, hemiSky: '#B6A6C8', hemiGround: '#5A5046', hemiI: 0.36, skyMid: '#C9B9C8', skyZenith: '#5F7FAF', exposure: 1.2 },
+      { h: 7.5, background: '#A9CBE6', sunColor: '#FFE2BC', sunI: 0.55, hemiSky: '#C9DCEE', hemiGround: '#7F7564', hemiI: 0.44, skyMid: '#BBD3EA', skyZenith: '#7BA6D6', exposure: 1.1 },
+      { h: 12, background: '#8EC3EA', sunColor: '#FFF7E8', sunI: 0.70, hemiSky: '#D6E6F5', hemiGround: '#8F8672', hemiI: 0.48, skyMid: '#A9CDEB', skyZenith: '#5E97D1', exposure: 1.15 },
+      { h: 16, background: '#9CC5E4', sunColor: '#FFEBCF', sunI: 0.65, hemiSky: '#D2E0EE', hemiGround: '#8A7F69', hemiI: 0.46, skyMid: '#B3CBE0', skyZenith: '#6390C8', exposure: 1.15 },
+      { h: 17, background: '#D8B994', sunColor: '#FFC98A', sunI: 0.75, hemiSky: '#D9C7B8', hemiGround: '#7F6F5C', hemiI: 0.34, skyMid: '#C6C4CF', skyZenith: '#6F86B8', exposure: 1.2 },
+      { h: 18, background: '#E59A6E', sunColor: '#FF9A5C', sunI: 0.55, hemiSky: '#A894B8', hemiGround: '#54463E', hemiI: 0.30, skyMid: '#C792A0', skyZenith: '#4E5F95', exposure: 1.2 },
+      { h: 19.5, background: '#2C3556', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#6E7BA6', hemiGround: '#2A2A38', hemiI: 0.32, skyMid: '#2E3658', skyZenith: '#151C38', exposure: 1.25 },
+      { h: 21, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30, skyMid: '#0F1A2E', skyZenith: '#060B16', exposure: 1.3 },
+      { h: 24, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30, skyMid: '#0F1A2E', skyZenith: '#060B16', exposure: 1.3 }
     ],
     seasons: {
       spring: { elevMax: 52, tint: '#F1F7E4', tintAmount: 0.08, canopy: '#6AA442', canopyVisible: true, shrub: '#8CBF5A', ground: '#9DC46F' },
@@ -4805,6 +4952,29 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       winter: { elevMax: 32, tint: '#D3E0F2', tintAmount: 0.20, canopy: '#6F6A5C', canopyVisible: false, shrub: '#DCE4EA', ground: '#EDF1F4' }
     },
     groundBounce: 0.25
+  };
+})(globalThis.PC = globalThis.PC || {});
+
+</script>
+<script>/* js/data/textures.js */
+/* Procedural texture specs (Designer-owned, F6-T1; Designer plan B; CTO C-3), read by PC.texgen (core/texgen.js).
+   Values are fractions of the grey value: value = base x (1 + terms), clamped, so a texture only modulates the
+   look-table colour (C-3.3). tileM = metres per texture repeat (world UVs are in metres, repeat = 1 / tileM).
+   - grass (B1, groundPlot): value noise octaves [cells per tile, amplitude] + blade dashes (bladeLen px, one per
+     bladeEvery px, +-blades).
+   - paving (B2, paving mesh): slabs x slabs per tile with 1 px joints at `joint`, per-slab +-slab, speckle +-speckle.
+   - tiles (B4, pitched roofTiles): rows x perRow per tile, staggered by half a tile; a lineW px shadow line at the
+     bottom of each row at `line`, 1 px joints at `joint`, per-tile +-tile.
+   - meadow (B8, groundOuter): low-frequency octaves.
+   - blob (C5, T1b): radial alpha (1 - r)^power. */
+(function (PC) {
+  'use strict';
+  PC.data.textures = {
+    grass: { tileM: 3, base: 0.86, noise: [[4, 0.10], [16, 0.05]], blades: 0.06, bladeLen: 3, bladeEvery: 40 },
+    paving: { tileM: 2.4, base: 0.92, slabs: 4, joint: -0.28, slab: 0.05, speckle: 0.03 },
+    tiles: { tileM: 1.5, base: 0.9, rows: 5, perRow: 6, lineW: 2, line: -0.30, joint: -0.15, tile: 0.06 },
+    meadow: { tileM: 12, base: 0.9, noise: [[3, 0.08], [12, 0.03]] },
+    blob: { power: 1.5 }
   };
 })(globalThis.PC = globalThis.PC || {});
 
@@ -4822,7 +4992,17 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
      away from the solid's centre): addPrism(cx, cz, sx, sz, y0, rise, alongX, hex, gableHex) a gable over the
      rectangle (ridge along X or Z, two slopes in hex, two triangles in gableHex, the base face down);
      addSeg(x0, z0, x1, z1, thick, y0, y1, hex) an oriented box along a segment; addFlat(pts, y0, y1, hex) a convex
-     XZ polygon extruded from y0 to y1. userData.items lists [kind, vertex count] in the order added. */
+     XZ polygon extruded from y0 to y1. userData.items lists [kind, vertex count] in the order added.
+     F6-T1a: new BoxBatch({ uv: true }) adds a 'uv' attribute in world metres (CTO C-3.5): per planar face the two
+     in-plane axes e1 = the horizontal tangent (X for horizontal faces) and e2 = n x e1, so a texture with
+     repeat = 1 / tileM tiles at real scale across merged boxes; rows run along e1 (the eaves on a slope).
+     addPrism(..., part) builds 'slopes' (the two roof slopes only, for roofTiles) or 'rest' (gables and base) or both.
+   - texture(kind, size, renderer): a DataTexture from the PC.texgen pixel cache with the explicit r128 settings of C-3.4
+     (colour kinds sRGB, blob linear); repeat = 1 / PC.data.textures[kind].tileM.
+   - skyDome(radius): the F6-T1a sky geometry, a latitude-longitude sphere (24 x 12, rings every 15 degrees from -90
+     to 90, so the horizon and the 15 degree ring are rows), wound to face inwards, with a colour attribute;
+     returns { geometry, colors, elev }. skyPaint(dome, L) writes the gradient in place (A-13 / plan review Q-T3:
+     linear lerp per vertex): below 0 the horizon, 0..15 horizon -> mid, 15..90 mid -> zenith. */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
@@ -4835,21 +5015,31 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   var FACES = [[0, 1, 1, 2], [0, -1, 2, 1], [1, 1, 2, 0], [1, -1, 0, 2], [2, 1, 0, 1], [2, -1, 1, 0]];
   var CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
 
-  function BoxBatch() {
+  function BoxBatch(o) {
     this.pos = []; this.nor = []; this.rgb = []; this.idx = []; this.cache = {}; this.items = [];
+    this.uv = o && o.uv ? [] : null;
     this.boxes = 0; this.quads = 0; this.prisms = 0; this.segs = 0; this.flats = 0;
   }
   function sub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
   function cross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
   function dot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+  // In-plane axes of a face with unit normal n (world metres for the uv attribute).
+  function basis(n) {
+    var e1 = cross([0, 1, 0], n), l = Math.sqrt(dot(e1, e1));
+    e1 = l < 1e-6 ? [1, 0, 0] : [e1[0] / l, e1[1] / l, e1[2] / l];
+    return [e1, cross(n, e1)];
+  }
   function mid(ps) { var c = [0, 0, 0]; ps.forEach(function (p) { c[0] += p[0] / ps.length; c[1] += p[1] / ps.length; c[2] += p[2] / ps.length; }); return c; }
   // One flat convex polygon (3+ points), wound so that its normal points away from `inner` (a point inside the solid).
   BoxBatch.prototype.poly = function (ps, rgb, inner) {
     var n = cross(sub(ps[1], ps[0]), sub(ps[2], ps[0])), l = Math.sqrt(dot(n, n)) || 1;
     n = [n[0] / l, n[1] / l, n[2] / l];
     if (dot(n, sub(mid(ps), inner)) < 0) { ps = ps.slice().reverse(); n = [-n[0], -n[1], -n[2]]; }
-    var base = this.pos.length / 3, self = this;
-    ps.forEach(function (p) { self.pos.push(p[0], p[1], p[2]); self.nor.push(n[0], n[1], n[2]); self.rgb.push(rgb[0], rgb[1], rgb[2]); });
+    var base = this.pos.length / 3, self = this, B = this.uv && basis(n);
+    ps.forEach(function (p) {
+      self.pos.push(p[0], p[1], p[2]); self.nor.push(n[0], n[1], n[2]); self.rgb.push(rgb[0], rgb[1], rgb[2]);
+      if (B) self.uv.push(dot(p, B[0]), dot(p, B[1]));
+    });
     for (var i = 1; i < ps.length - 1; i++) this.idx.push(base, base + i, base + i + 1);
     return ps.length;
   };
@@ -4869,20 +5059,21 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     this.items.push(['flat', this.solid(pts, y0, y1, this.color(hex))]);
     this.flats++;
   };
-  BoxBatch.prototype.addPrism = function (cx, cz, sx, sz, y0, rise, alongX, hex, gableHex) {
+  BoxBatch.prototype.addPrism = function (cx, cz, sx, sz, y0, rise, alongX, hex, gableHex, part) {
     var hx = sx / 2, hz = sz / 2, y1 = y0 + rise, s = this.color(hex), g = this.color(gableHex || hex), v = 0;
     var b = [[cx - hx, y0, cz - hz], [cx + hx, y0, cz - hz], [cx + hx, y0, cz + hz], [cx - hx, y0, cz + hz]];
     var r0 = alongX ? [cx - hx, y1, cz] : [cx, y1, cz - hz], r1 = alongX ? [cx + hx, y1, cz] : [cx, y1, cz + hz];
     var inner = [cx, y0 + rise / 3, cz];
+    var slopes = part !== 'rest', rest = part !== 'slopes';
     if (alongX) {
-      v += this.poly([b[0], b[1], r1, r0], s, inner) + this.poly([b[3], b[2], r1, r0], s, inner);
-      v += this.poly([b[0], b[3], r0], g, inner) + this.poly([b[1], b[2], r1], g, inner);
+      if (slopes) v += this.poly([b[0], b[1], r1, r0], s, inner) + this.poly([b[3], b[2], r1, r0], s, inner);
+      if (rest) v += this.poly([b[0], b[3], r0], g, inner) + this.poly([b[1], b[2], r1], g, inner);
     } else {
-      v += this.poly([b[0], b[3], r1, r0], s, inner) + this.poly([b[1], b[2], r1, r0], s, inner);
-      v += this.poly([b[0], b[1], r0], g, inner) + this.poly([b[3], b[2], r1], g, inner);
+      if (slopes) v += this.poly([b[0], b[3], r1, r0], s, inner) + this.poly([b[1], b[2], r1, r0], s, inner);
+      if (rest) v += this.poly([b[0], b[1], r0], g, inner) + this.poly([b[3], b[2], r1], g, inner);
     }
-    v += this.poly(b, s, inner);
-    this.items.push(['prism', v]);
+    if (rest) v += this.poly(b, s, inner);
+    this.items.push([part === 'slopes' ? 'slopes' : 'prism', v]);
     this.prisms++;
   };
   BoxBatch.prototype.color = function (hex) {
@@ -4897,6 +5088,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       p[n] += s * h[n]; p[u] += CORNERS[i][0] * h[u]; p[v] += CORNERS[i][1] * h[v];
       var nn = [0, 0, 0]; nn[n] = s;
       this.pos.push(p[0], p[1], p[2]); this.nor.push(nn[0], nn[1], nn[2]); this.rgb.push(rgb[0], rgb[1], rgb[2]);
+      if (this.uv) { var B = basis(nn); this.uv.push(dot(p, B[0]), dot(p, B[1])); }
     }
     this.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
   };
@@ -4917,6 +5109,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(this.pos), 3));
     g.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(this.nor), 3));
     g.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(this.rgb), 3));
+    if (this.uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(this.uv), 2));
     g.setIndex(this.idx);
     var m = new THREE.Mesh(g, material);
     m.name = name || '';
@@ -4926,6 +5119,49 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     return m;
   };
   three.BoxBatch = BoxBatch;
+
+  three.texture = function (kind, size, renderer) {
+    var px = PC.texgen.get(kind, size), t = new THREE.DataTexture(px.data, px.w, px.h, THREE.RGBAFormat), k = 1 / PC.data.textures[kind].tileM;
+    t.wrapS = THREE.RepeatWrapping; t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(k, k);
+    t.encoding = kind === 'blob' ? THREE.LinearEncoding : THREE.sRGBEncoding;
+    t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true;
+    t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+    t.needsUpdate = true;
+    return t;
+  };
+
+  var SKY_W = 24, SKY_H = 12;
+  three.skyDome = function (radius) {
+    var pos = [], idx = [], elev = [], i, j;
+    for (j = 0; j <= SKY_H; j++) {
+      var e = -90 + j * 180 / SKY_H, er = e * Math.PI / 180, y = Math.sin(er) * radius, rr = Math.cos(er) * radius;
+      for (i = 0; i < SKY_W; i++) { var a = i / SKY_W * 2 * Math.PI; pos.push(Math.cos(a) * rr, y, Math.sin(a) * rr); elev.push(e); }
+    }
+    // seen from the centre (i grows to the right, j upwards), a0 -> a1 -> b0 runs counter-clockwise: front faces inwards
+    for (j = 0; j < SKY_H; j++) for (i = 0; i < SKY_W; i++) {
+      var a0 = j * SKY_W + i, a1 = j * SKY_W + (i + 1) % SKY_W, b0 = a0 + SKY_W, b1 = a1 + SKY_W;
+      idx.push(a0, a1, b0, a1, b1, b0);
+    }
+    var g = new THREE.BufferGeometry(), colors = new THREE.Float32BufferAttribute(new Float32Array(pos.length), 3);
+    g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(pos), 3));
+    g.setAttribute('color', colors);
+    g.setIndex(idx);
+    return { geometry: g, colors: colors, elev: elev };
+  };
+  // The elevation gradient (degrees) between three linear colours [r, g, b]: exported for the tests.
+  three.skyAt = function (e, h, m, z) {
+    var k, a, b;
+    if (e <= 0) return h.slice();
+    if (e <= 15) { k = e / 15; a = h; b = m; } else { k = (Math.min(e, 90) - 15) / 75; a = m; b = z; }
+    return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+  };
+  three.skyPaint = function (dome, L) {
+    var lin = function (hex) { var c = three.col(hex); return [c.r, c.g, c.b]; }, h = lin(L.skyHorizon), m = lin(L.skyMid), z = lin(L.skyZenith);
+    var arr = dome.colors.array;
+    for (var i = 0; i < dome.elev.length; i++) { var c = three.skyAt(dome.elev[i], h, m, z); arr[i * 3] = c[0]; arr[i * 3 + 1] = c[1]; arr[i * 3 + 2] = c[2]; }
+    dome.colors.needsUpdate = true;
+  };
 })(globalThis.PC = globalThis.PC || {});
 
 </script>
@@ -4938,11 +5174,20 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
    and lift as plain 1.2 m boxes, basement pit walls up to ground level). Empty "roof" and "site" groups, filled by
    build-roof.js / build-site.js; build-interior.js adds each level's "furniture" batch (F4-T2).
    L -> T: X = u - cu, Z = -(v - cv) (PC.frames.l2t). Colours: Q10 exteriors, room tints mixed with the Q18 wood
-   (one sRGB lerp), stair / lift unmixed (H4, F3-T3 outcome section 7). */
+   (one sRGB lerp), stair / lift unmixed (H4, F3-T3 outcome section 7).
+   F6-T1a (plan sections 3-5 + review): opt = { tier } (PC.view3d's tier record).
+   - "sky": the dome (PC.three.skyDome, radius skyK x farK x R) directly under world, unlit, toneMapped false, no fog,
+     depthWrite false, renderOrder -1, frustumCulled false, no shadows; scene.js moves it to the eye before each
+     render and look.js paints it.
+   - groundPlot / groundOuter take the grass / meadow maps through their materials (ShapeGeometry UVs are shape
+     metres). Lite tier only (TL ruling Q-T6): groundOuter is a hand-built ring with the same footprint hole whose
+     outer 30 % (a skirt) carries vertex colours that look.js fades to the horizon; full keeps the ShapeGeometry.
+   - slab batches receive shadows but no longer cast them (CTO C-4.2). */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
   var EPS = 0.011;
+  function V() { return PC.C.VIEW3D; }
 
   // Union of [a, b] intervals (touching within EPS joins), sorted.
   function union(list) {
@@ -4993,7 +5238,34 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     return out;
   };
 
-  three.buildShell = function (house, world, mats) {
+  // Lite groundOuter (plan review Q-T6): the square of half-width hs minus the footprint rectangle in shape
+  // coordinates, as 4 inner trapezoids out to 0.7 hs and a 4-trapezoid skirt from 0.7 hs to hs. Counter-clockwise in
+  // shape space (normal +Z before the -PI/2 turn). Returns the mesh; userData.skirt = { colors, outer } for look.js.
+  function skirtGround(hs, fx0, fx1, fy0, fy1, mat) {
+    var a = 0.7 * hs, pos = [], col = [], uv = [], idx = [], outer = [];
+    function quad(ps, outerFlags) {
+      var b = pos.length / 3;
+      ps.forEach(function (p, i) { pos.push(p[0], p[1], 0); uv.push(p[0], p[1]); col.push(1, 1, 1); if (outerFlags && outerFlags[i]) outer.push(b + i); });
+      idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
+    }
+    quad([[-a, -a], [a, -a], [fx1, fy0], [fx0, fy0]]); quad([[a, -a], [a, a], [fx1, fy1], [fx1, fy0]]);
+    quad([[a, a], [-a, a], [fx0, fy1], [fx1, fy1]]); quad([[-a, a], [-a, -a], [fx0, fy0], [fx0, fy1]]);
+    var O = [1, 1, 0, 0];
+    quad([[-hs, -hs], [hs, -hs], [a, -a], [-a, -a]], O); quad([[hs, -hs], [hs, hs], [a, a], [a, -a]], O);
+    quad([[hs, hs], [-hs, hs], [-a, a], [a, a]], O); quad([[-hs, hs], [-hs, -hs], [-a, -a], [-a, a]], O);
+    var g = new THREE.BufferGeometry(), colors = new THREE.Float32BufferAttribute(new Float32Array(col), 3), nor = [];
+    for (var i = 0; i < pos.length / 3; i++) nor.push(0, 0, 1);
+    g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(pos), 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(nor), 3));
+    g.setAttribute('color', colors);
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(uv), 2));
+    g.setIndex(idx);
+    var m = new THREE.Mesh(g, mat);
+    m.userData.skirt = { colors: colors, outer: outer };
+    return m;
+  }
+
+  three.buildShell = function (house, world, mats, opt) {
     var H = PC.C.HOUSE, fp = house.footprint, cu = house.center[0], cv = house.center[1];
     var E = PC.data.exteriors[house.exterior], I = PC.data.interiors[house.interior.style], RT = PC.data.roomTints, SC = PC.data.siteColors;
     var mix = three.mixHex, R = house.radius, made = [];
@@ -5017,7 +5289,11 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     var sq = new THREE.Shape(), hs = H.outerK * R / 2;
     sq.moveTo(-hs, -hs); sq.lineTo(hs, -hs); sq.lineTo(hs, hs); sq.lineTo(-hs, hs); sq.closePath();
     sq.holes.push(footHole());
-    var outer = mesh(new THREE.ShapeGeometry(sq), mats.groundOuter, 'groundOuter', ground);
+    var lite = opt && opt.tier && !opt.tier.fog, outer;
+    if (lite) {
+      outer = skirtGround(hs, fp.u - cu, fp.u + fp.w - cu, fp.v - cv, fp.v + fp.d - cv, mats.groundOuter);
+      outer.name = 'groundOuter'; ground.add(outer); made.push(outer);
+    } else outer = mesh(new THREE.ShapeGeometry(sq), mats.groundOuter, 'groundOuter', ground);
     outer.rotation.x = flat; outer.position.y = -H.outerDrop;
     var shape = new THREE.Shape();
     house.plot.pts.forEach(function (p, i) { if (i) shape.lineTo(p[0] - cu, p[1] - cv); else shape.moveTo(p[0] - cu, p[1] - cv); });
@@ -5057,9 +5333,15 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       if (lv.stair) box(walls, lv.stair.u, lv.stair.u + lv.stair.w, lv.stair.v, lv.stair.v + lv.stair.d, floorY, top, RT.stair);
       if (lv.lift) box(walls, lv.lift.u, lv.lift.u + lv.lift.w, lv.lift.v, lv.lift.v + lv.lift.d, floorY, top, RT.lift);
       [slab.build(mats.batch, 'slab'), walls.build(mats.batch, 'walls')].forEach(function (m) { if (m) { g.add(m); made.push(m); } });
+      var sm = g.getObjectByName('slab');
+      if (sm) sm.castShadow = false;                       // CTO C-4.2: floors receive only
     });
     group('roof', world);
     group('site', world);
+    var dome = three.skyDome(V().skyK * PC.C.CAM.farK * R), sky = new THREE.Mesh(dome.geometry, mats.sky);
+    sky.name = 'sky'; sky.renderOrder = -1; sky.frustumCulled = false; sky.castShadow = false; sky.receiveShadow = false;
+    sky.userData.dome = dome;
+    world.add(sky); made.push(sky);
     return made;
   };
 })(globalThis.PC = globalThis.PC || {});
@@ -5075,7 +5357,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
      0.6 m along the region's longer side (roof).
    - Pitched: a 30 degree gable over the footprint (BoxBatch.addPrism), ridge along the longer side, no overhang,
      slopes in roof, gable triangles in wall. Never usable (the model switches a usable pitched roof to flat).
-   - Usable: stair head 2.4 m and lift overrun 1.2 m blocks (parapet) over roof.stairHead / roof.liftHead. */
+   - Usable: stair head 2.4 m and lift overrun 1.2 m blocks (parapet) over roof.stairHead / roof.liftHead.
+   F6-T1a (plan 5.4): a pitched roof's two slopes go into "roofTiles" (mats.tiles, the tile map on world UVs, rows
+   along the eaves); its gables and base stay in roofBatch. */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
@@ -5094,10 +5378,13 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     house.levels.forEach(function (lv) {
       if (lv.index >= 0) ring(t, lv.baseY + H.slab + H.wallH, lv.baseY + house.pitch, E.wall);
     });
-    var y = roof.baseY;
+    var y = roof.baseY, tm = null;
     if (roof.type === 'pitched') {
       var alongX = fp.w >= fp.d, rise = Math.tan(R.pitchDeg * Math.PI / 180) * Math.min(fp.w, fp.d) / 2;
-      b.addPrism(X(u0 + fp.w / 2), Z(v0 + fp.d / 2), fp.w, fp.d, y, rise, alongX, E.roof, E.wall);
+      b.addPrism(X(u0 + fp.w / 2), Z(v0 + fp.d / 2), fp.w, fp.d, y, rise, alongX, E.roof, E.wall, 'rest');
+      var tl = new three.BoxBatch({ uv: true });
+      tl.addPrism(X(u0 + fp.w / 2), Z(v0 + fp.d / 2), fp.w, fp.d, y, rise, alongX, E.roof, E.wall, 'slopes');
+      tm = tl.build(mats.tiles, 'roofTiles');
     } else {
       var top = y + R.slab, high = roof.usable || roof.type === 'terrace', p = R.parapetT;
       box(u0, u1, v0, v1, y, top, E.roof);
@@ -5116,10 +5403,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
         if (h[0]) box(h[0].u, h[0].u + h[0].w, h[0].v, h[0].v + h[0].d, top, top + h[1], E.parapet);
       });
     }
-    var g = world.getObjectByName('roof'), m = b.build(mats.batch, 'roofBatch');
-    if (!m) return [];
-    g.add(m);
-    return [m];
+    var g = world.getObjectByName('roof'), m = b.build(mats.batch, 'roofBatch'), out = [];
+    if (m) { g.add(m); out.push(m); }
+    if (tm) { g.add(tm); out.push(tm); }
+    return out;
   };
 })(globalThis.PC = globalThis.PC || {});
 
@@ -5164,7 +5451,16 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
      trees / shrubs, geometry from PC.data.vegetation (trunk cylinder, canopy cone with its base at canopyY0, shrub
      cone), one instance matrix per item = translate (u, base x s, v) x uniform scale s. frustumCulled false (the
      instances spread beyond the geometry's own bounds); cast, never receive. A kind with no items gets no mesh.
-     Materials mats.trunk / mats.canopy / mats.shrub are recoloured by applyLook (look.js). */
+     Materials mats.trunk / mats.canopy / mats.shrub are recoloured by applyLook (look.js).
+   F6-T1a (plan sections 3.3, 4.4, 5.4; TL plan review):
+   - "paving" (one mesh, mats.paving with the paving map, world UVs, receives only): the parking pads and the seating pad
+     (siteColors.paving), the pool rim (poolRim), moved here from siteBatch, plus the street footpath.
+   - "northNeedle": the needle's N half (northMarker) on mats.ui (unlit, toneMapped false: the UI colour exactly, as
+     the highlight); the S half stays in siteBatch.
+   - Street along the street edge (the plot edge from (0, 0) along +u at v = 0), outside the plot and across the
+     groundOuter square: a 1.5 m footpath quad at Y 0.02 (paving), a 0.15 x 0.12 m kerb (siteBatch, paving colour) and
+     an 8 m asphalt quad at Y -0.03 (siteBatch, siteColors.asphalt), above groundOuter at -0.05. None when the plot has
+     no such edge or reaches below v = 0. */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
@@ -5176,6 +5472,20 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     var r = house.northDeg * Math.PI / 180, nu = Math.sin(r), nv = Math.cos(r), L = nm.L, w = 0.175 * L, c = house.center;
     var T = function (du, dv) { return [nm.u + du - c[0], -(nm.v + dv - c[1])]; };
     return { tipN: T(nu * L / 2, nv * L / 2), tipS: T(-nu * L / 2, -nv * L / 2), east: T(nv * w, -nu * w), west: T(-nv * w, nu * w), L: L };
+  };
+
+  // The street strip in T (plan 4.4): x0..x1 across the groundOuter square, z0 = the street edge, then the footpath,
+  // the kerb and the road towards +Z, each clamped to the square. Null without a street edge.
+  three.street = function (house) {
+    var pts = house.plot.pts, n = pts.length, cu = house.center[0], cv = house.center[1], hs = PC.C.HOUSE.outerK * house.radius / 2, e = -1;
+    for (var i = 0; i < n; i++) {
+      var a = pts[i], c = pts[(i + 1) % n];
+      if (Math.abs(a[0]) < 1e-9 && Math.abs(a[1]) < 1e-9 && Math.abs(c[1]) < 1e-9 && c[0] > 0) e = i;
+    }
+    if (e < 0 || pts.some(function (p) { return p[1] < -1e-6; })) return null;
+    var z0 = cv, k = function (z) { return Math.min(z, hs); }, W = PC.C.STREET;
+    if (z0 >= hs) return null;
+    return { x0: -hs, x1: hs, z0: z0, zPath: k(z0 + W.path), zKerb: k(z0 + W.path + W.kerb), zRoad: k(z0 + W.path + W.kerb + W.road) };
   };
 
   three.buildVegetation = function (house, g, mats) {
@@ -5202,14 +5512,14 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 
   three.buildSite = function (house, world, mats) {
     var C = PC.C.SITE, SC = PC.data.siteColors, E = PC.data.exteriors[house.exterior], S = house.site;
-    var cu = house.center[0], cv = house.center[1], b = new three.BoxBatch(), g = world.getObjectByName('site'), made = [];
+    var cu = house.center[0], cv = house.center[1], b = new three.BoxBatch(), pv = new three.BoxBatch({ uv: true }), g = world.getObjectByName('site'), made = [];
     var X = function (u) { return u - cu; }, Z = function (v) { return -(v - cv); };
-    function box(u0, u1, v0, v1, y0, y1, hex) { b.add((X(u0) + X(u1)) / 2, (y0 + y1) / 2, (Z(v0) + Z(v1)) / 2, u1 - u0, y1 - y0, v1 - v0, hex); }
+    function box(u0, u1, v0, v1, y0, y1, hex, to) { (to || b).add((X(u0) + X(u1)) / 2, (y0 + y1) / 2, (Z(v0) + Z(v1)) / 2, u1 - u0, y1 - y0, v1 - v0, hex); }
 
     var p = S.parking;
     if (p) {
       var P = PC.C.PARKING;
-      for (var i = 0; i < p.cars; i++) box(p.u + i * P.w, p.u + (i + 1) * P.w, p.v, p.v + p.d, 0, 0.02, SC.paving);
+      for (var i = 0; i < p.cars; i++) box(p.u + i * P.w, p.u + (i + 1) * P.w, p.v, p.v + p.d, 0, 0.02, SC.paving, pv);
       if (p.covered) {
         var k = 0.1, top = 2.4;
         box(p.u, p.u + p.w, p.v, p.v + p.d, top - 0.1, top, SC.carCanopy);
@@ -5221,8 +5531,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     var q = S.pool;
     if (q) {
       var rw = 0.3, rh = 0.1;
-      box(q.u - rw, q.u + q.w + rw, q.v - rw, q.v, 0, rh, SC.poolRim); box(q.u - rw, q.u + q.w + rw, q.v + q.d, q.v + q.d + rw, 0, rh, SC.poolRim);
-      box(q.u - rw, q.u, q.v, q.v + q.d, 0, rh, SC.poolRim); box(q.u + q.w, q.u + q.w + rw, q.v, q.v + q.d, 0, rh, SC.poolRim);
+      box(q.u - rw, q.u + q.w + rw, q.v - rw, q.v, 0, rh, SC.poolRim, pv); box(q.u - rw, q.u + q.w + rw, q.v + q.d, q.v + q.d + rw, 0, rh, SC.poolRim, pv);
+      box(q.u - rw, q.u, q.v, q.v + q.d, 0, rh, SC.poolRim, pv); box(q.u + q.w, q.u + q.w + rw, q.v, q.v + q.d, 0, rh, SC.poolRim, pv);
     }
     if (S.wall) {
       var pts = house.plot.pts, n = pts.length, h = C.wallT / 2;
@@ -5246,7 +5556,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     var st = S.seating;
     if (st) {
       var mu = st.u + st.w / 2, mv = st.v + st.d / 2, pad = 0.05;
-      box(st.u, st.u + st.w, st.v, st.v + st.d, 0, pad, SC.paving);
+      box(st.u, st.u + st.w, st.v, st.v + st.d, 0, pad, SC.paving, pv);
       box(mu - 0.45, mu + 0.45, mv - 0.45, mv + 0.45, pad, pad + 0.75, SC.seating);
       [-0.9, 0.9].forEach(function (o) {
         if (st.along === 'u') box(mu - 0.8, mu + 0.8, mv + o - 0.225, mv + o + 0.225, pad, pad + 0.45, SC.seating);
@@ -5255,14 +5565,24 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     }
     var en = S.entrance;
     box(en.u - 0.6, en.u + 0.6, en.v - 0.6, en.v, 0, 0.15, E.trim);
-    var nd = three.needle(house);
+    var nd = three.needle(house), nb = new three.BoxBatch();
     if (nd) {
-      b.addFlat([nd.tipN, nd.east, nd.west], 0, 0.04, SC.northMarker);
+      nb.addFlat([nd.tipN, nd.east, nd.west], 0, 0.04, SC.northMarker);
       b.addFlat([nd.tipS, nd.west, nd.east], 0, 0.04, SC.poolRim);
+    }
+    var sr = three.street(house);
+    if (sr) {
+      pv.addQuad((sr.x0 + sr.x1) / 2, 0.02, (sr.z0 + sr.zPath) / 2, sr.x1 - sr.x0, sr.zPath - sr.z0, SC.paving);
+      b.add((sr.x0 + sr.x1) / 2, 0.035, (sr.zPath + sr.zKerb) / 2, sr.x1 - sr.x0, 0.17, sr.zKerb - sr.zPath, SC.paving);
+      b.addQuad((sr.x0 + sr.x1) / 2, -0.03, (sr.zKerb + sr.zRoad) / 2, sr.x1 - sr.x0, sr.zRoad - sr.zKerb, SC.asphalt);
     }
     three.buildVegetation(house, g, mats).forEach(function (x) { made.push(x); });
     var m = b.build(mats.batch, 'siteBatch');
     if (m) { g.add(m); made.push(m); }
+    var pm = pv.build(mats.paving, 'paving');
+    if (pm) { pm.castShadow = false; g.add(pm); made.push(pm); }
+    var nm = nb.build(mats.ui, 'northNeedle');
+    if (nm) { nm.castShadow = false; nm.receiveShadow = false; g.add(nm); made.push(nm); }
     if (q) {
       var water = new THREE.Mesh(new THREE.PlaneGeometry(q.w, q.d), mats.poolWater);
       water.name = 'poolWater'; water.rotation.x = -Math.PI / 2;
@@ -5382,7 +5702,12 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
    fitShadow: the content box (footprint up to the roof top, parking + canopy, pool + rim, seating, every tree and
    shrub at its scale; the boundary wall is left out) as 8 corners in the light's view (the basis three's lookAt
    gives the shadow camera: z = light direction, x = up x z, y = z x x), plus a 0.5 m margin; each side capped at
-   shadowR x house.radius. Writes left / right / top / bottom / near / far + updateProjectionMatrix only. */
+   shadowR x house.radius. Writes left / right / top / bottom / near / far + updateProjectionMatrix only.
+   F6-T1a (plan section A + TL review; ctx also has renderer and limits): toneMappingExposure = L.exposure; the sky
+   dome's colour attribute repainted in place (PC.three.skyPaint); the fog (full tier) gets the raw horizon hex (r128
+   mixes fog into the encoded output, A-10 second exception) and near = limits.rMax + R, far = min(near + fogSpanK x R,
+   0.9 x outerK x R / 2); the lite groundOuter skirt's outer vertices fade to the horizon (colour / meadow colour,
+   clamped). Still nothing created or disposed. */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
@@ -5440,6 +5765,21 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     ctx.mats.shrub.color.copy(col(L.shrubColor));
     var can = ctx.world.getObjectByName('canopies');
     if (can) can.visible = !!L.canopyVisible;
+    if (ctx.renderer) ctx.renderer.toneMappingExposure = L.exposure;
+    var sky = ctx.world.getObjectByName('sky');
+    if (sky) three.skyPaint(sky.userData.dome, L);
+    var fog = ctx.scene.fog, R = house.radius;
+    if (fog && ctx.limits) {
+      var near = ctx.limits.rMax + R, far = Math.max(near + 1, Math.min(near + V.fogSpanK * R, 0.9 * PC.C.HOUSE.outerK * R / 2));
+      fog.color = new THREE.Color(L.skyHorizon); fog.near = near; fog.far = far;
+    }
+    var outer = ctx.world.getObjectByName('groundOuter'), sk = outer && outer.userData.skirt;
+    if (sk) {
+      var h = col(L.skyHorizon), m = col(PC.data.siteColors.groundOuter), a = sk.colors.array;
+      var q = [Math.min(1, h.r / (m.r || 1)), Math.min(1, h.g / (m.g || 1)), Math.min(1, h.b / (m.b || 1))];
+      sk.outer.forEach(function (i) { a[i * 3] = q[0]; a[i * 3 + 1] = q[1]; a[i * 3 + 2] = q[2]; });
+      sk.colors.needsUpdate = true;
+    }
   };
 })(globalThis.PC = globalThis.PC || {});
 
@@ -5632,7 +5972,19 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
    exactly once with done | input | close | reset | build | replaced | stop; while anim.paused no frames are requested
    and the first frame after pauseAnimation(false) has dt 0. The tour (three/tour.js) is the second client.
    Selection (A-14): select(roomId | null) puts the one `highlight` mesh (PC.three.highlight, finder.js) on the room,
-   disposing the previous geometry; a build and close() clear it and call the onSelect hook with null. */
+   disposing the previous geometry; a build and close() clear it and call the onSelect hook with null.
+   F6-T1a (plan sections 2-5 + TL review): ACES tone mapping (exposure per look); the quality tier is picked once when
+   the view first opens (pickTier: PC.C.VIEW3D.tier by pointer kind, the shadow map 2048 only on fine pointers with
+   maxTextureSize >= 4096 in a tier that allows it, the pixel-ratio caps); the full tier has linear fog (colour and
+   range set by applyLook, re-applied on every re-fit); the sky dome is moved to the eye before every render; the
+   DataTextures (PC.three.texture, from the PC.texgen cache) are created per build and disposed with it, so a
+   context restore re-uploads the cached pixels; the highlight and the north needle use the unlit mats.ui. The Roof
+   switch starts at PC.C.VIEW3D.roofOnOpen (one value per page session, A-4).
+   On-demand shadow map (TL Q-T8 follow-up, CTO conditions): shadowMap.autoUpdate = false; shadowsDirty() sets
+   needsUpdate on every change of a caster or the light: a build (incl. context restore), every applyLook (sun,
+   season, canopy visibility; also the re-fit on resize), and every visibility change (level selector, Roof switch,
+   including the finder's and the tour's). Camera moves, flights, tour frames and the highlight (no caster) need none.
+   info().shadowUpdates counts the requests. */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
@@ -5640,12 +5992,22 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     renderer: null, scene: null, camera: null, world: null, hemi: null, sun: null, mats: null, canvas: null,
     house: null, builtKey: null, pose: null, limits: null, size: [0, 0], occl: { right: 0, bottom: 0 }, view: null,
     active: false, lost: false, dirty: false, frame: 0, building: 0, token: 0, onState: null,
-    meshes: [], level: 'all', roof: false, renders: 0, builds: 0, restores: 0, looks: 0,
+    meshes: [], level: 'all', roof: !!(PC.C && PC.C.VIEW3D && PC.C.VIEW3D.roofOnOpen), renders: 0, builds: 0, restores: 0, looks: 0,
+    tier: null, textures: [], shadowUpdates: 0,
     look: { hour: 12, season: 'summer' },
     anim: null, animT: null, highlight: null, selected: null, onSelect: null, hlMade: 0
   };
   function V() { return PC.C.VIEW3D; }
-  function dpr() { var d = typeof devicePixelRatio === 'number' && devicePixelRatio > 0 ? devicePixelRatio : 1; return Math.min(d, V().maxDpr); }
+  function coarse() { return typeof matchMedia === 'function' && !!matchMedia('(pointer: coarse)').matches; }
+  function dpr() { var d = typeof devicePixelRatio === 'number' && devicePixelRatio > 0 ? devicePixelRatio : 1; return Math.min(d, S.tier ? S.tier.maxDpr : V().maxDpr); }
+
+  // env = { coarse, maxTex } -> the tier record used for this page session (CTO C-4.5 .. C-4.7).
+  three.pickTier = function (env) {
+    var v = V(), name = v.tier[env.coarse ? 'coarse' : 'fine'], t = v.tiers[name] || v.tiers.full;
+    var fine = t.fineShadow && !env.coarse && env.maxTex >= 4096;
+    return { name: v.tiers[name] ? name : 'full', tex: t.tex, fog: !!t.fog, treeDetail: t.treeDetail,
+      shadowMap: fine ? v.shadowMapFine : v.shadowMap, maxDpr: Math.min(v.maxDpr, t.maxDpr, env.coarse ? v.maxDprCoarse : Infinity) };
+  };
   function visible() { return typeof document === 'undefined' || document.visibilityState !== 'hidden'; }
 
   three.makeRenderer = function (canvas) {
@@ -5653,7 +6015,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     r.setPixelRatio(dpr());
     r.shadowMap.enabled = true;
     r.shadowMap.type = THREE.PCFSoftShadowMap;
+    r.shadowMap.autoUpdate = false;
     r.outputEncoding = THREE.sRGBEncoding;
+    r.toneMapping = THREE.ACESFilmicToneMapping;
     return r;
   };
 
@@ -5663,6 +6027,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     S.frame = requestAnimationFrame(frame);
   }
   function invalidate() { S.dirty = true; request(); }
+  function shadowsDirty() { if (S.renderer) { S.renderer.shadowMap.needsUpdate = true; S.shadowUpdates++; } }
   // The frame measures the canvas itself (QA F4T1-1): the shell may still be settling its layout when
   // PC.view3d.open() runs (e.g. stage 4's sample strip), so the size is taken when the frame draws.
   function frame(ts) {
@@ -5712,7 +6077,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   function select(id) {
     if (id === null || id === undefined || !S.house || !PC.cam.roomOf(S.house, id)) { clearSelection(); invalidate(); return false; }
     if (S.highlight) { S.world.remove(S.highlight); S.highlight.geometry.dispose(); S.highlight = null; }
-    S.highlight = three.highlight(S.house, id, S.mats.batch);
+    S.highlight = three.highlight(S.house, id, S.mats.ui);
     S.world.add(S.highlight);
     S.selected = id; S.hlMade++;
     invalidate();
@@ -5723,6 +6088,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     cam.position.set(e[0], e[1], e[2]);
     cam.lookAt(p.target[0], p.target[1], p.target[2]);
     if (cam.near !== n) { cam.near = n; cam.updateProjectionMatrix(); }
+    var sky = S.world.getObjectByName('sky');
+    if (sky) sky.position.set(e[0], e[1], e[2]);               // TL required change 2: the dome follows the eye
     S.renderer.render(S.scene, cam);
     S.renders++;
   }
@@ -5738,7 +6105,13 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     S.view = v;
     cam.updateProjectionMatrix();
   }
-  function refit() { if (S.house) { S.limits = PC.cam.limits(S.house, aspect()); if (S.pose) S.pose = PC.cam.clamp(S.pose, S.limits); } }
+  // The fog range follows the limits (TL required change 1), so a re-fit re-applies the stored look (creates nothing).
+  function refit() {
+    if (!S.house) return;
+    S.limits = PC.cam.limits(S.house, aspect());
+    if (S.pose) S.pose = PC.cam.clamp(S.pose, S.limits);
+    if (S.mats) apply(S.house);
+  }
   function resize(inFrame) {
     var c = S.canvas;
     if (!c || !S.renderer) return;
@@ -5763,7 +6136,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     S.hemi = new THREE.HemisphereLight(three.col('#FFFFFF'), three.col('#FFFFFF'), 1); S.hemi.name = 'hemi';
     S.sun = new THREE.DirectionalLight(three.col('#FFFFFF'), 1); S.sun.name = 'sun';
     S.sun.castShadow = true;
-    S.sun.shadow.mapSize.set(V().shadowMap, V().shadowMap);
+    S.sun.shadow.mapSize.set(S.tier.shadowMap, S.tier.shadowMap);
+    if (S.tier.fog) S.scene.fog = new THREE.Fog(new THREE.Color('#FFFFFF'), 1, 2);   // colour and range: applyLook
     S.sun.shadow.bias = V().shadowBias; S.sun.shadow.normalBias = V().shadowNormalBias;
     S.sun.target.name = 'sunTarget';
     S.world = new THREE.Group(); S.world.name = 'world';
@@ -5797,29 +6171,37 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     clearSelection();
     S.meshes.forEach(function (m) { m.geometry.dispose(); });
     Object.keys(S.mats || {}).forEach(function (k) { S.mats[k].dispose(); });
+    S.textures.forEach(function (t) { t.dispose(); });
     S.world.children.slice().forEach(function (c) { S.world.remove(c); });
-    S.meshes = []; S.mats = null;
+    S.meshes = []; S.mats = null; S.textures = [];
   }
 
-  function lights(house) {
+  function apply(house) {
     var L = PC.sky.compute(S.look.hour, S.look.season, house.northDeg);
-    three.applyLook({ scene: S.scene, sun: S.sun, hemi: S.hemi, mats: S.mats, world: S.world, house: house }, L);
-    S.looks++;
+    three.applyLook({ scene: S.scene, sun: S.sun, hemi: S.hemi, mats: S.mats, world: S.world, house: house, renderer: S.renderer, limits: S.limits }, L);
+    shadowsDirty();
   }
+  function lights(house) { apply(house); S.looks++; }
+  function tex(kind) { var t = three.texture(kind, S.tier.tex, S.renderer); S.textures.push(t); return t; }
 
   function build(house) {
     dispose();
     var SC = PC.data.siteColors;
+    var lite = !S.tier.fog;
     S.mats = {
       batch: new THREE.MeshLambertMaterial({ vertexColors: true }),
-      ground: new THREE.MeshLambertMaterial({ color: three.col(SC.ground) }),
-      groundOuter: new THREE.MeshLambertMaterial({ color: three.col(SC.groundOuter) }),
+      ground: new THREE.MeshLambertMaterial({ color: three.col(SC.ground), map: tex('grass') }),
+      groundOuter: new THREE.MeshLambertMaterial({ color: three.col(SC.groundOuter), map: tex('meadow'), vertexColors: lite }),
+      paving: new THREE.MeshLambertMaterial({ vertexColors: true, map: tex('paving') }),
+      ui: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, fog: false }),
+      sky: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, fog: false, depthWrite: false }),
       poolWater: new THREE.MeshLambertMaterial({ color: three.col(SC.poolWater) }),
       trunk: new THREE.MeshLambertMaterial({ color: three.col(SC.trunk) }),
       canopy: new THREE.MeshLambertMaterial({ color: three.col(PC.data.sky.seasons.summer.canopy) }),
       shrub: new THREE.MeshLambertMaterial({ color: three.col(PC.data.sky.seasons.summer.shrub) })
     };
-    S.meshes = three.buildShell(house, S.world, S.mats).concat(three.buildInterior(house, S.world, S.mats),
+    if (house.roof.type === 'pitched') S.mats.tiles = new THREE.MeshLambertMaterial({ vertexColors: true, map: tex('tiles') });
+    S.meshes = three.buildShell(house, S.world, S.mats, { tier: S.tier }).concat(three.buildInterior(house, S.world, S.mats),
       three.buildRoof(house, S.world, S.mats), three.buildSite(house, S.world, S.mats));
     var keep = S.house && S.pose && S.house.radius === house.radius && S.house.center[0] === house.center[0] && S.house.center[1] === house.center[1];
     S.house = house; S.builtKey = house.key; S.builds++;
@@ -5840,6 +6222,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     });
     var cap = S.world.getObjectByName('groundCap');
     if (cap) cap.visible = sel !== 'B';
+    shadowsDirty();
   }
 
   PC.view3d = {
@@ -5849,6 +6232,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       if (typeof THREE === 'undefined' || !house) { S.onState('unavailable'); return { ok: false }; }
       if (!S.renderer) {
         try { S.renderer = three.makeRenderer(canvas); } catch (e) { S.renderer = null; S.onState('unavailable'); return { ok: false }; }
+        S.tier = three.pickTier({ coarse: coarse(), maxTex: S.renderer.capabilities.maxTextureSize });
+        S.renderer.setPixelRatio(dpr());
         setup(canvas);
       }
       S.active = true;
@@ -5908,6 +6293,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
         building: !!S.building, frame: !!S.frame, dirty: S.dirty, renders: S.renders, builds: S.builds, restores: S.restores,
         meshCount: S.meshes.length + (S.highlight ? 1 : 0), meshes: S.meshes.concat(S.highlight ? [S.highlight] : []),
         flight: S.anim && S.anim.kind === 'flight' ? { from: PC.cam.copy(S.anim.from), to: PC.cam.copy(S.anim.to), t: S.anim.t, ms: S.anim.ms } : null,
+        tier: S.tier ? Object.assign({}, S.tier) : null, textures: S.textures.slice(), shadowUpdates: S.shadowUpdates,
         animating: !!S.anim, selected: S.selected, highlight: S.highlight, highlightsMade: S.hlMade, level: S.level, roof: S.roof, look: { hour: S.look.hour, season: S.look.season }, looks: S.looks, size: S.size.slice(), occl: { right: S.occl.right, bottom: S.occl.bottom }, viewOffset: S.view ? S.view.slice() : null, aspect: aspect(), renderNow: function () { if (S.house && !S.lost) render(); } };
     }
   };
@@ -8485,7 +8871,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
    to PC.view3d (three layer) and owns the stage-5 DOM: Building... / unavailable overlays, the level selector
    ("All" + the house's own levels, lowest first; PM round 9 labels), Reset view, the collapsible panel and its tabs.
    Session state only (A-4): level selection and roof toggle survive leaving and returning; the view opens on All
-   with the roof off. Controls of later tasks (room finder, tour) are disabled here (TL F4-T1 ruling 3); the Roof
+   with the Roof at PC.C.VIEW3D.roofOnOpen (F6-T1a: on, client card pending). Controls of later tasks (room finder, tour) are disabled here (TL F4-T1 ruling 3); the Roof
    switch is enabled since F4-T2. Light tab (F4-T3, A-13; Designer F4-T3 plan 3): the time slider (0-24 h, 0.25), four
    presets (8 / 12 / 17.5 / 22; aria-pressed only while the hour equals the preset) and the season select set the
    session look through PC.view3d.setLook (no rebuild, camera untouched); the readout shows HH:MM. The look lives in
@@ -8657,6 +9043,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   ui.stages.view3d = {
     init: function () {
       LATER.forEach(function (h) { ui.$(h).disabled = true; });
+      ui.$('v3-roof').checked = PC.view3d.info().roof;      // F6-T1a: PC.C.VIEW3D.roofOnOpen, once per page session
       ui.on(ui.$('v3-level'), 'change', function (e) {
         if (!e.target || e.target.name !== 'v3-level' || !e.target.checked) return;
         level = e.target.value;

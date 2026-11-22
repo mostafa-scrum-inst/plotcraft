@@ -1,6 +1,49 @@
 # F6-T1 plan: realism MVP (CD-8), implementation (FS)
 
-Date: 2026-11-22. Owner: FS. Status: **for the TL plan review**.
+Date: 2026-11-22. Owner: FS. Status: **APPROVED with 2 required changes** (`plan-review.md`, 0c0a33b); amended in §A below (binding; it supersedes the text where they differ), no re-review.
+
+## A. Amendments after the TL plan review (binding)
+
+1. **Fog range (required change 1).**
+   - The fixed `near = 4 R` / `far = 14 R` of §4.2 is replaced, and `fogNearK` / `fogFarK` are dropped from §2:
+     - `near = limits.rMax + R`;
+     - `far = min(near + fogSpanK × R, 0.9 × outerK × R / 2)`, with `PC.C.VIEW3D.fogSpanK = 8`.
+   - Both are computed in `applyLook` from the current limits. `ctx` gains `limits`.
+   - The resize path (`refit`) re-applies the stored look, which creates nothing.
+   - Test: at the narrowest sweep aspect, every house vertex is nearer than `near` from the eye at Reset and at `rMax`.
+2. **The sky dome follows the camera (required change 2).**
+   - It is not centred at the origin with radius 0.8 × far, as §4.1 said. Instead `sky.position.copy(camera.position)` runs before each render, the radius is `0.9 × camera.far`, and `frustumCulled = false`, `depthWrite: false`, `renderOrder = -1`.
+   - `skyK` is 0.9.
+   - Because the radius is fixed per build (`farK × R`), the dome geometry is built per build.
+   - Test: the dome radius is below `far`, and it is never clipped at `rMax` on any aspect.
+3. **Rulings Q-T1..Q-T9 as in `plan-review.md`:**
+   - two tasks with one publish;
+   - an unlit `mats.ui` for the highlight and the N half of `northNeedle` (A-14 updated);
+   - per-vertex linear gradients;
+   - `blobs.count` set in `applyLook`, shrubs first;
+   - transparency set `poolWater` + `blobs`;
+   - raw fog colour (A-10);
+   - the check renames in §9.2 / §9.4 approved in principle, with before and after numbers at the impl review;
+   - run-time buy-back by the spike numbers, the `QA_FULL=1` moves agreed with QA;
+   - `PC.house.openings` in `house.js`.
+4. **The meadow skirt (§4.3) is `lite` only.** Full keeps a plain `groundOuter` (fogged), with the B-1 hole unchanged. There is no seam assertion in `lite`.
+5. **Slab shadows.** `slab` stops casting (C-4.2). The Designer judges this in the shots; if it reads wrong, upper slabs may cast again, with the call counted.
+6. **Added mutations:**
+   - fog range fixed at 4 R: the portrait near test fails;
+   - the dome not following the camera: the clip test fails;
+   - `blobs` with trees first: the winter test fails.
+7. **Designer answers (9c6cb51) for T1b:**
+   - decal windows plus a 0.06 m reveal ring (`frame` × 0.65, at 0.02 m out);
+   - lumps refitted inside `canopyR`;
+   - a new `door` key per exterior.
+   - **PM (a33ab26):** no help line, and Roof stays off after the finder or the tour.
+8. **Contract-change reader lists** are required in the impl notes for:
+   - `PC.sky.compute` (new fields);
+   - the `PC.view3d.info()` additions;
+   - `house.v` / `house.openings`;
+   - the highlight material;
+   - `siteBatch` → `paving` / `northNeedle`;
+   - `roofBatch` slopes → `roofTiles`.
 
 Sources:
 - `cto-constraints.md` (0d2cef1), cited as C-x.y; binding.

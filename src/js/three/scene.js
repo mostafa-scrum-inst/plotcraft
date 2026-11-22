@@ -17,7 +17,19 @@
    exactly once with done | input | close | reset | build | replaced | stop; while anim.paused no frames are requested
    and the first frame after pauseAnimation(false) has dt 0. The tour (three/tour.js) is the second client.
    Selection (A-14): select(roomId | null) puts the one `highlight` mesh (PC.three.highlight, finder.js) on the room,
-   disposing the previous geometry; a build and close() clear it and call the onSelect hook with null. */
+   disposing the previous geometry; a build and close() clear it and call the onSelect hook with null.
+   F6-T1a (plan sections 2-5 + TL review): ACES tone mapping (exposure per look); the quality tier is picked once when
+   the view first opens (pickTier: PC.C.VIEW3D.tier by pointer kind, the shadow map 2048 only on fine pointers with
+   maxTextureSize >= 4096 in a tier that allows it, the pixel-ratio caps); the full tier has linear fog (colour and
+   range set by applyLook, re-applied on every re-fit); the sky dome is moved to the eye before every render; the
+   DataTextures (PC.three.texture, from the PC.texgen cache) are created per build and disposed with it, so a
+   context restore re-uploads the cached pixels; the highlight and the north needle use the unlit mats.ui. The Roof
+   switch starts at PC.C.VIEW3D.roofOnOpen (one value per page session, A-4).
+   On-demand shadow map (TL Q-T8 follow-up, CTO conditions): shadowMap.autoUpdate = false; shadowsDirty() sets
+   needsUpdate on every change of a caster or the light: a build (incl. context restore), every applyLook (sun,
+   season, canopy visibility; also the re-fit on resize), and every visibility change (level selector, Roof switch,
+   including the finder's and the tour's). Camera moves, flights, tour frames and the highlight (no caster) need none.
+   info().shadowUpdates counts the requests. */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
@@ -25,12 +37,22 @@
     renderer: null, scene: null, camera: null, world: null, hemi: null, sun: null, mats: null, canvas: null,
     house: null, builtKey: null, pose: null, limits: null, size: [0, 0], occl: { right: 0, bottom: 0 }, view: null,
     active: false, lost: false, dirty: false, frame: 0, building: 0, token: 0, onState: null,
-    meshes: [], level: 'all', roof: false, renders: 0, builds: 0, restores: 0, looks: 0,
+    meshes: [], level: 'all', roof: !!(PC.C && PC.C.VIEW3D && PC.C.VIEW3D.roofOnOpen), renders: 0, builds: 0, restores: 0, looks: 0,
+    tier: null, textures: [], shadowUpdates: 0,
     look: { hour: 12, season: 'summer' },
     anim: null, animT: null, highlight: null, selected: null, onSelect: null, hlMade: 0
   };
   function V() { return PC.C.VIEW3D; }
-  function dpr() { var d = typeof devicePixelRatio === 'number' && devicePixelRatio > 0 ? devicePixelRatio : 1; return Math.min(d, V().maxDpr); }
+  function coarse() { return typeof matchMedia === 'function' && !!matchMedia('(pointer: coarse)').matches; }
+  function dpr() { var d = typeof devicePixelRatio === 'number' && devicePixelRatio > 0 ? devicePixelRatio : 1; return Math.min(d, S.tier ? S.tier.maxDpr : V().maxDpr); }
+
+  // env = { coarse, maxTex } -> the tier record used for this page session (CTO C-4.5 .. C-4.7).
+  three.pickTier = function (env) {
+    var v = V(), name = v.tier[env.coarse ? 'coarse' : 'fine'], t = v.tiers[name] || v.tiers.full;
+    var fine = t.fineShadow && !env.coarse && env.maxTex >= 4096;
+    return { name: v.tiers[name] ? name : 'full', tex: t.tex, fog: !!t.fog, treeDetail: t.treeDetail,
+      shadowMap: fine ? v.shadowMapFine : v.shadowMap, maxDpr: Math.min(v.maxDpr, t.maxDpr, env.coarse ? v.maxDprCoarse : Infinity) };
+  };
   function visible() { return typeof document === 'undefined' || document.visibilityState !== 'hidden'; }
 
   three.makeRenderer = function (canvas) {
@@ -38,7 +60,9 @@
     r.setPixelRatio(dpr());
     r.shadowMap.enabled = true;
     r.shadowMap.type = THREE.PCFSoftShadowMap;
+    r.shadowMap.autoUpdate = false;
     r.outputEncoding = THREE.sRGBEncoding;
+    r.toneMapping = THREE.ACESFilmicToneMapping;
     return r;
   };
 
@@ -48,6 +72,7 @@
     S.frame = requestAnimationFrame(frame);
   }
   function invalidate() { S.dirty = true; request(); }
+  function shadowsDirty() { if (S.renderer) { S.renderer.shadowMap.needsUpdate = true; S.shadowUpdates++; } }
   // The frame measures the canvas itself (QA F4T1-1): the shell may still be settling its layout when
   // PC.view3d.open() runs (e.g. stage 4's sample strip), so the size is taken when the frame draws.
   function frame(ts) {
@@ -97,7 +122,7 @@
   function select(id) {
     if (id === null || id === undefined || !S.house || !PC.cam.roomOf(S.house, id)) { clearSelection(); invalidate(); return false; }
     if (S.highlight) { S.world.remove(S.highlight); S.highlight.geometry.dispose(); S.highlight = null; }
-    S.highlight = three.highlight(S.house, id, S.mats.batch);
+    S.highlight = three.highlight(S.house, id, S.mats.ui);
     S.world.add(S.highlight);
     S.selected = id; S.hlMade++;
     invalidate();
@@ -108,6 +133,8 @@
     cam.position.set(e[0], e[1], e[2]);
     cam.lookAt(p.target[0], p.target[1], p.target[2]);
     if (cam.near !== n) { cam.near = n; cam.updateProjectionMatrix(); }
+    var sky = S.world.getObjectByName('sky');
+    if (sky) sky.position.set(e[0], e[1], e[2]);               // TL required change 2: the dome follows the eye
     S.renderer.render(S.scene, cam);
     S.renders++;
   }
@@ -123,7 +150,13 @@
     S.view = v;
     cam.updateProjectionMatrix();
   }
-  function refit() { if (S.house) { S.limits = PC.cam.limits(S.house, aspect()); if (S.pose) S.pose = PC.cam.clamp(S.pose, S.limits); } }
+  // The fog range follows the limits (TL required change 1), so a re-fit re-applies the stored look (creates nothing).
+  function refit() {
+    if (!S.house) return;
+    S.limits = PC.cam.limits(S.house, aspect());
+    if (S.pose) S.pose = PC.cam.clamp(S.pose, S.limits);
+    if (S.mats) apply(S.house);
+  }
   function resize(inFrame) {
     var c = S.canvas;
     if (!c || !S.renderer) return;
@@ -148,7 +181,8 @@
     S.hemi = new THREE.HemisphereLight(three.col('#FFFFFF'), three.col('#FFFFFF'), 1); S.hemi.name = 'hemi';
     S.sun = new THREE.DirectionalLight(three.col('#FFFFFF'), 1); S.sun.name = 'sun';
     S.sun.castShadow = true;
-    S.sun.shadow.mapSize.set(V().shadowMap, V().shadowMap);
+    S.sun.shadow.mapSize.set(S.tier.shadowMap, S.tier.shadowMap);
+    if (S.tier.fog) S.scene.fog = new THREE.Fog(new THREE.Color('#FFFFFF'), 1, 2);   // colour and range: applyLook
     S.sun.shadow.bias = V().shadowBias; S.sun.shadow.normalBias = V().shadowNormalBias;
     S.sun.target.name = 'sunTarget';
     S.world = new THREE.Group(); S.world.name = 'world';
@@ -182,29 +216,37 @@
     clearSelection();
     S.meshes.forEach(function (m) { m.geometry.dispose(); });
     Object.keys(S.mats || {}).forEach(function (k) { S.mats[k].dispose(); });
+    S.textures.forEach(function (t) { t.dispose(); });
     S.world.children.slice().forEach(function (c) { S.world.remove(c); });
-    S.meshes = []; S.mats = null;
+    S.meshes = []; S.mats = null; S.textures = [];
   }
 
-  function lights(house) {
+  function apply(house) {
     var L = PC.sky.compute(S.look.hour, S.look.season, house.northDeg);
-    three.applyLook({ scene: S.scene, sun: S.sun, hemi: S.hemi, mats: S.mats, world: S.world, house: house }, L);
-    S.looks++;
+    three.applyLook({ scene: S.scene, sun: S.sun, hemi: S.hemi, mats: S.mats, world: S.world, house: house, renderer: S.renderer, limits: S.limits }, L);
+    shadowsDirty();
   }
+  function lights(house) { apply(house); S.looks++; }
+  function tex(kind) { var t = three.texture(kind, S.tier.tex, S.renderer); S.textures.push(t); return t; }
 
   function build(house) {
     dispose();
     var SC = PC.data.siteColors;
+    var lite = !S.tier.fog;
     S.mats = {
       batch: new THREE.MeshLambertMaterial({ vertexColors: true }),
-      ground: new THREE.MeshLambertMaterial({ color: three.col(SC.ground) }),
-      groundOuter: new THREE.MeshLambertMaterial({ color: three.col(SC.groundOuter) }),
+      ground: new THREE.MeshLambertMaterial({ color: three.col(SC.ground), map: tex('grass') }),
+      groundOuter: new THREE.MeshLambertMaterial({ color: three.col(SC.groundOuter), map: tex('meadow'), vertexColors: lite }),
+      paving: new THREE.MeshLambertMaterial({ vertexColors: true, map: tex('paving') }),
+      ui: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, fog: false }),
+      sky: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, fog: false, depthWrite: false }),
       poolWater: new THREE.MeshLambertMaterial({ color: three.col(SC.poolWater) }),
       trunk: new THREE.MeshLambertMaterial({ color: three.col(SC.trunk) }),
       canopy: new THREE.MeshLambertMaterial({ color: three.col(PC.data.sky.seasons.summer.canopy) }),
       shrub: new THREE.MeshLambertMaterial({ color: three.col(PC.data.sky.seasons.summer.shrub) })
     };
-    S.meshes = three.buildShell(house, S.world, S.mats).concat(three.buildInterior(house, S.world, S.mats),
+    if (house.roof.type === 'pitched') S.mats.tiles = new THREE.MeshLambertMaterial({ vertexColors: true, map: tex('tiles') });
+    S.meshes = three.buildShell(house, S.world, S.mats, { tier: S.tier }).concat(three.buildInterior(house, S.world, S.mats),
       three.buildRoof(house, S.world, S.mats), three.buildSite(house, S.world, S.mats));
     var keep = S.house && S.pose && S.house.radius === house.radius && S.house.center[0] === house.center[0] && S.house.center[1] === house.center[1];
     S.house = house; S.builtKey = house.key; S.builds++;
@@ -225,6 +267,7 @@
     });
     var cap = S.world.getObjectByName('groundCap');
     if (cap) cap.visible = sel !== 'B';
+    shadowsDirty();
   }
 
   PC.view3d = {
@@ -234,6 +277,8 @@
       if (typeof THREE === 'undefined' || !house) { S.onState('unavailable'); return { ok: false }; }
       if (!S.renderer) {
         try { S.renderer = three.makeRenderer(canvas); } catch (e) { S.renderer = null; S.onState('unavailable'); return { ok: false }; }
+        S.tier = three.pickTier({ coarse: coarse(), maxTex: S.renderer.capabilities.maxTextureSize });
+        S.renderer.setPixelRatio(dpr());
         setup(canvas);
       }
       S.active = true;
@@ -293,6 +338,7 @@
         building: !!S.building, frame: !!S.frame, dirty: S.dirty, renders: S.renders, builds: S.builds, restores: S.restores,
         meshCount: S.meshes.length + (S.highlight ? 1 : 0), meshes: S.meshes.concat(S.highlight ? [S.highlight] : []),
         flight: S.anim && S.anim.kind === 'flight' ? { from: PC.cam.copy(S.anim.from), to: PC.cam.copy(S.anim.to), t: S.anim.t, ms: S.anim.ms } : null,
+        tier: S.tier ? Object.assign({}, S.tier) : null, textures: S.textures.slice(), shadowUpdates: S.shadowUpdates,
         animating: !!S.anim, selected: S.selected, highlight: S.highlight, highlightsMade: S.hlMade, level: S.level, roof: S.roof, look: { hour: S.look.hour, season: S.look.season }, looks: S.looks, size: S.size.slice(), occl: { right: S.occl.right, bottom: S.occl.bottom }, viewOffset: S.view ? S.view.slice() : null, aspect: aspect(), renderNow: function () { if (S.house && !S.lost) render(); } };
     }
   };

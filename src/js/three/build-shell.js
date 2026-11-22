@@ -6,11 +6,20 @@
    and lift as plain 1.2 m boxes, basement pit walls up to ground level). Empty "roof" and "site" groups, filled by
    build-roof.js / build-site.js; build-interior.js adds each level's "furniture" batch (F4-T2).
    L -> T: X = u - cu, Z = -(v - cv) (PC.frames.l2t). Colours: Q10 exteriors, room tints mixed with the Q18 wood
-   (one sRGB lerp), stair / lift unmixed (H4, F3-T3 outcome section 7). */
+   (one sRGB lerp), stair / lift unmixed (H4, F3-T3 outcome section 7).
+   F6-T1a (plan sections 3-5 + review): opt = { tier } (PC.view3d's tier record).
+   - "sky": the dome (PC.three.skyDome, radius skyK x farK x R) directly under world, unlit, toneMapped false, no fog,
+     depthWrite false, renderOrder -1, frustumCulled false, no shadows; scene.js moves it to the eye before each
+     render and look.js paints it.
+   - groundPlot / groundOuter take the grass / meadow maps through their materials (ShapeGeometry UVs are shape
+     metres). Lite tier only (TL ruling Q-T6): groundOuter is a hand-built ring with the same footprint hole whose
+     outer 30 % (a skirt) carries vertex colours that look.js fades to the horizon; full keeps the ShapeGeometry.
+   - slab batches receive shadows but no longer cast them (CTO C-4.2). */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
   var EPS = 0.011;
+  function V() { return PC.C.VIEW3D; }
 
   // Union of [a, b] intervals (touching within EPS joins), sorted.
   function union(list) {
@@ -61,7 +70,34 @@
     return out;
   };
 
-  three.buildShell = function (house, world, mats) {
+  // Lite groundOuter (plan review Q-T6): the square of half-width hs minus the footprint rectangle in shape
+  // coordinates, as 4 inner trapezoids out to 0.7 hs and a 4-trapezoid skirt from 0.7 hs to hs. Counter-clockwise in
+  // shape space (normal +Z before the -PI/2 turn). Returns the mesh; userData.skirt = { colors, outer } for look.js.
+  function skirtGround(hs, fx0, fx1, fy0, fy1, mat) {
+    var a = 0.7 * hs, pos = [], col = [], uv = [], idx = [], outer = [];
+    function quad(ps, outerFlags) {
+      var b = pos.length / 3;
+      ps.forEach(function (p, i) { pos.push(p[0], p[1], 0); uv.push(p[0], p[1]); col.push(1, 1, 1); if (outerFlags && outerFlags[i]) outer.push(b + i); });
+      idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
+    }
+    quad([[-a, -a], [a, -a], [fx1, fy0], [fx0, fy0]]); quad([[a, -a], [a, a], [fx1, fy1], [fx1, fy0]]);
+    quad([[a, a], [-a, a], [fx0, fy1], [fx1, fy1]]); quad([[-a, a], [-a, -a], [fx0, fy0], [fx0, fy1]]);
+    var O = [1, 1, 0, 0];
+    quad([[-hs, -hs], [hs, -hs], [a, -a], [-a, -a]], O); quad([[hs, -hs], [hs, hs], [a, a], [a, -a]], O);
+    quad([[hs, hs], [-hs, hs], [-a, a], [a, a]], O); quad([[-hs, hs], [-hs, -hs], [-a, -a], [-a, a]], O);
+    var g = new THREE.BufferGeometry(), colors = new THREE.Float32BufferAttribute(new Float32Array(col), 3), nor = [];
+    for (var i = 0; i < pos.length / 3; i++) nor.push(0, 0, 1);
+    g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(pos), 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(nor), 3));
+    g.setAttribute('color', colors);
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(uv), 2));
+    g.setIndex(idx);
+    var m = new THREE.Mesh(g, mat);
+    m.userData.skirt = { colors: colors, outer: outer };
+    return m;
+  }
+
+  three.buildShell = function (house, world, mats, opt) {
     var H = PC.C.HOUSE, fp = house.footprint, cu = house.center[0], cv = house.center[1];
     var E = PC.data.exteriors[house.exterior], I = PC.data.interiors[house.interior.style], RT = PC.data.roomTints, SC = PC.data.siteColors;
     var mix = three.mixHex, R = house.radius, made = [];
@@ -85,7 +121,11 @@
     var sq = new THREE.Shape(), hs = H.outerK * R / 2;
     sq.moveTo(-hs, -hs); sq.lineTo(hs, -hs); sq.lineTo(hs, hs); sq.lineTo(-hs, hs); sq.closePath();
     sq.holes.push(footHole());
-    var outer = mesh(new THREE.ShapeGeometry(sq), mats.groundOuter, 'groundOuter', ground);
+    var lite = opt && opt.tier && !opt.tier.fog, outer;
+    if (lite) {
+      outer = skirtGround(hs, fp.u - cu, fp.u + fp.w - cu, fp.v - cv, fp.v + fp.d - cv, mats.groundOuter);
+      outer.name = 'groundOuter'; ground.add(outer); made.push(outer);
+    } else outer = mesh(new THREE.ShapeGeometry(sq), mats.groundOuter, 'groundOuter', ground);
     outer.rotation.x = flat; outer.position.y = -H.outerDrop;
     var shape = new THREE.Shape();
     house.plot.pts.forEach(function (p, i) { if (i) shape.lineTo(p[0] - cu, p[1] - cv); else shape.moveTo(p[0] - cu, p[1] - cv); });
@@ -125,9 +165,15 @@
       if (lv.stair) box(walls, lv.stair.u, lv.stair.u + lv.stair.w, lv.stair.v, lv.stair.v + lv.stair.d, floorY, top, RT.stair);
       if (lv.lift) box(walls, lv.lift.u, lv.lift.u + lv.lift.w, lv.lift.v, lv.lift.v + lv.lift.d, floorY, top, RT.lift);
       [slab.build(mats.batch, 'slab'), walls.build(mats.batch, 'walls')].forEach(function (m) { if (m) { g.add(m); made.push(m); } });
+      var sm = g.getObjectByName('slab');
+      if (sm) sm.castShadow = false;                       // CTO C-4.2: floors receive only
     });
     group('roof', world);
     group('site', world);
+    var dome = three.skyDome(V().skyK * PC.C.CAM.farK * R), sky = new THREE.Mesh(dome.geometry, mats.sky);
+    sky.name = 'sky'; sky.renderOrder = -1; sky.frustumCulled = false; sky.castShadow = false; sky.receiveShadow = false;
+    sky.userData.dome = dome;
+    world.add(sky); made.push(sky);
     return made;
   };
 })(globalThis.PC = globalThis.PC || {});

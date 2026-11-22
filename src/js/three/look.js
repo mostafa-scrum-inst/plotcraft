@@ -8,7 +8,12 @@
    fitShadow: the content box (footprint up to the roof top, parking + canopy, pool + rim, seating, every tree and
    shrub at its scale; the boundary wall is left out) as 8 corners in the light's view (the basis three's lookAt
    gives the shadow camera: z = light direction, x = up x z, y = z x x), plus a 0.5 m margin; each side capped at
-   shadowR x house.radius. Writes left / right / top / bottom / near / far + updateProjectionMatrix only. */
+   shadowR x house.radius. Writes left / right / top / bottom / near / far + updateProjectionMatrix only.
+   F6-T1a (plan section A + TL review; ctx also has renderer and limits): toneMappingExposure = L.exposure; the sky
+   dome's colour attribute repainted in place (PC.three.skyPaint); the fog (full tier) gets the raw horizon hex (r128
+   mixes fog into the encoded output, A-10 second exception) and near = limits.rMax + R, far = min(near + fogSpanK x R,
+   0.9 x outerK x R / 2); the lite groundOuter skirt's outer vertices fade to the horizon (colour / meadow colour,
+   clamped). Still nothing created or disposed. */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
@@ -66,5 +71,20 @@
     ctx.mats.shrub.color.copy(col(L.shrubColor));
     var can = ctx.world.getObjectByName('canopies');
     if (can) can.visible = !!L.canopyVisible;
+    if (ctx.renderer) ctx.renderer.toneMappingExposure = L.exposure;
+    var sky = ctx.world.getObjectByName('sky');
+    if (sky) three.skyPaint(sky.userData.dome, L);
+    var fog = ctx.scene.fog, R = house.radius;
+    if (fog && ctx.limits) {
+      var near = ctx.limits.rMax + R, far = Math.max(near + 1, Math.min(near + V.fogSpanK * R, 0.9 * PC.C.HOUSE.outerK * R / 2));
+      fog.color = new THREE.Color(L.skyHorizon); fog.near = near; fog.far = far;
+    }
+    var outer = ctx.world.getObjectByName('groundOuter'), sk = outer && outer.userData.skirt;
+    if (sk) {
+      var h = col(L.skyHorizon), m = col(PC.data.siteColors.groundOuter), a = sk.colors.array;
+      var q = [Math.min(1, h.r / (m.r || 1)), Math.min(1, h.g / (m.g || 1)), Math.min(1, h.b / (m.b || 1))];
+      sk.outer.forEach(function (i) { a[i * 3] = q[0]; a[i * 3 + 1] = q[1]; a[i * 3 + 2] = q[2]; });
+      sk.colors.needsUpdate = true;
+    }
   };
 })(globalThis.PC = globalThis.PC || {});

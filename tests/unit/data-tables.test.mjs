@@ -26,8 +26,8 @@ const hue = (h) => { const [, a, b] = lab(h); return Math.atan2(b, a) * 180 / Ma
 
 const EXT_KEYS = ['wall', 'wallInner', 'slab', 'roof', 'trim', 'parapet'];
 const INT_KEYS = ['fabric', 'wood', 'accent', 'white', 'metal', 'dark', 'floorMix'];
-const SITE_KEYS = ['ground', 'groundOuter', 'paving', 'poolWater', 'poolRim', 'boundaryWall', 'gate', 'carCanopy', 'seating', 'trunk', 'northMarker', 'highlight'];
-const KEY_KEYS = ['h', 'background', 'sunColor', 'sunI', 'hemiSky', 'hemiGround', 'hemiI'];
+const SITE_KEYS = ['ground', 'groundOuter', 'paving', 'poolWater', 'poolRim', 'boundaryWall', 'gate', 'carCanopy', 'seating', 'trunk', 'northMarker', 'highlight', 'asphalt'];   // F6-T1a: + asphalt
+const KEY_KEYS = ['h', 'background', 'sunColor', 'sunI', 'hemiSky', 'hemiGround', 'hemiI', 'skyMid', 'skyZenith', 'exposure'];   // F6-T1a: the dome rows + exposure
 const SEASON_KEYS = ['elevMax', 'tint', 'tintAmount', 'canopy', 'canopyVisible', 'shrub', 'ground'];
 const SEASONS = ['spring', 'summer', 'autumn', 'winter'];
 const PIECE_KEYS = ['id', 'w', 'd', 'h', 'y0', 'anchor', 'color', 'sparse'];
@@ -51,12 +51,13 @@ test('F3-T3 tables: option keys and exact key lists', () => {
 test('F3-T3 tables: value types (colours #RRGGBB upper case; the few numbers in range)', () => {
   const colours = [...Object.values(X).flatMap(Object.values), ...Object.values(T), ...Object.values(S),
     ...Object.values(I).flatMap((v) => COLOR_KEYS.map((k) => v[k])),
-    ...SKY.keys.flatMap((k) => [k.background, k.sunColor, k.hemiSky, k.hemiGround]),
+    ...SKY.keys.flatMap((k) => [k.background, k.sunColor, k.hemiSky, k.hemiGround, k.skyMid, k.skyZenith]),
     ...Object.values(SKY.seasons).flatMap((s) => [s.tint, s.canopy, s.shrub, s.ground])];
   for (const c of colours) assert.match(c, HEX);
   for (const [k, v] of Object.entries(I)) assert.ok(typeof v.floorMix === 'number' && v.floorMix >= 0 && v.floorMix <= 0.3, k + ' floorMix');
   for (const k of SKY.keys) for (const n of ['h', 'sunI', 'hemiI']) assert.ok(Number.isFinite(k[n]), n);
   for (const k of SKY.keys) assert.ok(k.sunI >= 0 && k.sunI <= 1.5 && k.hemiI >= 0 && k.hemiI <= 1.5, 'intensities at ' + k.h);
+  for (const k of SKY.keys) assert.ok(k.exposure >= 0.5 && k.exposure <= 2, 'F6-T1a exposure at ' + k.h);
   assert.deepEqual(SEASONS.map((s) => SKY.seasons[s].elevMax), [52, 72, 52, 32]);
   for (const s of SEASONS) {
     const v = SKY.seasons[s];

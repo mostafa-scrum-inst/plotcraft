@@ -124,3 +124,14 @@ test('night: the light is the moon (-s.x, |s.y|, -s.z) of the A-13 path, then Y 
     assert.equal(L.moon, true); near(L.sunDir, m, 1e-12, `${s} ${h} N ${N}`);
   }
 });
+
+test('F6-T1a fields: skyHorizon = background; skyMid / skyZenith = the key lerp then the same season blend; exposure = the key lerp', () => {
+  const keys = SKY.keys, at = (h) => { let i = 0; while (keys[i + 1].h < h) i++; return [keys[i], keys[i + 1], (h - keys[i].h) / (keys[i + 1].h - keys[i].h)]; };
+  for (const s of SEASONS) for (const h of [0, 6, 7.5, 9, 12, 16.5, 17.5, 19, 22, 24]) {
+    const L = K(h, s), [a, b, t] = at(h), se = SKY.seasons[s], noon = keys.find((k) => k.h === 12);
+    const day = Math.min(1, (a.sunI + (b.sunI - a.sunI) * t) / noon.sunI), w = se.tintAmount * day;
+    assert.equal(L.skyHorizon, L.background, `${s} ${h}`);
+    for (const f of ['skyMid', 'skyZenith']) assert.equal(L[f], PC.sky.mix(PC.sky.mix(a[f], b[f], t), se.tint, w), `${s} ${h} ${f}`);
+    assert.ok(Math.abs(L.exposure - (a.exposure + (b.exposure - a.exposure) * t)) < 1e-12, `${s} ${h} exposure`);
+  }
+});

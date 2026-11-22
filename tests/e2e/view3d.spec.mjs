@@ -10,6 +10,7 @@ import { lookChecks } from '../helpers/look-checks.mjs';   // F4-T3 Light tab (f
 import { finderChecks } from '../helpers/finder-checks.mjs';
 import { tourChecks, g1Draft } from '../helpers/tour-checks.mjs';   // F5-T2 drone tour (in these page loads)
 
+const FULL = !!process.env.QA_FULL;   // F6-T1a (TL Q-T8): checks covered by a QA section run only with QA_FULL=1
 const T = suite('e2e view3d'), browser = await launch();
 // Counts the app's animation-frame requests. The tests below never call requestAnimationFrame themselves while
 // they measure: they wait with a fixed 300 ms, because "nothing is requested" has no state to poll (A-16 exception).
@@ -81,15 +82,19 @@ async function phone() {
   await ready(page);
   T.eq(await page.evaluate(() => { const w = PC.debug.scene().world; return [w.getObjectByName('level-G').visible, w.getObjectByName('level-1').visible]; }), [true, false], `${tag} Ground hides the First floor`);
   T.eq(await page.evaluate(() => { const w = PC.debug.scene().world, f = w.getObjectByName('level-1').children.find((c) => c.name === 'furniture'); return [!!f, f && f.parent.visible]; }), [true, false], `${tag} ...and its furniture with it (F4-T2)`);
-  // F4-T2: the Roof switch by touch (shown only with All: a single level hides it)
+  // F4-T2: the Roof switch by touch (shown only with All: a single level hides it). F6-T1a: the view opens with the
+  // Roof on (roofOnOpen), so the switch is on with Ground selected and the roof hidden. QA_FULL=1 only since F6-T1a
+  // (TL Q-T8: covered in the default run by QA f4-t2-view "A roof 1280x800" and f4-t1-view G).
   const roofOn = () => page.evaluate(() => [document.querySelector('[data-pc="v3-roof"]').checked, PC.debug.scene().roof, PC.debug.scene().world.getObjectByName('roof').visible]);
-  await page.locator('.pc-switch:has([data-pc="v3-roof"])').tap(); await ready(page);
-  T.eq(await roofOn(), [true, true, false], `${tag} Roof on with Ground selected: switch on, roof still hidden`);
-  await page.locator('[data-pc="v3-level"] label:has(> input[value="all"])').tap();
-  await ready(page);
-  T.eq(await roofOn(), [true, true, true], `${tag} Roof on + All: the roof is shown`);
-  await page.locator('.pc-switch:has([data-pc="v3-roof"])').tap(); await ready(page);
-  T.eq(await roofOn(), [false, false, false], `${tag} tap again: Roof off`);
+  T.eq(await roofOn(), [true, true, false], `${tag} F6-T1a: opened with the Roof on; Ground selected keeps the roof hidden`);
+  if (FULL) {
+    await page.locator('.pc-switch:has([data-pc="v3-roof"])').tap(); await ready(page);
+    T.eq(await roofOn(), [false, false, false], `${tag} Roof off with Ground selected`);
+    await page.locator('[data-pc="v3-level"] label:has(> input[value="all"])').tap(); await ready(page);
+    T.eq(await roofOn(), [false, false, false], `${tag} All with the Roof off: no roof`);
+    await page.locator('.pc-switch:has([data-pc="v3-roof"])').tap(); await ready(page);
+    T.eq(await roofOn(), [true, true, true], `${tag} Roof on + All: the roof is shown`);
+  } else { await page.locator('[data-pc="v3-level"] label:has(> input[value="all"])').tap(); await ready(page); }
   // leaving stops frames; returning keeps the pose
   const pose = await cam(page);
   await act('btn-back'); await settled(page);
@@ -165,11 +170,11 @@ async function desktop() {
   T.ok(L.occl === 0 && L.vo === null && Math.abs(L.aspect - L.w / L.h) < 1e-9, `${tag} panel collapsed: no lens shift, aspect ${L.aspect.toFixed(3)}`);
   await act('v3-panel-toggle'); await ready(page);
   L = await lensOf(); T.ok(L.o > 300 && L.occl === L.o && L.vo && L.vo[2] === L.o, `${tag} panel expanded again: lens shift back (${L.occl} px)`);
-  // F4-T2: the Roof switch by keyboard (Space toggles the focused switch)
+  // F4-T2: the Roof switch by keyboard (Space toggles the focused switch); F6-T1a: it starts on (roofOnOpen)
   await hook('v3-roof').focus(); await page.keyboard.press('Space'); await ready(page);
-  T.eq(await page.evaluate(() => [document.querySelector('[data-pc="v3-roof"]').checked, PC.debug.scene().world.getObjectByName('roof').visible]), [true, true], `${tag} Space on Roof: roof shown`);
+  T.eq(await page.evaluate(() => [document.querySelector('[data-pc="v3-roof"]').checked, PC.debug.scene().world.getObjectByName('roof').visible]), [false, false], `${tag} Space on Roof: roof hidden`);
   await page.keyboard.press('Space'); await ready(page);
-  T.eq(await page.evaluate(() => PC.debug.scene().world.getObjectByName('roof').visible), false, `${tag} Space again: hidden`);
+  T.eq(await page.evaluate(() => PC.debug.scene().world.getObjectByName('roof').visible), true, `${tag} Space again: shown`);
   // F3-S4 last criterion: Q19 on stage 4 -> stage 5 rebuilds with fewer pieces; approvals kept
   const pieces = () => page.evaluate(() => PC.debug.house().levels.reduce((n, l) => n + l.rooms.reduce((m, r) => m + r.furniture.length, 0), 0));
   const n0 = await pieces(), b0 = (await info(page)).builds;

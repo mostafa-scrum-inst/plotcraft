@@ -151,6 +151,9 @@ export function lintProject(root = ROOT) {
   else {
     const html = readFileSync(dist, 'utf8'); out.push(...scanHtml(html, 'dist/index.html', layers)); out.push(...scanExternal(html, 'dist/index.html'));
     out.push(...scanVendor(html, 'dist/index.html'));
+    // F6 size line (CTO C-1.3: at most +80 KB over the 547 KB before F6)
+    const kb = Buffer.byteLength(html, 'utf8') / 1000;   // kB as the status lines count them
+    if (kb > 627) out.push(`dist/index.html is ${kb.toFixed(1)} KB, over the F6 limit of 627 KB (CTO C-1.3)`);
   }
   return { violations: out, warnings: warn };
 }

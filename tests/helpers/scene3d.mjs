@@ -4,8 +4,9 @@ import { sampleApproved } from './houses.mjs';
 import { itemsOf } from './batch.mjs';
 
 // stateFn(PC) -> a ready stage-5 state (default: the approved sample); edit(house) may change the model before open.
-export function opened(stateFn, edit) {
-  const E = load3d(), s = stateFn ? stateFn(E.PC) : sampleApproved(E.PC);
+// o: load3d options (F6-T1a: coarse, maxTex, tier).
+export function opened(stateFn, edit, o) {
+  const E = load3d(o), s = stateFn ? stateFn(E.PC) : sampleApproved(E.PC);
   E.state = s;
   E.house = E.PC.house.build(s);
   if (edit) edit(E.house);

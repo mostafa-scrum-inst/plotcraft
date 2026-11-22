@@ -7,7 +7,9 @@
      0.6 m along the region's longer side (roof).
    - Pitched: a 30 degree gable over the footprint (BoxBatch.addPrism), ridge along the longer side, no overhang,
      slopes in roof, gable triangles in wall. Never usable (the model switches a usable pitched roof to flat).
-   - Usable: stair head 2.4 m and lift overrun 1.2 m blocks (parapet) over roof.stairHead / roof.liftHead. */
+   - Usable: stair head 2.4 m and lift overrun 1.2 m blocks (parapet) over roof.stairHead / roof.liftHead.
+   F6-T1a (plan 5.4): a pitched roof's two slopes go into "roofTiles" (mats.tiles, the tile map on world UVs, rows
+   along the eaves); its gables and base stay in roofBatch. */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
@@ -26,10 +28,13 @@
     house.levels.forEach(function (lv) {
       if (lv.index >= 0) ring(t, lv.baseY + H.slab + H.wallH, lv.baseY + house.pitch, E.wall);
     });
-    var y = roof.baseY;
+    var y = roof.baseY, tm = null;
     if (roof.type === 'pitched') {
       var alongX = fp.w >= fp.d, rise = Math.tan(R.pitchDeg * Math.PI / 180) * Math.min(fp.w, fp.d) / 2;
-      b.addPrism(X(u0 + fp.w / 2), Z(v0 + fp.d / 2), fp.w, fp.d, y, rise, alongX, E.roof, E.wall);
+      b.addPrism(X(u0 + fp.w / 2), Z(v0 + fp.d / 2), fp.w, fp.d, y, rise, alongX, E.roof, E.wall, 'rest');
+      var tl = new three.BoxBatch({ uv: true });
+      tl.addPrism(X(u0 + fp.w / 2), Z(v0 + fp.d / 2), fp.w, fp.d, y, rise, alongX, E.roof, E.wall, 'slopes');
+      tm = tl.build(mats.tiles, 'roofTiles');
     } else {
       var top = y + R.slab, high = roof.usable || roof.type === 'terrace', p = R.parapetT;
       box(u0, u1, v0, v1, y, top, E.roof);
@@ -48,9 +53,9 @@
         if (h[0]) box(h[0].u, h[0].u + h[0].w, h[0].v, h[0].v + h[0].d, top, top + h[1], E.parapet);
       });
     }
-    var g = world.getObjectByName('roof'), m = b.build(mats.batch, 'roofBatch');
-    if (!m) return [];
-    g.add(m);
-    return [m];
+    var g = world.getObjectByName('roof'), m = b.build(mats.batch, 'roofBatch'), out = [];
+    if (m) { g.add(m); out.push(m); }
+    if (tm) { g.add(tm); out.push(tm); }
+    return out;
   };
 })(globalThis.PC = globalThis.PC || {});

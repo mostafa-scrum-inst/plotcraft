@@ -12,7 +12,16 @@
      trees / shrubs, geometry from PC.data.vegetation (trunk cylinder, canopy cone with its base at canopyY0, shrub
      cone), one instance matrix per item = translate (u, base x s, v) x uniform scale s. frustumCulled false (the
      instances spread beyond the geometry's own bounds); cast, never receive. A kind with no items gets no mesh.
-     Materials mats.trunk / mats.canopy / mats.shrub are recoloured by applyLook (look.js). */
+     Materials mats.trunk / mats.canopy / mats.shrub are recoloured by applyLook (look.js).
+   F6-T1a (plan sections 3.3, 4.4, 5.4; TL plan review):
+   - "paving" (one mesh, mats.paving with the paving map, world UVs, receives only): the parking pads and the seating pad
+     (siteColors.paving), the pool rim (poolRim), moved here from siteBatch, plus the street footpath.
+   - "northNeedle": the needle's N half (northMarker) on mats.ui (unlit, toneMapped false: the UI colour exactly, as
+     the highlight); the S half stays in siteBatch.
+   - Street along the street edge (the plot edge from (0, 0) along +u at v = 0), outside the plot and across the
+     groundOuter square: a 1.5 m footpath quad at Y 0.02 (paving), a 0.15 x 0.12 m kerb (siteBatch, paving colour) and
+     an 8 m asphalt quad at Y -0.03 (siteBatch, siteColors.asphalt), above groundOuter at -0.05. None when the plot has
+     no such edge or reaches below v = 0. */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
@@ -24,6 +33,20 @@
     var r = house.northDeg * Math.PI / 180, nu = Math.sin(r), nv = Math.cos(r), L = nm.L, w = 0.175 * L, c = house.center;
     var T = function (du, dv) { return [nm.u + du - c[0], -(nm.v + dv - c[1])]; };
     return { tipN: T(nu * L / 2, nv * L / 2), tipS: T(-nu * L / 2, -nv * L / 2), east: T(nv * w, -nu * w), west: T(-nv * w, nu * w), L: L };
+  };
+
+  // The street strip in T (plan 4.4): x0..x1 across the groundOuter square, z0 = the street edge, then the footpath,
+  // the kerb and the road towards +Z, each clamped to the square. Null without a street edge.
+  three.street = function (house) {
+    var pts = house.plot.pts, n = pts.length, cu = house.center[0], cv = house.center[1], hs = PC.C.HOUSE.outerK * house.radius / 2, e = -1;
+    for (var i = 0; i < n; i++) {
+      var a = pts[i], c = pts[(i + 1) % n];
+      if (Math.abs(a[0]) < 1e-9 && Math.abs(a[1]) < 1e-9 && Math.abs(c[1]) < 1e-9 && c[0] > 0) e = i;
+    }
+    if (e < 0 || pts.some(function (p) { return p[1] < -1e-6; })) return null;
+    var z0 = cv, k = function (z) { return Math.min(z, hs); }, W = PC.C.STREET;
+    if (z0 >= hs) return null;
+    return { x0: -hs, x1: hs, z0: z0, zPath: k(z0 + W.path), zKerb: k(z0 + W.path + W.kerb), zRoad: k(z0 + W.path + W.kerb + W.road) };
   };
 
   three.buildVegetation = function (house, g, mats) {
@@ -50,14 +73,14 @@
 
   three.buildSite = function (house, world, mats) {
     var C = PC.C.SITE, SC = PC.data.siteColors, E = PC.data.exteriors[house.exterior], S = house.site;
-    var cu = house.center[0], cv = house.center[1], b = new three.BoxBatch(), g = world.getObjectByName('site'), made = [];
+    var cu = house.center[0], cv = house.center[1], b = new three.BoxBatch(), pv = new three.BoxBatch({ uv: true }), g = world.getObjectByName('site'), made = [];
     var X = function (u) { return u - cu; }, Z = function (v) { return -(v - cv); };
-    function box(u0, u1, v0, v1, y0, y1, hex) { b.add((X(u0) + X(u1)) / 2, (y0 + y1) / 2, (Z(v0) + Z(v1)) / 2, u1 - u0, y1 - y0, v1 - v0, hex); }
+    function box(u0, u1, v0, v1, y0, y1, hex, to) { (to || b).add((X(u0) + X(u1)) / 2, (y0 + y1) / 2, (Z(v0) + Z(v1)) / 2, u1 - u0, y1 - y0, v1 - v0, hex); }
 
     var p = S.parking;
     if (p) {
       var P = PC.C.PARKING;
-      for (var i = 0; i < p.cars; i++) box(p.u + i * P.w, p.u + (i + 1) * P.w, p.v, p.v + p.d, 0, 0.02, SC.paving);
+      for (var i = 0; i < p.cars; i++) box(p.u + i * P.w, p.u + (i + 1) * P.w, p.v, p.v + p.d, 0, 0.02, SC.paving, pv);
       if (p.covered) {
         var k = 0.1, top = 2.4;
         box(p.u, p.u + p.w, p.v, p.v + p.d, top - 0.1, top, SC.carCanopy);
@@ -69,8 +92,8 @@
     var q = S.pool;
     if (q) {
       var rw = 0.3, rh = 0.1;
-      box(q.u - rw, q.u + q.w + rw, q.v - rw, q.v, 0, rh, SC.poolRim); box(q.u - rw, q.u + q.w + rw, q.v + q.d, q.v + q.d + rw, 0, rh, SC.poolRim);
-      box(q.u - rw, q.u, q.v, q.v + q.d, 0, rh, SC.poolRim); box(q.u + q.w, q.u + q.w + rw, q.v, q.v + q.d, 0, rh, SC.poolRim);
+      box(q.u - rw, q.u + q.w + rw, q.v - rw, q.v, 0, rh, SC.poolRim, pv); box(q.u - rw, q.u + q.w + rw, q.v + q.d, q.v + q.d + rw, 0, rh, SC.poolRim, pv);
+      box(q.u - rw, q.u, q.v, q.v + q.d, 0, rh, SC.poolRim, pv); box(q.u + q.w, q.u + q.w + rw, q.v, q.v + q.d, 0, rh, SC.poolRim, pv);
     }
     if (S.wall) {
       var pts = house.plot.pts, n = pts.length, h = C.wallT / 2;
@@ -94,7 +117,7 @@
     var st = S.seating;
     if (st) {
       var mu = st.u + st.w / 2, mv = st.v + st.d / 2, pad = 0.05;
-      box(st.u, st.u + st.w, st.v, st.v + st.d, 0, pad, SC.paving);
+      box(st.u, st.u + st.w, st.v, st.v + st.d, 0, pad, SC.paving, pv);
       box(mu - 0.45, mu + 0.45, mv - 0.45, mv + 0.45, pad, pad + 0.75, SC.seating);
       [-0.9, 0.9].forEach(function (o) {
         if (st.along === 'u') box(mu - 0.8, mu + 0.8, mv + o - 0.225, mv + o + 0.225, pad, pad + 0.45, SC.seating);
@@ -103,14 +126,24 @@
     }
     var en = S.entrance;
     box(en.u - 0.6, en.u + 0.6, en.v - 0.6, en.v, 0, 0.15, E.trim);
-    var nd = three.needle(house);
+    var nd = three.needle(house), nb = new three.BoxBatch();
     if (nd) {
-      b.addFlat([nd.tipN, nd.east, nd.west], 0, 0.04, SC.northMarker);
+      nb.addFlat([nd.tipN, nd.east, nd.west], 0, 0.04, SC.northMarker);
       b.addFlat([nd.tipS, nd.west, nd.east], 0, 0.04, SC.poolRim);
+    }
+    var sr = three.street(house);
+    if (sr) {
+      pv.addQuad((sr.x0 + sr.x1) / 2, 0.02, (sr.z0 + sr.zPath) / 2, sr.x1 - sr.x0, sr.zPath - sr.z0, SC.paving);
+      b.add((sr.x0 + sr.x1) / 2, 0.035, (sr.zPath + sr.zKerb) / 2, sr.x1 - sr.x0, 0.17, sr.zKerb - sr.zPath, SC.paving);
+      b.addQuad((sr.x0 + sr.x1) / 2, -0.03, (sr.zKerb + sr.zRoad) / 2, sr.x1 - sr.x0, sr.zRoad - sr.zKerb, SC.asphalt);
     }
     three.buildVegetation(house, g, mats).forEach(function (x) { made.push(x); });
     var m = b.build(mats.batch, 'siteBatch');
     if (m) { g.add(m); made.push(m); }
+    var pm = pv.build(mats.paving, 'paving');
+    if (pm) { pm.castShadow = false; g.add(pm); made.push(pm); }
+    var nm = nb.build(mats.ui, 'northNeedle');
+    if (nm) { nm.castShadow = false; nm.receiveShadow = false; g.add(nm); made.push(nm); }
     if (q) {
       var water = new THREE.Mesh(new THREE.PlaneGeometry(q.w, q.d), mats.poolWater);
       water.name = 'poolWater'; water.rotation.x = -Math.PI / 2;

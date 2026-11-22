@@ -21,13 +21,13 @@ test('trunks / canopies / shrubs: one instance per model item, frustumCulled fal
   }
   const info = E.info(), mats = E.mock.created.materials;
   assert.equal(E.world.getObjectByName('trunks').material, E.world.getObjectByName('trunks').material);
-  assert.ok(mats.length === 7, 'batch, ground, groundOuter, poolWater, trunk, canopy, shrub');
+  assert.ok(mats.length === 10, 'batch, ground, groundOuter, paving, ui, sky (F6-T1a), poolWater, trunk, canopy, shrub');
   // geometry from the table, not literals
   const g = (n) => [...raw(E.world.getObjectByName(n).geometry).params];
   assert.deepEqual(g('trunks'), [V.tree.trunkR, V.tree.trunkR, V.tree.trunkH, V.tree.trunkSeg]);
   assert.deepEqual(g('canopies'), [V.tree.canopyR, V.tree.canopyH, V.tree.canopySeg]);
   assert.deepEqual(g('shrubs'), [V.shrub.r, V.shrub.h, V.shrub.seg]);
-  assert.ok(info.meshCount === 15);
+  assert.ok(info.meshCount === 18);
 });
 
 test('instance matrices: T position of the item, uniform scale s, canopy base at canopyY0 x s, trunk and shrub bases on the ground', () => {
@@ -47,9 +47,9 @@ test('instance matrices: T position of the item, uniform scale s, canopy base at
   }
 });
 
-test('no items of a kind -> no mesh of that kind (vegetation 0 %: the F4-T2 12 meshes); sample has trees and shrubs', () => {
+test('no items of a kind -> no mesh of that kind (vegetation 0 %: the F4-T2 12 meshes + the F6-T1a 3); sample has trees and shrubs', () => {
   const E = opened((PC) => sampleApproved(PC, (d) => { d.ans.vegPct = 0; }));
   for (const [name] of KINDS) assert.equal(E.world.getObjectByName(name), undefined, name);
-  assert.equal(E.info().meshCount, 12);
+  assert.equal(E.info().meshCount, 15);
   assert.equal(E.mock.created.geometries.filter((g) => /Cylinder|Cone/.test(E.mock.raw(g).__kind || '')).length, 0, 'no vegetation geometry made');
 });

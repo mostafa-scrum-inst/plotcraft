@@ -14,6 +14,8 @@
    - siteColors: fixed site colours. ground is the build-time plot grass and equals sky.seasons.summer.ground;
      groundOuter (outside the plot) is never seasonal; gate is for a gate leaf (posts use exteriors.trim);
      highlight is the F5 selection colour (the 2D selection orange).
+     F6-T1a: groundOuter is the meadow (Designer plan D3, meadow texture); asphalt is the street road; highlight and
+     northMarker are drawn unlit and not tone-mapped (read as the hex); every other hex is retuned under ACES.
    - vegetation (F4-T3, Designer plan section 1): sizes in metres at instance scale 1 and segment counts. Tree = trunk
      cylinder (trunkR, Y 0 to trunkH) + canopy cone (canopyR, canopyH, base at canopyY0); shrub = cone (r, h, base at
      Y 0); per-instance uniform scale in [scale[0], scale[1]]. Colours are not here: trunk = siteColors.trunk, canopy and
@@ -37,9 +39,9 @@
     hall: '#D9D6CE', stair: '#C5CBD0', lift: '#AEB7BB'
   };
   PC.data.siteColors = {
-    ground: '#7FAE55', groundOuter: '#B3B0A6', paving: '#CFC8BA', poolWater: '#3FA7C9', poolRim: '#E6E1D6',
+    ground: '#7FAE55', groundOuter: '#8E9E6A', paving: '#CFC8BA', poolWater: '#3FA7C9', poolRim: '#E6E1D6',
     boundaryWall: '#CDC4B2', gate: '#3B4652', carCanopy: '#A3ABB1', seating: '#9A7A55', trunk: '#5B4636',
-    northMarker: '#16212B', highlight: '#C2410C'
+    northMarker: '#16212B', highlight: '#C2410C', asphalt: '#55595C'
   };
   PC.data.vegetation = {
     tree: { trunkR: 0.12, trunkH: 2.6, canopyR: 1.35, canopyY0: 1.4, canopyH: 2.8, trunkSeg: 6, canopySeg: 8 },
