@@ -112,7 +112,9 @@ try {
 } finally { await browser.close(); }
 // The release step also carries the rows the TL moved out of QA_FULL=1 after the 488 s gate (F6-T1a): each in its own
 // process with QA_RELEASE=1, after the stream. The whole step stays <= 300 s (NOTE above 260 s). It runs in every implementation-review gate (with QA_FULL) and at release.
-const RELEASE_ROWS = [['f4-t1-view.mjs', '--no-shots', '--release-only'], ['f5-t3-view.mjs', '--no-shots', '--release-only'], ['f4-t2-s0-ui.mjs', '--no-shots', '--only=640x360']];
+const RELEASE_ROWS = [['f4-t1-view.mjs', '--no-shots', '--release-only'], ['f5-t3-view.mjs', '--no-shots', '--release-only'], ['f4-t2-s0-ui.mjs', '--no-shots', '--only=640x360'],
+  // TL default-run trim (docs/03-tasks/F6-T1/qa-default-trim.md rows 1-7): the desktop / landscape twins moved out of the default run
+  ['f2-t3-site-rooms.mjs', '--no-shots', '--release-only'], ['f1-t3-plot.mjs', '--no-shots', '--release-only'], ['f1-t1-layout.mjs', '--no-shots', '--release-only']];
 if (MAXONLY) {
   for (const [f, ...a] of RELEASE_ROWS) { const t = Date.now(), r = spawnSync('node', [join(ROOT, 'tests/qa', f), ...a], { stdio: 'inherit', cwd: ROOT, env: { ...process.env, QA_RELEASE: '1' } }); const s = (Date.now() - t) / 1000;
     TIMES.push(`${f} ${s.toFixed(1)} s`); R.check(`[release] ${f} ${a.join(' ')} (QA_RELEASE=1): its checks pass (${s.toFixed(1)} s)`, r.status === 0 ? [] : [`exit ${r.status}`]); }

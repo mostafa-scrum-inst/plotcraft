@@ -70,10 +70,15 @@ const stable = (page) => page.evaluate(() => new Promise((resolve) => {
 const threeFor = (name, stage) => (stage === 5 && name !== 's5-unavailable' ? { three: 'mock' } : {});
 const v3settle = (page) => page.evaluate(() => new Promise((res) => { if (!(PC.house && PC.house.build)) return res(); const t0 = performance.now(), q = (h) => document.querySelector(`[data-pc="${h}"]`);
   const tick = () => (q('v3-building').hidden || performance.now() - t0 > 3000 ? res() : requestAnimationFrame(tick)); requestAnimationFrame(tick); }));
+// Default-run trim (TL, F6-T1 margin ruling, docs/03-tasks/F6-T1/qa-default-trim.md rows 4 and 5): at 640x360 and
+// 1280x800 the layout scenarios s5-building, x-banners, s5-light and s5-tour run in the release step only (QA_RELEASE=1;
+// f6-t1-leak.mjs --max-only runs this file with --release-only, which runs just those). 360x640 keeps every scenario.
+const REL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only'), RELSCN = ['s5-building', 'x-banners', 's5-light', 's5-tour'];
+const scnRun = (vp, name) => { const twin = ['640x360', '1280x800'].includes(vp.tag) && RELSCN.includes(name); return RELONLY ? twin : REL || !twin; };
 const browser = await launch();
 try {
   // ================= markup contract (once, pristine document) =================
-  {
+  if (!RELONLY) {
     const { ctx, page, log } = await openPage(browser, VIEWPORTS[0]);
     await until(() => log.requests.length > 0, 3000); await settled(page);   // the three.js request has been attempted
     R.check('only network request is the three.js tag', log.requests.length === 1 && log.requests[0] === THREE_URL ? [] : ['requests: ' + JSON.stringify(log.requests)]);
@@ -166,6 +171,7 @@ try {
     if (only && vp.tag !== only) continue;
     metrics[vp.tag] = {};
     for (const [name, stage, setup, flags = {}] of SCENARIOS) {
+      if (!scnRun(vp, name)) continue;
       const { ctx, page, log } = await openPage(browser, vp, threeFor(name, stage));
       await page.evaluate(INPAGE);
       if (stage === 5) { await page.evaluate(() => __qa.S.stage(5)); await v3settle(page); }
@@ -220,7 +226,7 @@ try {
       await ctx.close();
     }
     // stepper in every position (states: done / current / locked)
-    for (let n = 1; n <= 5; n++) {
+    if (!RELONLY) for (let n = 1; n <= 5; n++) {
       const { ctx, page } = await openPage(browser, vp); await page.evaluate(INPAGE); await page.evaluate((n) => __qa.S.stage(n), n);
       R.check(`${vp.tag} stepper one line with stage ${n} current`, await page.evaluate(() => __qa.C.stepper()));
       R.check(`${vp.tag} stage ${n}: step states are visually distinct (icon or style per state)`, await page.evaluate((n) => { const f = []; for (let i = 1; i <= 5; i++) { const b = __qa.q('step-' + i), cs = getComputedStyle(b); const done = __qa.rendered(b.querySelector('.pc-step__i-done')), lock = __qa.rendered(b.querySelector('.pc-step__i-lock')); if (i < n && !done) f.push(`step ${i} done without check icon`); if (i > n && b.classList.contains('is-locked') && !lock) f.push(`step ${i} locked without lock icon`); if (i > n && !b.classList.contains('is-locked') && lock) f.push(`step ${i} reachable but shows a lock`);   /* real stages (F3-T1, F3-T2) open later steps */ if (i === n) { if (done || lock) f.push(`current step ${i} shows a state icon`); if (cs.borderBottomColor === 'rgba(0, 0, 0, 0)') f.push('current step has no underline'); if (!__qa.rendered(b.querySelector('.pc-step__label'))) f.push('current step has no label'); } } return f; }, n));
@@ -229,7 +235,7 @@ try {
     }
     // sample strip on the build's strip stages ([1,3,4] until F4-T2 Step 0.7, [1,3] after; marker PC.ui.shell.STRIP_STAGES / PC.C.STRIP_STAGES): stage must still fit
     const STRIPS = await (async () => { const { ctx, page } = await openPage(browser, vp); const r = await page.evaluate(() => (PC.ui && PC.ui.shell && PC.ui.shell.STRIP_STAGES) || PC.C.STRIP_STAGES || [1, 3, 4]); await ctx.close(); return r.slice(); })();
-    for (const n of STRIPS) {
+    if (!RELONLY) for (const n of STRIPS) {
       const { ctx, page } = await openPage(browser, vp); await page.evaluate(INPAGE); await page.evaluate((n) => { __qa.S.stage(n); __qa.q('sample-strip').hidden = false; if (n === 1) __qa.q('start-panel').hidden = true; if (n === 3) __qa.S.planTabs([['Ground', 'approved', true], ['First', 'approved', false]]); __qa.S.paint(); }, n);
       const T = `${vp.tag} strip on stage ${n}`;
       R.check(`${T} no page scroll`, await page.evaluate(() => __qa.C.pageScroll()));
@@ -245,7 +251,7 @@ try {
   }
 
   // ================= focus (keyboard) =================
-  for (const vp of VIEWPORTS.filter((v) => ['360x640', '1280x800'].includes(v.tag) && (!only || v.tag === only))) {
+  if (!RELONLY) for (const vp of VIEWPORTS.filter((v) => ['360x640', '1280x800'].includes(v.tag) && (!only || v.tag === only))) {
     for (const [name, stage, setup] of SCENARIOS.filter((s) => ['s1-resume', 's2-site', 's2-building', 's2-rooms', 's2-outdoor', 's3-max', 's4', 's5-view', 's5-light', 's5-tour'].includes(s[0]))) {
       const { ctx, page } = await openPage(browser, vp, threeFor(name, stage)); await page.evaluate(INPAGE);
       if (stage === 5) { await page.evaluate(() => __qa.S.stage(5)); await v3settle(page); }
@@ -271,7 +277,7 @@ try {
     }
   }
   // mouse click must not leave a ring on buttons (focus-visible), keyboard must
-  {
+  if (!RELONLY) {
     const { ctx, page } = await openPage(browser, VIEWPORTS[2]); await page.evaluate(INPAGE);
     await page.click('[data-pc="btn-sample"]');
     R.check('mouse click shows no focus ring on a button', await page.evaluate(() => getComputedStyle(document.activeElement).outlineStyle === 'none' ? [] : ['ring after mouse click']));
@@ -279,17 +285,18 @@ try {
   }
 
   // ================= reduced motion =================
-  {
+  if (!RELONLY) {
     const a = await openPage(browser, VIEWPORTS[0]); await a.page.evaluate(INPAGE); await a.page.evaluate(() => { for (const s of document.querySelectorAll('[data-stage]')) s.hidden = false; __qa.q('v3-building').hidden = false; __qa.q('dialog-layer').hidden = false; __qa.S.toast('x'); });
     const n = await a.page.evaluate(() => __qa.C.motionPresent()); R.check('motion exists without the preference (control)', n > 0 ? [] : ['no transitions/animations found at all']); R.note(`elements with transition/animation by default: ${n}`); await a.ctx.close();
     const b = await openPage(browser, VIEWPORTS[0], { reducedMotion: 'reduce' }); await b.page.evaluate(INPAGE); await b.page.evaluate(() => { for (const s of document.querySelectorAll('[data-stage]')) s.hidden = false; __qa.q('v3-building').hidden = false; __qa.q('dialog-layer').hidden = false; __qa.S.toast('x'); });
     R.check('prefers-reduced-motion: no transitions or animations anywhere', await b.page.evaluate(() => __qa.C.motion())); await b.ctx.close();
   }
   // canvases: touch-action none (R2 groundwork)
-  { const a = await openPage(browser, VIEWPORTS[0]); await a.page.evaluate(INPAGE); R.check('canvases have touch-action: none', await a.page.evaluate(() => __qa.C.touchAction())); await a.ctx.close(); }
+  if (!RELONLY) { const a = await openPage(browser, VIEWPORTS[0]); await a.page.evaluate(INPAGE); R.check('canvases have touch-action: none', await a.page.evaluate(() => __qa.C.touchAction())); await a.ctx.close(); }
 } finally { await browser.close(); }
 
-writeFileSync(join(SHOTS, 'metrics.json'), JSON.stringify(metrics, null, 1));
+if (!REL) R.note('at 640x360 and 1280x800 the layout scenarios s5-building, x-banners, s5-light and s5-tour run in the release step only (QA_RELEASE=1, f6-t1-leak.mjs --max-only; TL default-run trim)');
+if (!RELONLY) writeFileSync(join(SHOTS, 'metrics.json'), JSON.stringify(metrics, null, 1));
 for (const vp in metrics) for (const n in metrics[vp]) { const m = metrics[vp][n]; if (m.panel) console.log(`panel ${vp} ${n}: ${m.panel.panelW}x${m.panel.panelH} on canvas ${m.panel.canvasW}x${m.panel.canvasH} -> height ${(m.panel.heightShare * 100).toFixed(1)} %, area ${(m.panel.areaShare * 100).toFixed(1)} %`); if (m.disabledLow && m.disabledLow.length) console.log(`disabled-low-contrast ${vp} ${n}: ${m.disabledLow.join(' | ')}`); }
 let minC = 99; for (const vp in metrics) for (const n in metrics[vp]) if (metrics[vp][n].minContrast) minC = Math.min(minC, metrics[vp][n].minContrast); console.log('lowest rendered text contrast (enabled text): ' + minC);
 process.exit(R.done() ? 0 : 1);

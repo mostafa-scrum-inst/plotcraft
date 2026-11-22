@@ -304,3 +304,4 @@
 - [TL] Default-run trim agreed (qa-default-trim.md rows 1–7, ~54 s work → release step): quiet runs 425.8/432.8 s made it required; exit two quiet runs ≤ 420 s (target ≤ 412).
 - [TL] F6-T1c follow-up (roof detail, evening far grass, max-house blank walls) agreed after the publish; correction: roof detail is in the client brief, so CD-8 is not complete until T1c.
 - [TL] F6-T1c Designer plan review — APPROVED (designer-plan-review.md): MVP R1/R2/R3/G1/W1; R3 strips; one roofDeck mesh; W1 accepted with house.v 3; G2b needs CTO (not T1c); R4/R5 deferred while the default run is trimmed.
+- [QA] Default-run trim landed (TL-agreed rows 1-7, desktop/landscape twins of f2-t3 / f1-t3 / f1-t1 into the release step): quiet default runs 411.9 / 413.1 s green, release step 246.1 s (9/9).

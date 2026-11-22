@@ -20,6 +20,11 @@ const FULLV = (vs) => (process.env.QA_FULL ? vs : vs.filter((v) => v.tag === '36
 // 768x1024 touch); the same behaviours by touch stay here at 360x640. O, L and N keep 768x1024 (their e2e twins,
 // noFlip and borderLabels, were removed from plot.spec instead; N is the only Fit-view check with a 640x360 run).
 const MAIN_AG = MAIN.filter((v) => v.tag !== '768x1024');
+// Default-run trim (TL, F6-T1 margin ruling, docs/03-tasks/F6-T1/qa-default-trim.md rows 2, 3 and 7): the 1280x800 passes
+// of B, C, F and G, and O at 768x1024 / 1280x800, run in the release step only (QA_RELEASE=1; f6-t1-leak.mjs --max-only
+// runs this file with --release-only, which runs just those passes). 360x640 and the other 1280x800 sections stay default.
+const REL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only'), RELB = ['B', 'C', 'F', 'G'];
+const run = (sec, vp) => (RELONLY ? vp.tag === '1280x800' && RELB.includes(sec) : REL || vp.tag !== '1280x800' || !RELB.includes(sec));
 const FT = 0.3048;
 const near = (a, b, tol = 1e-6) => Math.abs(a - b) <= tol;
 const samePts = (a, b, tol = 1e-6) => a.length === b.length && a.every((p, i) => near(p[0], b[i][0], tol) && near(p[1], b[i][1], tol));
@@ -125,11 +130,11 @@ const count = (arr, v) => arr.filter((x) => x === v).length;
 
 const browser = await launch();
 try {
-  for (const vp of MAIN_AG) {
+  for (const vp of (RELONLY ? MAIN_AG.filter((v) => v.tag === '1280x800') : MAIN_AG)) {
     const V = vp.tag;
 
     // ============ A. draw and close a 20 x 30 m plot; measurements in m and ft (F1-S1, F1-S2, R4) ============
-    { const s = await plotSession(browser, vp);
+    if (run('A', vp)) { const s = await plotSession(browser, vp);
       R.check(`${V} A empty: Close/Undo/Clear disabled, hint shown, readouts empty`, eq(await s.btn(), { undo: false, clear: false, 'close-shape': false, next: false }) && (await s.msg()).text === 'Place at least 3 points, then close the shape.' && eq([(await s.readout()).area, (await s.readout()).points], ['–', '0']) ? [] : [JSON.stringify([await s.btn(), await s.msg(), await s.readout()])]);
       R.check(`${V} A all four corners can be brought into view`, await s.reveal(RECT));
       await s.tapW(0, 0);
@@ -172,7 +177,7 @@ try {
       await s.end(`${V} A`); }
 
     // ============ B. close by button; clockwise input; Undo (also reopening); Clear (F1-S1) ============
-    { const s = await plotSession(browser, vp); const CW = [[4, 4], [4, 16], [18, 16], [18, 4]];
+    if (run('B', vp)) { const s = await plotSession(browser, vp); const CW = [[4, 4], [4, 16], [18, 16], [18, 4]];
       await s.reveal(CW); await s.draw(CW.slice(0, 3));
       R.check(`${V} B three points: Close shape enabled`, (await s.btn())['close-shape']);
       await s.tapW(18, 4); await s.act('btn-close-shape'); await s.settle(); let st = await s.state();
@@ -215,7 +220,7 @@ try {
       await s.end(`${V} B clear with plans`, { resume: false }); }
 
     // ============ C. refusals: crossing, closing across, old vertex, 13th point, outside, too small (F1-S1) ============
-    { const s = await plotSession(browser, vp);
+    if (run('C', vp)) { const s = await plotSession(browser, vp);
       const Z = [[2, 2], [12, 2], [12, 12]]; await s.reveal([[2, 2], [14, 14], [-1.5, 5]]); await s.draw(Z);
       await s.tapW(6, 0); let m = await s.msg();
       R.check(`${V} C a vertex whose edge would cross is rejected with an inline message`, samePts(await s.pts(), Z) && m.kind === 'warn' && m.text === 'That edge would cross the outline.' ? [] : [JSON.stringify(m)]);
@@ -270,7 +275,7 @@ try {
       await s.end(`${V} C`); }
 
     // ============ D. vertex editing on a closed plot (F1-S3) ============
-    { const s = await plotSession(browser, vp);
+    if (run('D', vp)) { const s = await plotSession(browser, vp);
       await s.reveal([[0, 0], [26, 36]]); await s.draw(RECT); await s.tapW(0, 0); await s.settle();
       await s.reveal([[0, 0], [26, 36]]);
       const before = await s.state(); let live = null;
@@ -311,7 +316,7 @@ try {
       await s.end(`${V} D`); }
 
     // ============ E. gestures: pan, pinch, hold, wheel, lost pointers (R2) ============
-    { const s = await plotSession(browser, vp); const c = await s.canvasBox(); const mid = [c.x + c.w / 2, c.y + c.h * 0.4];
+    if (run('E', vp)) { const s = await plotSession(browser, vp); const c = await s.canvasBox(); const mid = [c.x + c.w / 2, c.y + c.h * 0.4];
       await s.tapAt([c.x + 60, c.y + 80]); const one = await s.pts(); R.check(`${V} E setup: one point`, one.length === 1);
       let v0 = await s.view();
       await s.dragScr([mid[0] - 40, mid[1]], [mid[0] + 40, mid[1] + 30]); let v1 = await s.view();
@@ -367,7 +372,7 @@ try {
       await s.end(`${V} E`); }
 
     // ============ F. sample: figures in m and ft, label legibility, scale chip against the drawn grid (F1-S2) ============
-    { const s = await plotSession(browser, vp);
+    if (run('F', vp)) { const s = await plotSession(browser, vp);
       await s.act('btn-sample'); await s.settle();
       const L = SAMPLE.map((a, i) => Math.hypot(SAMPLE[(i + 1) % 5][0] - a[0], SAMPLE[(i + 1) % 5][1] - a[1]));
       for (const u of ['m', 'ft']) {
@@ -401,7 +406,7 @@ try {
       R.note(`${V} scale chip values seen while zooming: ${[...chips].join(' | ')}`);
       await s.page.keyboard.press('0'); await s.act('unit-m'); await s.settle();
       await s.end(`${V} F`); }
-    { const s = await plotSession(browser, vp); await s.act('btn-sample'); await s.settle(); await s.page.focus(sel('plot-canvas'));
+    if (run('F', vp)) { const s = await plotSession(browser, vp); await s.act('btn-sample'); await s.settle(); await s.page.focus(sel('plot-canvas'));
       for (const k of ['-', '+', 'ArrowLeft', '0']) await s.page.keyboard.press(k); await s.tapW(10, 15); const c = await s.canvasBox(); await s.dragScr([c.x + 30, c.y + 80], [c.x + 60, c.y + 100]);
       R.check(`${V} F sample still unmodified after zooming, panning and a tap on the plot`, (await s.state()).sampleClean && (await s.shown('sample-strip')) && samePts(await s.pts(), SAMPLE, 0));
       await s.reveal([[0, 0], [24, 34]]); await s.dragW([20, 30], [22, 32]); await s.settle();
@@ -409,7 +414,7 @@ try {
       await s.end(`${V} F2`); }
 
     // ============ G. drafts with a hand-drawn plot; pending-draft guard on the first tap ============
-    { const s = await plotSession(browser, vp); const OPEN = [[3, 3], [15.5, 3], [15.5, 12.5]];
+    if (run('G', vp)) { const s = await plotSession(browser, vp); const OPEN = [[3, 3], [15.5, 3], [15.5, 12.5]];
       await s.reveal(OPEN); await s.draw(OPEN);
       R.check(`${V} G an open outline is saved automatically`, await s.waitDraft((d) => d && d.state.plot.pts.length === 3 && !d.state.plot.closed));
       await s.reload(); await s.settle();
@@ -438,6 +443,7 @@ try {
       await s.end(`${V} G`); }
   }
 
+  if (!RELONLY) {   // H-L: not in the release step
   // ============ H. bad drafts under the new plot rules (360x640) ============
   { const s = await plotSession(browser, VIEWPORTS[0]);
     await s.act('btn-sample'); await s.waitDraft((d) => !!d); const GOOD = await s.raw(); const mut = (fn) => { const d = JSON.parse(GOOD); d.state.sampleClean = false; fn(d.state); return JSON.stringify(d); };
@@ -539,8 +545,9 @@ try {
     R.check('360x640 L corner triangle at the origin: all three edges labelled (20.0 m hypotenuse)', (await s.edgeLabelProblems((await s.state()).plot.pts, true, 'm')).concat(await s.labelProblems()));
     await s.shot('L-corner-triangle'); await s.end('360x640 L triangle'); }
 
+  }
   // ============ O. a corner drag must never turn a closed plot inside out (found by the CTO; fixed in F2-T1) ============
-  for (const vp of MAIN) for (const u of (vp.tag === '360x640' ? ['m', 'ft'] : ['m'])) { const s = await plotSession(browser, vp); const T = `${vp.tag} O (${u})`;
+  for (const vp of MAIN.filter((v) => (RELONLY ? v.tag !== '360x640' : REL || v.tag === '360x640'))) for (const u of (vp.tag === '360x640' ? ['m', 'ft'] : ['m'])) { const s = await plotSession(browser, vp); const T = `${vp.tag} O (${u})`;
     const TRI = [[4, 4], [16, 4], [10, 14]]; await s.reveal([[2, 0.5], [18, 16]]); await s.draw(TRI); await s.act('btn-close-shape'); await s.reveal([[2, 0.5], [18, 16]]);
     if (u === 'ft') await s.act('unit-ft');
     const t0 = await s.state(); let held = null;
@@ -560,6 +567,7 @@ try {
     await s.shot('O-flip-refused-' + u);
     await s.end(T); }   // end(): flush, reload, the draft must be offered and resume exactly
 
+  if (!RELONLY) {   // N, M, K: not in the release step
   // ============ N. Fit view control (touch has no keyboard "0") ============
   for (const vp of FULLV(VIEWPORTS.filter((v) => !only || v.tag === only))) { const s = await plotSession(browser, vp); const T = `${vp.tag} N`;
     R.check(`${T} Fit view: one button, named, 44 px or more, inside the canvas area, clear of the scale chip and the start button`, await s.page.evaluate(() => { const f = [], all = document.querySelectorAll('[data-pc="plot-fit"]'), b = all[0]; if (all.length !== 1) return ['count ' + all.length]; const r = b.getBoundingClientRect(), cv = document.querySelector('[data-pc="plot-canvas"]').getBoundingClientRect(); if (r.width < 43.5 || r.height < 43.5) f.push(`size ${r.width}x${r.height}`); if (b.getAttribute('aria-label') !== 'Fit view' || b.type !== 'button') f.push('name/type'); if (r.left < cv.left || r.top < cv.top || r.right > cv.right || r.bottom > cv.bottom) f.push('outside the canvas'); const X = (q) => { const e = document.querySelector(q); if (!e || e.closest('[hidden]')) return false; const o = e.getBoundingClientRect(); return o.width > 0 && !(r.right <= o.left || o.right <= r.left || r.bottom <= o.top || o.bottom <= r.top); }; for (const q of ['.pc-plot__scale', '[data-pc="btn-sample"]', '[data-pc="start-panel"]']) if (X(q)) f.push('overlaps ' + q); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); if (!hit || !b.contains(hit)) f.push('not hittable'); return f; }));
@@ -616,5 +624,7 @@ try {
     R.check('1280x800 K keys on the canvas never scroll the page or change the plot', (await s.noScroll()).concat(samePts(await s.pts(), SAMPLE, 0) && (await s.state()).sampleClean ? [] : ['plot changed']));
     await s.page.keyboard.press('Backspace'); await s.settle(); R.check('1280x800 K Backspace reopens the closed sample (Undo)', !(await s.state()).plot.closed && (await s.pts()).length === 5);
     await s.end('1280x800 K'); }
+  }
 } finally { await browser.close(); }
+if (!REL) R.note('the 1280x800 passes of B, C, F and G and the 768x1024 / 1280x800 passes of O run in the release step only (QA_RELEASE=1, f6-t1-leak.mjs --max-only; TL default-run trim)');
 process.exit(R.done() ? 0 : 1);

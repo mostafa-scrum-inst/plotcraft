@@ -12,7 +12,11 @@ import { DOT, LEVEL, lab, fmtLen, fmtArea, r1, streetOf, expectFor, READ, stage2
 const SHOTS = join(ROOT, 'tests/qa/shots/F2-T3'); mkdirSync(SHOTS, { recursive: true });
 const noShots = process.argv.includes('--no-shots');
 const only = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7).split(',').filter(Boolean);
-const want = (sec) => !only.length || only.includes(sec);
+// Default-run trim (TL, F6-T1 margin ruling, docs/03-tasks/F6-T1/qa-default-trim.md rows 1 and 6): the 1280x800 twins of
+// A, D, E, G, H/I, J, K and L run in the release step only (QA_RELEASE=1; f6-t1-leak.mjs --max-only runs this file with
+// --release-only, which runs just those twins). The 360x640 pass stays in the default run; B, C, F, M and N are unchanged.
+const REL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only'), REL_SECS = ['A', 'D', 'E', 'G', 'H', 'J', 'K', 'L'];
+const want = (sec) => (!only.length || only.includes(sec)) && (!RELONLY || REL_SECS.includes(sec));
 const R = collector('F2-T3 site and rooms');
 // Open minor bugs (docs/03-tasks/F2-T3/qa-report.md): listed as KNOWN, do not fail the run. Remove an entry when fixed.
 // (F2-T3 bug 1, "Master bedroom" cut off in ft on phones, was listed here; fixed by the Designer, re-tested 2026-11-20, entry removed.)
@@ -24,6 +28,7 @@ const PHONE = VP['360x640'], LAND = VP['640x360'], TAB = VP['768x1024'], DESK = 
 // Run-time trim (QA batch 13, TL F5-T2 ruling 3): the sections marked FULL run at 360x640 + 1280x800 by default and at
 // every listed viewport with QA_FULL=1 (standing condition: run QA_FULL=1 before each feature review and whenever the
 // code these sweeps guard changes).
+const PD = () => (RELONLY ? [DESK] : REL ? [PHONE, DESK] : [PHONE]);   // phone by default, the desktop twin in the release step
 const FULL = (...vps) => (process.env.QA_FULL ? vps : vps.filter((v) => v === PHONE || v === DESK));
 const rect = (w, h) => [[0, 0], [w, 0], [w, h], [0, h]];
 const SAMPLE = [[0, 0], [20, 0], [20, 30], [8, 30], [0, 26]];
@@ -110,7 +115,7 @@ try {
       R.check(`N comb 100 x 100 m at ${pct} %: analyse with step 4b under 500 ms (best of 3: ${best.toFixed(0)} ms), clamped so 4b ran`, best < 500 && fp && fp.clamped !== undefined ? [] : [`${best} ms`, JSON.stringify(fp)]); } }
 
   // ======================= A. Item 1: 4b footprints in the UI, m and ft =======================
-  if (want('A')) for (const vp of [PHONE, DESK]) {
+  if (want('A')) for (const vp of PD()) {
     for (let [name, pts, pct, sb, exp] of [
       ['10 x 50 m at 30 %', rect(10, 50), 30, null, [6, 18, 'proportion']], ['50 x 10 m at 30 %', rect(50, 10), 30, null, [15, 5, 'proportion']],
       ['20 x 30 m at 80 %', rect(20, 30), 80, null, [16, 24.5, 'setbacks']], ['10 x 20 m at 80 %', rect(10, 20), 80, null, [6, 15, 'setbacks']],
@@ -222,7 +227,7 @@ try {
   }
 
   // ======================= D. Item 4 + 5: live effect, R5, clearing, invariant attack =======================
-  if (want('D')) for (const vp of [PHONE, DESK]) {
+  if (want('D')) for (const vp of PD()) {
     const V = vp.tag;
     { const S = await kit(browser, vp, { max5: true });
       await S.type('q-setback-back', '5'); await S.type('q-setback-side', '1'); await sync(S, 'D back 5 / sides 1');
@@ -277,7 +282,7 @@ try {
   }
 
   // ======================= E. Item 6: overrides in the draft; Skip to 3D =======================
-  if (want('E')) for (const vp of [PHONE, DESK]) {
+  if (want('E')) for (const vp of PD()) {
     const V = vp.tag, S = await kit(browser, vp, { max5: true });
     await S.act('unit-ft'); await S.act('step-1'); R.check(`${V} E unit switch keeps the sample unmodified (Skip offered)`, (await S.state()).sampleClean && await S.shown('btn-skip3d'));
     await S.act('btn-next'); await setTap(S, 'class'); await S.tapAt(await S.edgeMid(4)); const ov = (await S.ans()).edgeOv;
@@ -331,7 +336,7 @@ try {
   // ======================= G. Item 8: add form =======================
   // A-16 trim (F4-T1 QA round): 640x360 removed here. Twin: tests/e2e/rooms.spec.mjs addAndEdit at 640x360 (touch; also
   // 768x1024), the twin the F3-T3 trim named for this section. G keeps 360x640 touch and 1280x800 mouse.
-  if (want('G')) for (const vp of [PHONE, DESK]) {
+  if (want('G')) for (const vp of PD()) {
     const V = vp.tag, S = await kit(browser, vp, { max5: true }); await S.openGroup('rooms'); await rooms(S, 'G sample');
     R.check(`${V} G sample rooms, pairs, stair = 6.2`, sampleProblems(await S.state()));
     // level options: existing levels only
@@ -386,7 +391,7 @@ try {
   }
 
   // ======================= H, I. Items 9 and 10: rows and pairs =======================
-  if (want('H')) for (const vp of [PHONE, DESK]) {
+  if (want('H')) for (const vp of PD()) {
     const V = vp.tag, S = await kit(browser, vp, { max5: true }); await S.openGroup('rooms');
     const a0 = await S.ans(), bed = a0.rooms.filter((r) => r.type === 'bedroom' && r.level === '1' && !r.master);
     // type change renumbers; summary follows (sync)
@@ -438,7 +443,7 @@ try {
   }
 
   // ======================= J. Item 11: Q14 through R5; "single level" note =======================
-  if (want('J')) for (const vp of [PHONE, DESK]) {
+  if (want('J')) for (const vp of PD()) {
     const V = vp.tag, S = await kit(browser, vp, { max5: true }); await seedPlans(S); await S.openGroup('rooms');
     const vals = await S.page.evaluate(() => [...document.querySelectorAll('[data-pc="q-stair-pos"] input')].map((i) => i.value));
     R.check(`${V} J exactly five stair positions`, eq(vals.sort(), ['bl', 'br', 'centre', 'fl', 'fr']) ? [] : [JSON.stringify(vals)]);
@@ -461,7 +466,7 @@ try {
   // ======================= K. Item 12: removing a level with rooms =======================
   // A-16 trim (F4-T1 QA round): 640x360 removed here. Twin: tests/e2e/rooms.spec.mjs stairsAndLevels at 640x360 (touch;
   // also 768x1024: the three-way level-removal dialog), as named by the F3-T3 trim. K keeps 360x640 and 1280x800.
-  if (want('K')) for (const vp of [PHONE, DESK]) {
+  if (want('K')) for (const vp of PD()) {
     const V = vp.tag;
     // (1) move allowed: 3 floors, 2 rooms on the second floor, ground and first have 7 -> nearest is First (7 + 2 > 8: refused) ... build a case
     { const S = await kit(browser, vp, { max5: true, plot: rect(20, 30), ans: { floors: 3, rooms: [{ id: 'r1', type: 'living', level: 'G', size: 'M', area: null, master: false }, { id: 'r2', type: 'bedroom', level: '1', size: 'M', area: null, master: false }, { id: 'r3', type: 'bedroom', level: '2', size: 'S', area: null, master: false }, { id: 'r4', type: 'bathroom', level: '2', size: 'S', area: null, master: false }], pairs: [['r3', 'r4']], nextRoomId: 5 } });
@@ -497,7 +502,7 @@ try {
   }
 
   // ======================= L. Item 13: room conflicts, Fix, live clearing =======================
-  if (want('L')) for (const vp of [PHONE, DESK]) {
+  if (want('L')) for (const vp of PD()) {
     const V = vp.tag, S = await kit(browser, vp, { max5: true });
     await S.openGroup('building'); await S.act(lab('q-floors', '3'));
     await sync(S, 'L 3 floors, Second floor empty');
@@ -543,5 +548,6 @@ try {
     }
   }
 } finally { await browser.close(); }
+if (!REL) R.note('the 1280x800 passes of A, D, E, G, H/I, J, K and L run in the release step only (QA_RELEASE=1, f6-t1-leak.mjs --max-only; TL default-run trim)');
 R.note(`runtime ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 process.exit(R.done() ? 0 : 1);

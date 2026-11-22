@@ -50,3 +50,26 @@ every stage, and CD-7 is still open.
   - run two quiet default runs, one QA_FULL run and the release step;
   - report the times to the TL and FS.
 - FS then re-times `tests/durations.json`.
+
+## Addendum: landed (TL agreed all 7 rows)
+
+- The f2-t3, f1-t3 and f1-t1 rows are gated as above, and the three files are in RELEASE_ROWS.
+- **Measured on f6t1 fa8674d, scratch copy, quiet machine:**
+
+| Run | Result | Wall |
+|---|---|---|
+| Default, run 1 | all green, 10 822 passed / 0 failed | **411.9 s** |
+| Default, run 2 | all green, 10 822 passed / 0 failed | **413.1 s** |
+| Release step | 9 of 9 | **246.1 s** |
+
+- Before the trim, the same set-up gave 425.8 s and 432.8 s.
+- **Release-step breakdown:**
+  - maximum-house stream: 122.3 s
+  - f4-t1: 20.3 s
+  - f5-t3: 38.7 s
+  - f4-t2-s0-ui: 16.8 s
+  - f2-t3: 21.4 s
+  - f1-t3: 15.4 s
+  - f1-t1: 10.7 s
+- The release step is under the 260 s NOTE line.
+- **QA_FULL:** the moved rows no longer run under QA_FULL=1 alone, so its time goes down.
