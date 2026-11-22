@@ -61,6 +61,7 @@
     CONTACT: { skirtH: 0.6, skirtK: 0.82, skirtOut: 0.005, ringW: 0.3, ringK: 0.9, ringLift: 0.003, footW: 0.8, footGap: 0.05, footK: 0.8 },
     OPEN: { win: { w: 1.2, h: 1.4, sill: 0.9 }, small: { w: 0.6, h: 0.6, sill: 1.6 }, slot: { w: 0.6, h: 1.6, sill: 0.5 },
       door: { w: 1.0, h: 2.2 }, endClear: 0.6, pitch: 2.6, smallMin: 1.2, doorClear: 0.6, headGap: 0.3,
+      hallPitch: 3.9,   // F6-T1c W1: hall panes on free runs (no room, stair or lift), 1.5 x pitch
       // the decals (Q-D1): glass / reveal band offsets out of the wall plane, frame profile and proud depth, sill
       decal: { glass: 0.01, reveal: 0.06, revealD: 0.02, revealK: 0.65, frame: 0.06, proud: 0.05, mullionMin: 1.2,
         sillT: 0.04, sillOut: 0.08, sillOver: 0.02, leaf: 0.04 } },
