@@ -169,9 +169,9 @@ The order follows the dependencies: 1 first (it is the baseline the others are j
 |---|---|---|
 | **Toast shows the old unit** (F1 note 3: "minimum 538 sq ft" toast after switching back to m) | On a unit change, `PC.ui.toast` drops every toast raised with a measurement. The new API is `toast(text, { units: true })`; the measurement toasts in stage 1 pass it. They are not re-worded, because the message line already shows the current value. | FS (`ui/dialog.js`, call sites) + unit / e2e; Designer reviews |
 | **Lighter area label** (inner-side edge labels crowd it on small plots) | New `palette2d.font.area` = `'500 12px <room stack>'` and `palette2d.label.area` = `label.muted` #46535F (7.6:1 on canvas). Edge labels keep 600 weight and ink. | Designer (data); FS swaps one constant in `draw2d` |
-| **Toast when saving stops mid-session** | When `storage.set` fails after a success, one toast. PM text needed; proposal: "Saving stopped: this browser's storage is full or blocked. Your work stays open until you close the page." Shown once per session. | PM text; FS (`ui/storage.js`, `PC.ui.autosave`) |
+| **Toast when saving stops mid-session** | When `storage.set` fails after a success, one toast. Text: PM round 14 (§10). Shown once per session. | PM text; FS (`ui/storage.js`, `PC.ui.autosave`) |
 | **Full quota at start** (draft exists but the adapter turns off, so it is not offered) | Read-only fallback: if the probe write fails but `getItem` works, offer **Resume** of the stored draft and show the no-save note. Today it hides a draft the user has. | FS (`ui/storage.js` `probe` split into `canRead` / `canWrite`); TL to rule on scope |
-| **Hidden no-save note** (it lives in the start panel, which is hidden once a plot exists) | When saving is off, a small persistent `#i-nosave` icon chip sits in the header beside the unit toggle, `aria-label` "Drafts are not saved on this device", 44 px target, tap → the same text as a toast. Hidden while saving works. | Designer (markup, CSS); FS (one render line) |
+| **Hidden no-save note** (it lives in the start panel, which is hidden once a plot exists) | When saving is off, a small persistent `#i-nosave` icon chip sits in the header beside the unit toggle, `aria-label` / `title` and tap toast as in PM round 14 (§10), 44 px target. Hidden while saving works. | Designer (markup, CSS); FS (one render line) |
 
 ## 8. Designer known limits and routed polish
 
@@ -183,10 +183,10 @@ Each item gets a before / after screenshot from §1. I keep it in F5-T3a when it
    - overridden edges whose label is culled get a small `*` tick at the edge midpoint;
    - the edge list remains the full reference.
    - Designer spec; FS one-liner in `q-preview` label placement. Test: 12-vertex staircase, no two labels overlap.
-2. **Legend wraps at 1280x800 with "\* set by you":** shorter entry "\* yours", or legend `font-size` 12 px in the side panel. Pick by measurement: the street-mode and class-mode drawings must be equal in size.
+2. **Legend wraps at 1280x800 with "\* set by you":** "\* by you" if the measured wrap goes away with it (PM round 14); otherwise unchanged. No 12 px legend. Check: the street-mode and class-mode drawings are equal in size.
 3. **Area label wider than narrow footprints:** when the label's width > footprint width − 8 px, draw it on two lines ("108" / "m²"). If that still does not fit, place it outside the footprint on the street side with a 1 px leader. Designer spec + `palette2d`; FS `draw2d` placement.
-4. **No Parking / Pool legend entries:** add two swatch entries, shown only when the item exists (markup + CSS, existing palette colours).
-5. **Pool-size note wraps at 360 px:** shorten it with the PM ("Pool S / M / L: 18 / 32 / 50 m²" form), or `pc-note` 12 px. Test: one line at 360.
+4. **No Parking / Pool legend entries:** add two swatch entries, "Parking" and "Pool" (PM round 14), shown only when the item exists (markup + CSS, existing palette colours).
+5. **Pool-size note wraps at 360 px:** use the PM round-14 text (dimensions, not areas). It may go to 12 px only if the ft line still wraps at 360. Test: one line at 360 in m and ft.
 
 **Routed from F3-T2 / F3-T3 / F1-T1:**
 
@@ -236,10 +236,17 @@ Each item gets a before / after screenshot from §1. I keep it in F5-T3a when it
 4. Full-quota read-only resume (§7 row 4): in scope, or a recorded limit?
 5. The outward-handle-over-stair hit order (§8 item 6).
 
-**PM:**
-- the "saving stopped" toast text;
-- the no-save chip label;
-- shorter legend and pool-note wording (§8 items 2 and 5).
+**PM: answered (goals-and-stories round 14; these texts are binding):**
+- **Saving stopped** (toast, once per session): "Saving has stopped: this browser's storage is full or blocked. Your work stays on screen but will be lost when you close or reload the page."
+- **No-save chip** (`#i-nosave`, no visible text):
+  - `aria-label` and `title`: "Drafts are not saved on this device";
+  - a tap shows the toast "Drafts are not saved on this device. Your work will be lost when you close or reload the page."
+- **Legend override entry:** "* by you", but only if I measure the wrap at 1280x800 and it fixes it. Otherwise "* set by you" stays. **No 12 px legend.**
+- **Pool-size note:**
+  - m: "S 3 × 6 · M 4 × 8 · L 5 × 10 m";
+  - ft, one decimal: "S 9.8 × 19.7 · M 13.1 × 26.2 · L 16.4 × 32.8 ft";
+  - 12 px is allowed for this note only, and only if the ft line wraps at 360 px. Not the area form.
+- **New legend entries:** "Parking" and "Pool".
 
 **FS:** consent to the golden-row regeneration in `sky.test.mjs` in the O-1 commit; the `PC.C.TOUR` numbers via my proposal table.
 
