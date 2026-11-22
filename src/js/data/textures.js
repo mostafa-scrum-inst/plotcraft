@@ -14,7 +14,7 @@
     grass: { tileM: 3, base: 0.86, noise: [[4, 0.10], [16, 0.05]], blades: 0.06, bladeLen: 3, bladeEvery: 40 },
     paving: { tileM: 2.4, base: 0.92, slabs: 4, joint: -0.28, slab: 0.05, speckle: 0.03 },
     tiles: { tileM: 1.5, base: 0.9, rows: 5, perRow: 6, lineW: 2, line: -0.30, joint: -0.15, tile: 0.06 },
-    meadow: { tileM: 12, base: 0.9, noise: [[3, 0.08], [12, 0.03]] },
+    meadow: { tileM: 12, base: 0.9, noise: [[3, 0.045], [12, 0.025]] },   // F6-T1a shots: 0.08 read as camouflage patches
     blob: { power: 1.5 }
   };
 })(globalThis.PC = globalThis.PC || {});

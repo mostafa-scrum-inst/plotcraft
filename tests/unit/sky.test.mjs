@@ -10,22 +10,22 @@ const ang = (a, b) => Math.acos(Math.max(-1, Math.min(1, a[0] * b[0] + a[1] * b[
 const near = (a, b, e, m) => a.forEach((x, i) => assert.ok(Math.abs(x - b[i]) <= e, `${m} [${i}] ${x} vs ${b[i]}`));
 
 // Designer plan section 2: background, sunColor, sunI, hemiSky, hemiGround, hemiI at the four presets x four seasons.
-const GOLD = `spring 8 #ABCDE6 #FEE5C3 0.567 #CDDFEE #878768 0.444
-spring 12 #96C7EA #FEF7E8 0.7 #D8E7F4 #939671 0.48
-spring 17.5 #E0B088 #FEB77B 0.65 #C5B3BB #767355 0.32
-spring 22 #0F1A29 #A0B4D9 0.15 #7285AE #303843 0.3
-summer 8 #A6CAE6 #FFE4C1 0.567 #CADDEF #818263 0.444
-summer 12 #8EC3EA #FFF7E8 0.7 #D6E6F5 #8B906B 0.48
-summer 17.5 #DFAA81 #FFB273 0.65 #C1AEB8 #6F6E4F 0.32
-summer 22 #0B1626 #9FB3D9 0.15 #7083AD #2F3741 0.3
-autumn 8 #B0C9DB #FEE0BB 0.567 #CFDAE3 #887E64 0.444
-autumn 12 #9EC3DC #FEF0DB 0.7 #DBE1E6 #958B6D 0.48
-autumn 17.5 #E2AE83 #FEB577 0.65 #C8B1B2 #786A50 0.32
-autumn 22 #131C29 #A2B4D7 0.15 #7485AC #313642 0.3
-winter 8 #ADCEE8 #F8E3C9 0.567 #CBDDEF #979083 0.444
-winter 12 #9CC9EC #F6F2EA 0.7 #D5E5F4 #A7A193 0.48
-winter 17.5 #DDB496 #F7BB8B 0.65 #C4B7C3 #887E74 0.32
-winter 22 #141F2F #A1B5DA 0.15 #7487B0 #343A4A 0.3`.split('\n').map((l) => l.split(' '));
+const GOLD = `spring 8 #B0CFE7 #FEE5C3 0.69 #CDDFEE #A8AB85 0.444
+spring 12 #BDD9ED #FEF7E8 0.85 #D8E7F4 #B4BA91 0.48
+spring 17.5 #E0B088 #FEB77B 0.79 #C5B3BB #979370 0.39
+spring 22 #0E1929 #A0B4D9 0.15 #7285AE #2D3541 0.3
+summer 8 #ABCCE7 #FFE4C1 0.69 #CADDEF #A5A483 0.444
+summer 12 #B9D6EE #FFF7E8 0.85 #D6E6F5 #B0B18F 0.48
+summer 17.5 #DFAA81 #FFB273 0.79 #C1AEB8 #938B6E 0.39
+summer 22 #0B1626 #9FB3D9 0.15 #7083AD #2D3440 0.3
+autumn 8 #B4CBDC #FEE0BB 0.69 #CFDAE3 #ACA284 0.444
+autumn 12 #C2D3E0 #FEF0DB 0.85 #DBE1E6 #B9AF90 0.48
+autumn 17.5 #E2AE83 #FEB577 0.79 #C8B1B2 #9B896F 0.39
+autumn 22 #111B29 #A1B3D7 0.15 #7485AC #2E3341 0.3
+winter 8 #B1CFE9 #F8E3C9 0.69 #CBDDEF #C4BCA8 0.444
+winter 12 #BED8EF #F6F2EA 0.85 #D5E5F4 #D7CFBC 0.48
+winter 17.5 #DDB496 #F7BB8B 0.79 #C4B7C3 #B7A798 0.39
+winter 22 #121D2D #A1B5DA 0.15 #7386AF #333948 0.3`.split('\n').map((l) => l.split(' '));
 
 test('Designer golden table: 16 rows exact (key lerp rounded, then season blend rounded); intensities = the key lerp to 1e-9', () => {
   const keys = SKY.keys, lerp = (h, f) => { let i = 0; while (keys[i + 1].h < h) i++; const a = keys[i], b = keys[i + 1], t = (h - a.h) / (b.h - a.h); return a[f] + (b[f] - a[f]) * t; };
@@ -39,8 +39,8 @@ test('Designer golden table: 16 rows exact (key lerp rounded, then season blend 
 
 test('F4-T1 continuity (TL Q8): compute(12, summer) equals the literal goldens of the former noonLook / noonSunDir', () => {
   const L = K(12, 'summer', 0);
-  assert.deepEqual([L.sunColor, L.hemiSky, L.hemiGround, L.background], ['#FFF7E8', '#D6E6F5', '#8B906B', '#8EC3EA']);
-  assert.deepEqual([L.sunIntensity, L.hemiIntensity, L.moon], [0.7, 0.48, false]);
+  assert.deepEqual([L.sunColor, L.hemiSky, L.hemiGround, L.background], ['#FFF7E8', '#D6E6F5', '#B0B18F', '#B9D6EE']);   // F6-T1a retune (generated: verify/golden.mjs summer 12 row)
+  assert.deepEqual([L.sunIntensity, L.hemiIntensity, L.moon], [0.85, 0.48, false]);
   near(L.sunDir, [0, 0.9510565162951535, 0.30901699437494745], 1e-12, 'N 0');
   near(K(12, 'summer', 90).sunDir, [-0.30901699437494745, 0.9510565162951535, 0], 1e-12, 'N 90');
 });
@@ -88,7 +88,7 @@ test('intensities: noon > evening > night; night hemi >= 0.25 and sun <= a quart
     }
   }
   const key22 = SKY.keys.find((k) => k.h === 21).background;
-  assert.equal(K(22, 'winter').background, PC.sky.mix(key22, SKY.seasons.winter.tint, SKY.seasons.winter.tintAmount * (0.15 / 0.7)));
+  assert.equal(K(22, 'winter').background, PC.sky.mix(key22, SKY.seasons.winter.tint, SKY.seasons.winter.tintAmount * (0.15 / K(12, 'winter').sunIntensity)));   // F6-T1a: the noon sunI from the table, not a 0.7 literal
   assert.notEqual(K(22, 'winter').background, PC.sky.mix(key22, SKY.seasons.winter.tint, SKY.seasons.winter.tintAmount), 'the day factor applies');
 });
 

@@ -23,10 +23,10 @@
 (function (PC) {
   'use strict';
   PC.data.exteriors = {
-    sand: { wall: '#D9C7A3', wallInner: '#F3EDE0', slab: '#A89F8E', roof: '#9C7E5E', trim: '#B89F78', parapet: '#CDB993' },
-    white: { wall: '#F2F0EA', wallInner: '#F8F7F3', slab: '#B3B5B1', roof: '#7F878C', trim: '#C9CCC8', parapet: '#E2E0D9' },
-    terracotta: { wall: '#C4704F', wallInner: '#F4E9DE', slab: '#A3958A', roof: '#6E3A2A', trim: '#8F4A32', parapet: '#B9654A' },
-    grey: { wall: '#9BA1A6', wallInner: '#EEF0F0', slab: '#8D9398', roof: '#454B51', trim: '#5F676E', parapet: '#8C9298' }
+    sand: { wall: '#D9C7A3', wallInner: '#F3EDE0', slab: '#A89F8E', roof: '#9C7E5E', trim: '#B89F78', parapet: '#B49A72' },
+    white: { wall: '#F2F0EA', wallInner: '#F8F7F3', slab: '#B3B5B1', roof: '#7F878C', trim: '#C9CCC8', parapet: '#E3E0C9' },
+    terracotta: { wall: '#C4704F', wallInner: '#F4E9DE', slab: '#A3958A', roof: '#6E3A2A', trim: '#8F4A32', parapet: '#995744' },
+    grey: { wall: '#9BA1A6', wallInner: '#EEF0F0', slab: '#8D9398', roof: '#454B51', trim: '#5F676E', parapet: '#72787D' }
   };
   PC.data.interiors = {
     modern: { fabric: '#3B4652', wood: '#4E3D33', accent: '#C8742F', white: '#F2F1EC', metal: '#8A9299', dark: '#23292F', floorMix: 0.10 },
@@ -39,9 +39,9 @@
     hall: '#D9D6CE', stair: '#C5CBD0', lift: '#AEB7BB'
   };
   PC.data.siteColors = {
-    ground: '#7FAE55', groundOuter: '#8E9E6A', paving: '#CFC8BA', poolWater: '#3FA7C9', poolRim: '#E6E1D6',
-    boundaryWall: '#CDC4B2', gate: '#3B4652', carCanopy: '#A3ABB1', seating: '#9A7A55', trunk: '#5B4636',
-    northMarker: '#16212B', highlight: '#C2410C', asphalt: '#55595C'
+    ground: '#668748', groundOuter: '#727E58', paving: '#C1B4A1', poolWater: '#398BB5', poolRim: '#F1E3C1',
+    boundaryWall: '#B5A990', gate: '#3B4652', carCanopy: '#838D93', seating: '#7E664C', trunk: '#5B4636',
+    northMarker: '#16212B', highlight: '#C2410C', asphalt: '#5D6063'
   };
   PC.data.vegetation = {
     tree: { trunkR: 0.12, trunkH: 2.6, canopyR: 1.35, canopyY0: 1.4, canopyH: 2.8, trunkSeg: 6, canopySeg: 8 },

@@ -90,7 +90,7 @@ test('scene graph names, sample = 18 meshes (F4-T2: + 2 furniture, roofBatch, si
   const sun = i.scene.getObjectByName('sun');
   assert.deepEqual([sun.shadow.mapSize.x, sun.shadow.mapSize.y], [2048, 2048]);
   // the former noonLook goldens (TL F4-T3 Q8; tests/unit/sky.test.mjs): the opening look is unchanged
-  const k = { hemiSky: '#D6E6F5', sunColor: '#FFF7E8', hemiI: 0.48, sunI: 0.7, background: '#8EC3EA' }, L = { hemiGround: '#8B906B' };
+  const k = { hemiSky: '#D6E6F5', sunColor: '#FFF7E8', hemiI: 0.48, sunI: 0.85, background: '#B9D6EE' }, L = { hemiGround: '#B0B18F' };   // F6-T1a retune: the generated summer 12 row (sky.test GOLD)
   assert.deepEqual(plain(E.info().look), { hour: 12, season: 'summer' });
   const col = (h) => E.PC.three.col(h), eqc = (a, b) => ['r', 'g', 'b'].every((c) => Math.abs(a[c] - b[c]) < 1e-9);
   const hemi = i.scene.getObjectByName('hemi');
