@@ -122,7 +122,15 @@ export function scanExternal(html, file) {
 
 // The vendored test copy of three.js (tests/vendor, A-16) must never reach the build: the licence banner is the real
 // guard; the size cap is a tripwire (the vendored file alone is 603 445 bytes) — raise it only with that in mind.
-export const DIST_MAX_BYTES = 600000;
+// F6-T1c (TL ruling, CTO told): 600 000 -> 700 000; an inlined three.js still puts the build near 1.2 MB. The real
+// budget is the C-1.3 line below (dist <= 627 KB), unchanged.
+export const DIST_MAX_BYTES = 700000;
+// F6 size budget (CTO C-1.3: at most +80 000 bytes over the 547 302 before F6). Over it needs a CTO review.
+export const DIST_BUDGET_BYTES = 627302;
+export function scanBudget(html, file) {
+  const bytes = Buffer.byteLength(html, 'utf8');
+  return bytes > DIST_BUDGET_BYTES ? [`${file}: ${bytes} bytes, over the F6 budget of ${DIST_BUDGET_BYTES} bytes (CTO C-1.3: 547 302 + 80 000); going over needs a CTO review`] : [];
+}
 export function scanVendor(html, file) {
   const out = [];
   if (/Copyright 2010-2021 Three\.js Authors/.test(html)) out.push(`${file}: contains the three.js r128 licence banner: the vendored test copy (tests/vendor) must never be inlined; the app loads r128 from cdnjs only`);
@@ -151,9 +159,7 @@ export function lintProject(root = ROOT) {
   else {
     const html = readFileSync(dist, 'utf8'); out.push(...scanHtml(html, 'dist/index.html', layers)); out.push(...scanExternal(html, 'dist/index.html'));
     out.push(...scanVendor(html, 'dist/index.html'));
-    // F6 size line (CTO C-1.3: at most +80 KB over the 547 KB before F6)
-    const kb = Buffer.byteLength(html, 'utf8') / 1000;   // kB as the status lines count them
-    if (kb > 627) out.push(`dist/index.html is ${kb.toFixed(1)} KB, over the F6 limit of 627 KB (CTO C-1.3)`);
+    out.push(...scanBudget(html, 'dist/index.html'));
   }
   return { violations: out, warnings: warn };
 }
