@@ -1,7 +1,7 @@
 // Loads core + data + three files (manifest order) into a bare vm context with the strict THREE mock
 // (tests/three-mock.js) and controllable browser stubs (A-16 step 4). ui files are not loaded.
 //   load3d({ three: true|false, dpr, size: [w, h], visible })
-//   -> { PC, THREE, mock, canvas, doc, raf, ro, win, ctx }
+//   -> { PC, THREE, mock, canvas, doc, raf, ro, win, ctx }; raf.tick(ms) runs one frame at a controllable clock (F5-T1)
 // three: false loads no THREE at all: proves every three file loads (and fails softly) without it.
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
@@ -47,7 +47,10 @@ export function load3d(o = {}) {
     request(fn) { raf.requested++; const id = ++seq; queue.set(id, fn); return id; },
     cancel(id) { if (queue.delete(id)) raf.cancelled++; },
     pending: () => queue.size,
-    flush(n = 1) { for (let i = 0; i < n && queue.size; i++) { const batch = [...queue.entries()]; queue.clear(); for (const [, fn] of batch) fn(16 * seq); } }
+    flush(n = 1) { for (let i = 0; i < n && queue.size; i++) { const batch = [...queue.entries()]; queue.clear(); for (const [, fn] of batch) fn(raf.clock === null ? 16 * seq : raf.clock); } },
+    // F5-T1 controllable clock: tick(ms) advances the frame clock by ms and runs the pending frames with it.
+    clock: null,
+    tick(ms = 16) { raf.clock = (raf.clock === null ? 0 : raf.clock) + ms; raf.flush(1); }
   };
   // timers (the Building… yield) under test control too
   let tseq = 0; const timers = new Map();

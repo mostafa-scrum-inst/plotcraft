@@ -201,7 +201,7 @@
     "heightShare": 0.2938775510204082,
     "areaShare": 0.2938775510204082
    },
-   "tabStops": 16
+   "tabStops": 17
   },
   "s5-collapsed": {
    "minContrast": 6.42,
@@ -575,7 +575,7 @@
     "heightShare": 0.8338994565217391,
     "areaShare": 0.20847486413043478
    },
-   "tabStops": 18
+   "tabStops": 19
   },
   "s5-light": {
    "minContrast": 5.55,
@@ -589,7 +589,7 @@
     "heightShare": 0.8338994565217391,
     "areaShare": 0.20847486413043478
    },
-   "tabStops": 18
+   "tabStops": 19
   },
   "s5-tour": {
    "minContrast": 5.55,
@@ -603,7 +603,7 @@
     "heightShare": 0.8338994565217391,
     "areaShare": 0.20847486413043478
    },
-   "tabStops": 22
+   "tabStops": 23
   },
   "s5-collapsed": {
    "minContrast": 6.81,

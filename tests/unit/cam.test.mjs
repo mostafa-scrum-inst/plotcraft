@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadCore, plain } from '../helpers/load.mjs';
-import { sampleApproved } from '../helpers/houses.mjs';
+import { sampleApproved, maxHouse } from '../helpers/houses.mjs';
 
 const PC = loadCore(), C = PC.cam, D = Math.PI / 180;
 const sample = PC.house.build(sampleApproved(PC));
@@ -75,4 +75,86 @@ test('lerpPose: smoothstep, ends exact, shortest arc across +-PI', () => {
   const e = C.lerpPose(a, b, 1); assert.ok(Math.abs(e.theta - b.theta) < 1e-12 && e.radius === 20);
   const m = C.lerpPose(a, b, 0.5); assert.ok(Math.abs(Math.abs(m.theta) - Math.PI) < 1e-9, 'passes through 180, not 0');
   assert.ok(Math.abs(C.lerpPose(a, b, 0.25).radius - (10 + 10 * 0.15625)) < 1e-12);
+});
+
+// ---- F5-T1 room finder (A-14 as built; plan review item 1, ruling Q1) ----
+const maxH = PC.house.build(maxHouse(PC));
+// The sample with a basement holding two small rooms along the footprint edge (plan review item 1: edge rooms).
+const sampleB = PC.house.build(sampleApproved(PC, (d) => {
+  d.ans.basement = true;
+  for (const t of ['storage', 'laundry']) d.ans.rooms.push(PC.store.room('r' + d.ans.nextRoomId++, t, 'B', 'S'));
+}));
+const centre = (h, lv, r) => [r.u + r.w / 2 - h.center[0], lv.baseY + 0.2 + 0.5, -(r.v + r.d / 2 - h.center[1])];
+
+test('roomGroups: one group per level, lowest first, full level names, every room in plan order with its plan name (sample 14, maximum house 40)', () => {
+  const g = C.roomGroups(sample);
+  assert.deepEqual(plain(g.map((x) => [x.level, x.label, x.rooms.length])), [['G', 'Ground floor', 7], ['1', 'First floor', 7]]);
+  assert.deepEqual(plain(g[1].rooms.map((r) => r.name)), ['Master bedroom', 'Bedroom 1', 'Bedroom 2', 'Living', 'Office', 'Bathroom 1', 'Bathroom 2']);
+  for (const h of [sample, maxH, sampleB]) {
+    const gg = C.roomGroups(h);
+    assert.deepEqual(plain(gg.flatMap((x) => x.rooms)), plain(h.levels.slice().sort((a, b) => a.index - b.index).flatMap((l) => l.rooms.map((r) => ({ id: r.id, name: r.name })))));
+  }
+  const m = C.roomGroups(maxH);
+  assert.deepEqual(plain(m.map((x) => [x.level, x.label, x.rooms.length])), [['B', 'Basement', 10], ['G', 'Ground floor', 10], ['1', 'First floor', 10], ['2', 'Second floor', 10]]);
+  assert.equal(m.reduce((n, x) => n + x.rooms.length, 0), 40);
+  assert.deepEqual(plain(C.roomGroups(sampleB).map((x) => x.level)), ['B', 'G', '1']);
+});
+
+test('caption parts (PM round 12): [room name, full level name]; roomOf null for an unknown id', () => {
+  assert.deepEqual(plain(C.caption(sample, 'r10')), ['Bedroom 2', 'First floor']);
+  assert.deepEqual(plain(C.caption(maxH, 'r1')), ['Bedroom', 'Basement']);
+  assert.equal(C.roomOf(sample, 'nope'), null);
+  assert.equal(C.forRoom(sample, 'nope', null, C.limits(sample, 1)), null);
+});
+
+test('forRoom above ground (A-14): target = room centre at floorY + 0.5, theta kept, phi 35, radius = clamp(1.6 max(w, d) + storeyH, 6, 3R); eye >= 1 m', () => {
+  for (const h of [sample, maxH]) {
+    const L = C.limits(h, 0.5625);
+    for (const lv of h.levels) if (lv.index >= 0) for (const r of lv.rooms) for (const th of [-2.5, 0, 0.52, 3]) {
+      const cur = { target: [0, 0, 0], radius: 30, theta: th, phi: 1 }, p = C.forRoom(h, r.id, cur, L), c = centre(h, lv, r), tag = `${lv.id} ${r.name} ${th}`;
+      p.target.forEach((x, i) => assert.ok(Math.abs(x - c[i]) < 1e-9, tag + ' target'));
+      assert.ok(Math.abs(p.theta - th) < 1e-12, tag + ' theta kept');
+      assert.ok(Math.abs(p.phi - 35 * D) < 1e-12, tag + ' phi 35');
+      assert.ok(Math.abs(p.radius - Math.min(3 * h.radius, Math.max(6, 1.6 * Math.max(r.w, r.d) + h.storeyH))) < 1e-9, tag + ' radius');
+      assert.ok(C.position(p)[1] >= 1 - 1e-9, tag + ' eye');
+    }
+  }
+  // the two clamp ends: a 1 x 1 m room -> 6 m; a 20 m room in a house of radius 5 -> 3R = 15 m
+  const h = JSON.parse(JSON.stringify(sample)), r = h.levels[0].rooms[0];
+  r.w = 1; r.d = 1;
+  assert.equal(C.forRoom(h, r.id, null, C.limits(h, 1)).radius, 6);
+  r.w = 20; r.d = 3; h.radius = 5;
+  assert.equal(C.forRoom(h, r.id, null, { ...C.limits(h, 1), rMax: 100 }).radius, 15);
+  // no current pose: the Reset theta
+  assert.ok(Math.abs(C.forRoom(sample, 'r1', null, C.limits(sample, 1)).theta - 30 * D) < 1e-12);
+});
+
+test('forRoom in the basement (plan review item 1): phi 15; the eye -> target line crosses ground level inside the footprint; eye >= 1 m (maximum house, sample + edge basement rooms)', () => {
+  let n = 0;
+  for (const h of [maxH, sampleB]) {
+    const L = C.limits(h, 0.5625), fp = h.footprint, X = (u) => u - h.center[0], Z = (v) => -(v - h.center[1]);
+    const box = { x0: X(fp.u), x1: X(fp.u + fp.w), z0: Z(fp.v + fp.d), z1: Z(fp.v) };
+    for (const lv of h.levels) if (lv.index < 0) for (const r of lv.rooms) for (let k = 0; k < 16; k++) {
+      const th = -Math.PI + k * Math.PI / 8, p = C.forRoom(h, r.id, { target: [0, 0, 0], radius: 20, theta: th, phi: 1 }, L), tag = `${r.name} ${th.toFixed(2)}`;
+      const c = centre(h, lv, r), e = C.position(p);
+      p.target.forEach((x, i) => assert.ok(Math.abs(x - c[i]) < 1e-9, tag + ' target below ground kept (ruling Q1)'));
+      assert.ok(p.target[1] < 0);
+      assert.ok(Math.abs(p.phi - 15 * D) < 1e-12, tag + ' phi 15');
+      assert.ok(e[1] >= 1 - 1e-9, tag + ' eye ' + e[1]);
+      const t = e[1] / (e[1] - p.target[1]), x = e[0] + (p.target[0] - e[0]) * t, z = e[2] + (p.target[2] - e[2]) * t;
+      assert.ok(x > box.x0 && x < box.x1 && z > box.z0 && z < box.z1, `${tag}: crosses Y 0 at ${x.toFixed(2)}, ${z.toFixed(2)} outside the footprint`);
+      n++;
+    }
+  }
+  assert.equal(n, 16 * 12);
+});
+
+test('limits Y floor (ruling Q1): lowest floorY with a basement (-pitch + 0.2), 0 without; a no-basement house clamps as before', () => {
+  assert.ok(Math.abs(C.limits(maxH, 1).box.y0 - (-maxH.pitch + 0.2)) < 1e-12);
+  assert.ok(Math.abs(C.limits(sampleB, 1).box.y0 - (-sampleB.pitch + 0.2)) < 1e-12);
+  assert.equal(C.limits(sample, 1).box.y0, 0);
+  const L = C.limits(sample, 1), r = C.reset(sample, 1);
+  assert.deepEqual(C.clamp(r, L), r, 'Reset unchanged');
+  const p = C.clamp(C.pan({ ...r, target: [0, -3, 0] }, 40, 10, 0.05), L);
+  assert.equal(p.target[1], 0, 'a pan / target below ground on a no-basement house still floors at 0');
 });

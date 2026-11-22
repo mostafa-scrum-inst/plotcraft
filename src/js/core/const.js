@@ -62,7 +62,9 @@
     SITE: { wallH: 1.2, wallT: 0.2, gateW: 3, post: 0.4, postH: 1.4, seat: 3, edgeClear: 0.3, pathHalf: 1,
       marker: { k: 0.06, min: 1.5, max: 3, spare: 0.5, step: 0.25 } },
     CAM: { fov: 45, nearMin: 0.5, nearK: 0.02, farK: 20, phiMin: 5, phiMax: 85, rMin: 4, rMaxK: 3, rMaxReset: 1.2,
-      eyeMin: 1, resetK: 2.2, resetFit: 1.05, resetTheta: 30, resetPhi: 50, keyDeg: 5, keyZoom: 1.1, wheelK: 0.0015 },
+      eyeMin: 1, resetK: 2.2, resetFit: 1.05, resetTheta: 30, resetPhi: 50, keyDeg: 5, keyZoom: 1.1, wheelK: 0.0015 ,
+      // F5-T1 (A-14 + plan review item 1): finder pose, flight time, frame-delta cap
+      finderLift: 0.5, finderK: 1.6, finderRMin: 6, finderPhi: 35, finderPhiB: 15, flightMs: 1200, dtMax: 100 },
     VIEW3D: { maxDpr: 2, shadowMap: 1024, shadowBias: -0.0005, shadowNormalBias: 0.02, sunDist: 2.5, shadowK: 2.5, shadowR: 1.2 },
     FOOTPRINT_ROUND: 0.5, FOOTPRINT_MAX_RATIO: 2, FOOTPRINT_STRETCH_RATIO: 3, FOOTPRINT_STRETCH_EXTRA: 0.5, BACK_ANGLE: 40
   };

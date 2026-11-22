@@ -3,7 +3,9 @@
    fov, onInput() }. One pointer (mouse left without Shift, or one finger) orbits; mouse right button or Shift+drag
    pans; two pointers pinch (distance ratio -> zoom) and pan (midpoint shift) together; wheel zooms (passive: false,
    preventDefault); context menu suppressed; keys on the focused canvas: arrows orbit, + / - zoom. Every input calls
-   api.onInput() (F5: cancels flights and tours). No THREE here. */
+   api.onInput() (F5: cancels flights and tours). F5-T1 (plan review item 2): every input that acts calls
+   api.interrupt() FIRST, before it reads the pose, so a flight or tour stops and the gesture's delta applies to the
+   current interpolated pose (no snap, no lost first delta). No THREE here. */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
@@ -14,11 +16,13 @@
       var pts = new Map(), mode = null, two = null;
       function K() { return PC.C.CAM; }
       function minSide() { var s = api.size(); return Math.max(1, Math.min(s[0], s[1])); }
+      function stop() { if (api.interrupt) api.interrupt(); }
       function apply(p) { api.set(p); if (api.onInput) api.onInput(); }
       function twoState() { var a = Array.from(pts.values()); return { d: Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) || 1, mx: (a[0].x + a[1].x) / 2, my: (a[0].y + a[1].y) / 2 }; }
       function down(e) {
         if (!api.active()) return;
         if (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 2) return;
+        stop();
         // QA F4T1-2: preventDefault below cancels the click's focus, so a mouse press focuses the canvas itself
         // (keys act on the focused canvas, A-12); touch does not, to keep the on-screen keyboard closed.
         if (e.pointerType === 'mouse' && canvas.focus) canvas.focus({ preventScroll: true });
@@ -33,8 +37,10 @@
         if (!q || !api.active()) return;
         var dx = e.clientX - q.x, dy = e.clientY - q.y;
         q.x = e.clientX; q.y = e.clientY;
+        if (!dx && !dy) return;
+        stop();
         var p = api.get(), s = api.size();
-        if (!p || (!dx && !dy)) return;
+        if (!p) return;
         if (pts.size >= 2) {
           if (pts.size > 2) return;
           var n = twoState(), mpp = PC.cam.metresPerPx(p, api.fov, s[1]);
@@ -53,14 +59,21 @@
         else mode = null;
       }
       function wheel(e) {
-        if (!api.active() || !api.get()) return;
+        if (!api.active()) return;
+        stop();
+        var p = api.get();
+        if (!p) return;
         e.preventDefault();
-        apply(PC.cam.zoom(api.get(), Math.exp(e.deltaY * K().wheelK)));
+        apply(PC.cam.zoom(p, Math.exp(e.deltaY * K().wheelK)));
       }
       function menu(e) { e.preventDefault(); }
       function key(e) {
-        if (!api.active() || !api.get()) return;
-        var p = api.get(), st = K().keyDeg * D, z = K().keyZoom, k = e.key;
+        if (!api.active()) return;
+        var st = K().keyDeg * D, z = K().keyZoom, k = e.key;
+        if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '+', '=', '-', '_'].indexOf(k) < 0) return;
+        stop();
+        var p = api.get();
+        if (!p) return;
         if (k === 'ArrowLeft') p = PC.cam.orbit(p, -st, 0);
         else if (k === 'ArrowRight') p = PC.cam.orbit(p, st, 0);
         else if (k === 'ArrowUp') p = PC.cam.orbit(p, 0, -st);

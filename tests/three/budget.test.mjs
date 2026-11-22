@@ -40,3 +40,19 @@ test('G6 final: maximum house + capped vegetation, every look applied: <= 40 mes
   assert.ok(total / n < 5, `applyLook mean ${(total / n).toFixed(2)} ms over ${n} looks (mock)`);
   assert.equal(E.info().builds, 1);
 });
+
+test('F5-T1 (TL rider): with a room selected the maximum house has 22 meshes (21 + highlight) <= 40, through every look; the highlight is no shadow caster', () => {
+  const E = opened((PC) => biggest(PC)), PC = E.PC;
+  for (const lv of E.house.levels) {
+    PC.three.finder.goTo(lv.rooms[lv.rooms.length - 1].id);
+    for (const [hour, season] of [[12, 'summer'], [22, 'winter']]) {
+      PC.view3d.setLook({ hour, season });
+      const i = E.info();
+      assert.ok(i.meshCount <= 40); assert.equal(i.meshCount, 22, lv.id);
+      assert.equal(i.meshes.filter((m) => m.name === 'highlight').length, 1);
+    }
+    assert.equal(E.info().highlight.castShadow, false);
+  }
+  PC.three.finder.clear();
+  assert.equal(E.info().meshCount, 21);
+});

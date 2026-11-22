@@ -48,6 +48,7 @@
     { "file": "js/three/build-site.js", "layer": "three" },
     { "file": "js/three/camera.js", "layer": "three" },
     { "file": "js/three/look.js", "layer": "three" },
+    { "file": "js/three/finder.js", "layer": "three" },
     { "file": "js/three/scene.js", "layer": "three" },
     { "file": "js/ui/dom.js", "layer": "ui" },
     { "file": "js/ui/storage.js", "layer": "ui" },
