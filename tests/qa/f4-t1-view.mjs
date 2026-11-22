@@ -51,6 +51,9 @@ async function expect(S) { const s = await S.state(); return { s, X: H.expected(
 const levelUi = (S) => S.page.evaluate(() => [...document.querySelectorAll('[data-pc="v3-level"] label')].map((l) => { const i = l.querySelector('input'); return { v: i.value, text: l.textContent.trim(), aria: i.getAttribute('aria-label'), checked: i.checked }; }));
 const pick = (v) => `css:[data-pc="v3-level"] label:has(input[value="${v}"])`;
 // my reset radius and rMax (A-12) for the canvas aspect
+// F6-T1b (a724113, PM-approved Designer value): the Reset phi rises from 50 to 62 degrees, the radius rule is unchanged.
+// Version-aware: the build's resetPhi must be one of the two agreed values, and the Reset pose must use it.
+const RPHI = (() => { const v = PC.C.CAM.resetPhi; return [50, 62].includes(v) ? v : 50; })();
 function myReset(F, aspect) { const hv = 22.5 * DEG, hh = Math.atan(Math.tan(hv) * aspect), r = Math.max(2.2 * F.R, 1.05 * F.R / Math.sin(Math.min(hv, hh))); return { r, rMax: Math.max(3 * F.R, 1.2 * r) }; }
 const poseEq = (a, b, t = 1e-9) => a && b && Math.abs(a.radius - b.radius) <= t && Math.abs(a.theta - b.theta) <= t && Math.abs(a.phi - b.phi) <= t && a.target.every((x, i) => Math.abs(x - b.target[i]) <= t);
 const pf = (p) => p ? `t[${p.target.map((x) => x.toFixed(2))}] r${p.radius.toFixed(2)} th${(p.theta / DEG).toFixed(1)} ph${(p.phi / DEG).toFixed(1)}` : 'null';
@@ -181,7 +184,7 @@ async function gestures(vp) {
   const mid = [c.fx + c.fw / 2, c.fy + c.fh / 2], P = () => info(S).then((x) => x.pose), td = vp.touch ? await touchDriver(S.page) : null;
   // Reset pose and framing at open
   const p0 = i.pose;
-  R.check(`${T}: first open = reset pose (target plot centre, theta 30, phi 50, my aspect-aware radius ${mine.r.toFixed(2)})`, p0 && p0.target.every((x) => Math.abs(x) < 1e-9) && Math.abs(p0.theta - 30 * DEG) < 1e-9 && Math.abs(p0.phi - 50 * DEG) < 1e-9 && Math.abs(p0.radius - mine.r) < 1e-6 ? [] : [pf(p0)]);
+  R.check(`${T}: first open = reset pose (target plot centre, theta 30, phi ${RPHI} (F6-T1b: 62, before 50), my aspect-aware radius ${mine.r.toFixed(2)})`, p0 && p0.target.every((x) => Math.abs(x) < 1e-9) && Math.abs(p0.theta - 30 * DEG) < 1e-9 && Math.abs(p0.phi - RPHI * DEG) < 1e-9 && Math.abs(p0.radius - mine.r) < 1e-6 ? [] : [pf(p0)]);
   R.check(`${T}: reset view frames the whole plot and the house up to the roof base`, framing(p0, X, aspect));
   const f = [];
   const drag = async (a, b, opt = {}) => { if (td) await td.drag(a, b, { steps: 8 }); else { if (opt.shift) await S.page.keyboard.down('Shift'); await S.page.mouse.move(...a); await S.page.mouse.down({ button: opt.button || 'left' }); for (let k = 1; k <= 8; k++) await S.page.mouse.move(a[0] + (b[0] - a[0]) * k / 8, a[1] + (b[1] - a[1]) * k / 8); await S.page.mouse.up({ button: opt.button || 'left' }); if (opt.shift) await S.page.keyboard.up('Shift'); } await S.settle(); };
