@@ -139,3 +139,17 @@ QA's input is `qa-full-moves.md` (64ca07c).
 - `tests/durations.json` refreshed.
 
 If the runs are still over: QA measures f1-t1-layout 640x360 next, and any further cut is a TL call. Each moved check keeps its coverage at 1280x800 or on the sample, and QA_FULL=1 restores the full set.
+
+**Item 4 conditions (CTO, binding, sent to FS):**
+- `needsUpdate` is also set on each of these:
+  - the level selector;
+  - the Roof toggle, including when the finder or the tour forces it, silently or not;
+  - context restore;
+  - a season change of canopy visibility (through `applyLook`);
+  - a run-time tier switch.
+- The highlight never casts a shadow (asserted).
+- `info()` exposes a shadow update count.
+- Mock tests cover each trigger, plus "no update on an orbit or flight frame".
+- A mutation that drops the level trigger must fail a test.
+- On real r128: hide the upper levels, and the ground pixel under the upper storey changes.
+- No change to cto-constraints.md is needed.
