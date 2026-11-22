@@ -182,3 +182,16 @@ If the runs are still over: QA measures f1-t1-layout 640x360 next, and any furth
   - **Also:** the tour overview follows Reset, and there are no story text changes.
 - **The Designer picked 62°** (d4dda7a), and all three checks pass with the dock collapsed: margins of 15, 51 and 136 px.
   - At 360x640 with the dock open, the plot is cut by 1 px. It was cut by 32 px at 50°. This is the known limit from occl.bottom; it is accepted and not asserted until T3b.
+
+## Addendum: QA_FULL over the 480 s line (TL, T1a gate)
+- **Gate result:** default runs 405.0 / 400.6 s; QA_FULL=1 545.6 s, of which the 200-op max-house leak stream alone is 175 s. C-4.8 solo: 113 ms.
+- **Ruling (b) + (c):**
+  - The leak-max stream becomes its own release step, run in its own process:
+    - `QA_RELEASE=1` or `--only leak-max`;
+    - it runs at release and whenever src/js/three/** or the leak suite changes;
+    - limit 240 s, with the number printed again at the end of the report.
+  - QA may shorten the stream if a slope check over at least 100 ops still finds leaks reliably.
+  - run-all gets a QA_FULL durations table, so QA_FULL orders files longest-first.
+- **Limits:**
+  - QA_FULL=1 stays ≤ 480 s. If it is still over, QA trims its own QA_FULL rows next, starting with f5-t3.
+  - The noise rule is unchanged.

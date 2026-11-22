@@ -292,3 +292,4 @@
 - [TL] F6-T1b resetPhi 62 accepted (d4dda7a); fit test asserts dock-collapsed, dock-open 1 px cut is known occl.bottom limit.
 - [QA] F6-T1a rows in (version-aware): Roof on at open, 24-mesh / 64 budget, paving / northNeedle / roofTiles / sky, 2048 map, on-demand shadow redraw, sky + site fields, Designer retune oracle (hand table, 20c9238); Q-T8 QA_FULL rows + leak 960x600. All QA suites green on f6t1 d4dda7a (copy) and on main
 - [FS] F6-T1a gate on f6t1 ac985f8 (FS + Designer 20c9238 + QA rows 5ab49de merged): full runs green 405.0 s and 400.6 s (durations written); QA_FULL=1 green but 545.6 s > 480 (C-4.8 solo 113 ms; +183 s from qa f6-t1 200-op max-house leak, scheduling by default durations makes it the tail) — impl review requested from TL with the QA_FULL overrun flagged (impl-notes §2a)
+- [TL] F6-T1a QA_FULL 545.6 s ruling — leak-max (200 ops) → own release step ≤ 240 s, QA_FULL durations table; QA_FULL stays ≤ 480 s; FS + QA told.
