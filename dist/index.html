@@ -1829,8 +1829,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       finderLift: 0.5, finderK: 1.6, finderRMin: 6, finderPhi: 35, finderPhiB: 15, flightMs: 1200, dtMax: 100 },
     // F5-T2 drone tour (A-14 as built, plan review): leg times in s at normal speed, speed factors, eye construction
     // (m), the tree gap over the canopy tops (eye floor from PC.data.vegetation), the A-14 nudge, the lead-in flight
-    TOUR: { overviewLeg: 4, roomLeg: 3.5, speeds: { slow: 0.6, normal: 1, fast: 1.8 }, eyeOut: 2, eyeOutK: 0.6, eyeUp: 2.5,
-      bEyeIn: 1.5, bEyeUp: 4, centralEps: 0.5, treeGap: 0.5, floorSoft: 1, phiSoft: 3, minGap: 0.5, leadInMs: 1200, leadInSkip: 0.5 },
+    TOUR: { overviewLeg: 4.5, roomLeg: 3.5, speeds: { slow: 0.6, normal: 1, fast: 1.8 }, eyeOut: 2, eyeOutK: 0.6, eyeUp: 2.5,
+      bEyeIn: 1.5, bEyeUp: 2.5, centralEps: 0.5, treeGap: 0.5, floorSoft: 1, phiSoft: 3, minGap: 0.5, leadInMs: 1200, leadInSkip: 0.5 },
     VIEW3D: { maxDpr: 2, shadowMap: 1024, shadowBias: -0.0005, shadowNormalBias: 0.02, sunDist: 2.5, shadowK: 2.5, shadowR: 1.2 },
     FOOTPRINT_ROUND: 0.5, FOOTPRINT_MAX_RATIO: 2, FOOTPRINT_STRETCH_RATIO: 3, FOOTPRINT_STRETCH_EXTRA: 0.5, BACK_ANGLE: 40
   };
@@ -4248,10 +4248,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
      its look point, the Reset target = the plot centre; ties by plan order), then the overview again.
    - Room eye: 0.6 x max(w, d) + 2 m from the room centre away from the footprint centre (street side, +Z, when the
      room is central), at max(baseY, 0) + storeyH + 2.5; a basement room: 1.5 m towards the footprint centre at
-     storeyH + 4. Look: the room centre at floorY + 0.5 (as the finder).
+     storeyH + 2.5 (F5-T3a pacing: TOUR.bEyeUp). Look: the room centre at floorY + 0.5 (as the finder).
    - Eye floor: (canopyY0 + canopyH) x scale max of PC.data.vegetation + TOUR.treeGap: every eye is at it or above.
    - Nudge: a point closer than 0.5 m to the one before is moved 0.5 m away along the leg (+X when they coincide).
-   - Times: rooms + 1 legs; the two overview legs 4 s, room-to-room legs 3.5 s (normal speed; TL ruling Q2). */
+   - Times: rooms + 1 legs; the two overview legs 4.5 s (F5-T3a pacing), room-to-room legs 3.5 s (normal speed; TL ruling Q2). */
 (function (PC) {
   'use strict';
   function K() { return PC.C.TOUR; }
@@ -5745,8 +5745,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       if (S.house) { S.builtKey = null; build(S.house); }
       invalidate();
     });
-    // the wrap and the canvas itself: at 640x360 the canvas narrows beside the expanded panel (F5-T3a, Designer CSS)
-    // while the wrap keeps its size; a double fire is harmless (resize() returns early on an unchanged size)
+    // the wrap and the canvas itself (F5-T3a: at 640x360 the canvas narrows beside the panel; a double fire is harmless)
     if (typeof ResizeObserver === 'function' && canvas.parentElement) { var ro = new ResizeObserver(function () { resize(); }); ro.observe(canvas.parentElement); ro.observe(canvas); }
     else if (typeof addEventListener === 'function') addEventListener('resize', function () { resize(); });
     if (typeof document !== 'undefined' && document.addEventListener) {
@@ -5852,8 +5851,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       if (S.house && S.mats) { lights(S.house); invalidate(); }
     },
     look: function () { return { hour: S.look.hour, season: S.look.season }; },
-    // F5-T3a: the canvas area covered by overlays, in CSS px ({ right, bottom }; bottom held at 0). Re-fits the lens
-    // and the limits and marks the frame dirty; the pose moves only if the new limits clamp it.
+    // F5-T3a: canvas px covered by overlays ({ right }; bottom held at 0): re-fits lens + limits, marks dirty.
     setOcclusion: function (o) {
       var r = o && o.right > 0 ? Math.round(o.right) : 0;
       if (r === S.occl.right) return;
