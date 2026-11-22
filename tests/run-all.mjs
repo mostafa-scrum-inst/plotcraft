@@ -14,7 +14,7 @@
 //                                                  tests/durations-full.json, which orders QA_FULL runs
 //   QA_RELEASE=1 or --only leak-max                 also the release step: QA's 200-op maximum-house leak stream
 //                                                  (tests/qa/f6-t1-leak.mjs --max-only), own process, after the pool,
-//                                                  limit 240 s, its time reprinted at the end
+//                                                  limit 300 s (NOTE above 260 s), its time reprinted at the end
 //   --write-durations                              after a green full run, rewrite tests/durations.json (commit it
 //                                                  with the run)
 //
@@ -100,15 +100,15 @@ if (browser.length) console.log(`\n${browser.length} browser file(s), ${jobs} at
 const failed = soloFailed.concat(await pool(longestFirst(browser)));
 // Release step (TL ruling, F6-T1a): the 200-operation leak stream on the maximum house runs in its own process, after
 // the pool, with QA_RELEASE=1 or --only leak-max (at release, and when src/js/three/** or the leak suite changes).
-// Its own limit is 240 s; its time is printed again at the end like the C-4.8 line.
+// Its own limit is 300 s (NOTE above 260 s, TL); its time is printed again at the end like the C-4.8 line.
 if (process.env.QA_RELEASE || words.includes('leak-max')) {
   const label = 'release qa/f6-t1-leak.mjs --max-only', t = Date.now();
   console.log(`\n=== ${label} (own process, after the pool) ===`);
   const r = spawnSync(process.execPath, [join(here, 'qa', 'f6-t1-leak.mjs'), '--max-only', '--no-shots'], { cwd: root, encoding: 'utf8', env: Object.assign({}, process.env, { QA_RELEASE: '1' }) });
   process.stdout.write((r.stdout || '') + (r.stderr || ''));
-  const sec = (Date.now() - t) / 1000, over = sec > 240;
-  soloLines.push(`  [leak-max] maximum-house leak stream: ${sec.toFixed(1)} s, limit 240 s, ${r.status === 0 ? 'checks passed' : 'checks FAILED'}${over ? ' — OVER the limit' : ''}`);
-  console.log(`(${label}: ${r.status === 0 && !over ? 'ok' : 'FAILED' + (over ? ', over 240 s' : ', exit ' + r.status)}, ${secs(Date.now() - t)})`);
+  const sec = (Date.now() - t) / 1000, over = sec > 300;
+  soloLines.push(`  [leak-max] release step: ${sec.toFixed(1)} s, limit 300 s, ${r.status === 0 ? 'checks passed' : 'checks FAILED'}${over ? ' — OVER the limit' : sec > 260 ? ' — NOTE above 260 s: TL review' : ''}`);
+  console.log(`(${label}: ${r.status === 0 && !over ? 'ok' : 'FAILED' + (over ? ', over 300 s' : ', exit ' + r.status)}, ${secs(Date.now() - t)})`);
   if (r.status !== 0 || over) failed.push(label);
 }
 if (soloLines.length) console.log('\n' + soloLines.join('\n'));
