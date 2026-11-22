@@ -48,12 +48,12 @@ test('stops: overview, every room exactly once, levels ascending (basement first
   assert.equal(P.build(basementH, 1).stops[1].level, 'B');
 });
 
-test('nearest-neighbour order: each next room on a level is the closest (XZ) to the previous stop\'s eye, ties by plan order', () => {
+test('nearest-neighbour order: each next room on a level is the closest (XZ) to the previous stop\'s look point (after an overview: the Reset target), ties by plan order', () => {
   for (const h of [sample, maxH]) {
     const s = P.build(h, 1).stops, X = (r) => r.u + r.w / 2 - h.center[0], Z = (r) => -(r.v + r.d / 2 - h.center[1]);
     for (let i = 1; i < s.length - 1; i++) {
       const lv = h.levels.find((l) => l.id === s[i].level), done = new Set(s.slice(1, i).map((x) => x.id));
-      const left = lv.rooms.filter((r) => !done.has(r.id)), prev = s[i - 1].eye;
+      const left = lv.rooms.filter((r) => !done.has(r.id)), prev = s[i - 1].look;
       const d = (r) => (X(r) - prev[0]) ** 2 + (Z(r) - prev[2]) ** 2, best = Math.min(...left.map(d));
       const first = left.find((r) => d(r) < best + 1e-9);
       assert.equal(s[i].id, first.id, `stop ${i}`);

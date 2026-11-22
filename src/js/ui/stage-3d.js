@@ -101,7 +101,7 @@
     ['v3-tour-pause', 'v3-caption-pause'].forEach(function (h) {
       var b = ui.$(h);
       b.setAttribute('aria-label', pz ? 'Resume tour' : 'Pause tour');
-      if (h === 'v3-tour-pause') b.setAttribute('aria-pressed', pz ? 'true' : 'false');
+      b.setAttribute('aria-pressed', pz ? 'true' : 'false');        // the caption's pause button mirrors the panel's
     });
     ['v3-caption-pause', 'v3-caption-stop'].forEach(function (h) { ui.show(ui.$(h), on); });
     Array.prototype.slice.call(ui.$('v3-tour-speed').querySelectorAll('input')).forEach(function (i) { i.checked = i.value === PC.three.tour.speed(); });

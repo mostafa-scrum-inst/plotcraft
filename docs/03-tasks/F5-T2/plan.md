@@ -1,6 +1,7 @@
 # F5-T2 plan: drone tour (FS)
 
-Date: 2026-11-22. Owner: FS. Status: **draft for the TL plan review.**
+Date: 2026-11-22. Owner: FS. Status: **APPROVED by the TL (`plan-review.md`); amended in §8 with the required items,
+the rulings on Q1–Q9 and the PM answers Q10–Q13 (round 13).** §1–§7 are the reviewed draft; where §8 differs, §8 holds.
 
 Sources:
 - `docs/02-features/F5-plan.md` F5-T2 (scope, files, QA list);
@@ -236,3 +237,52 @@ maximum house, a single room, and a basement house.
 12. **After Stop or a gesture.** **Proposal:** the camera, level and Roof stay as they are, and the caption and
     highlight are cleared. The alternative is to return to level All.
 13. **Speed.** **Proposal:** it is session state (default Normal) and is kept between tours and stage visits.
+
+## 8. Amendments after the plan review (TL `plan-review.md`, PM round 13)
+
+**PM answers (required item 1).**
+- Q10: the caption reads "Overview" at both overview stops, and "Room · Level" at room stops.
+- Q11: the room being approached gets the finder's highlight; overviews get none.
+- Q12: after Stop or a gesture, the camera, level and Roof stay as they are; the caption and highlight are cleared and
+  the select shows "Go to room…".
+- Q13: speed is session state, Normal by default, kept across tours and stage visits, and not in the draft.
+
+**Rulings Q1–Q9 as adopted.**
+- Q1: `getPoint(u)` with u linear in τ inside each leg; `getPointAt` / `arcLengthDivisions` are not used.
+- Q2: `rooms + 1` legs, overview legs 4 s, room legs 3.5 s: sample 53.5 s, maximum house 144.5 s, one room 8 s.
+- Q3: the level, caption and highlight switch at the start of each leg, to the stop being approached; the last leg
+  switches to All at its start.
+- Q4 / required item 2: `eyeFloor = (canopyY0 + canopyH) × scale[1] + TOUR.treeGap`, read from `PC.data.vegetation`
+  each time (no literal 4.83 or 5.33); unit test with a table mutation. It replaces A-14's 1.5 m clamp.
+- Q5: look point at floorY + 0.5 (`baseY + 0.2 + 0.5`).
+- Q6: driver API as in §3; `flyTo` migrated; a gesture while paused ends the tour with `input`.
+- Q7 / required item 3: every frame is clamped; a unit test asserts `PC.cam.clamp` leaves every stop's
+  `fromEyeLook(eye, look)` unchanged (5 houses × 2 aspects).
+- Q8: `PC.debug.tourSeek(τ)` is debug-only; a grep test checks that only `stage-3d.js` defines it and no product code
+  calls it or `debugSeek`.
+- Q9: a level radio, Reset view, Roof on and a finder pick end the tour (`replaced` for a pick) and then apply; the
+  Light tab and the speed radios do not. Start clears any finder selection first.
+
+**Required items 4–6.**
+- Item 4: the tour sets the level radios and the Roof switch with `.checked` (no `change` event), so the UI's
+  "level change ends the tour" handlers never fire from the tour. Tested in e2e: a seek across the G → 1 switch keeps
+  the tour running; mutation: dispatching `change` from the tour's level sync is killed.
+- Item 5: `view3d-real` on the maximum house seeks to the first and last basement stops (paused just before each): the first visible
+  hit on the eye → highlight ray is the highlight or level B, and the highlight draws orange pixels.
+- Item 6: full run at `--jobs 3` (recorded in `impl-notes.md`).
+
+**Nearest-neighbour walk, exact reading (for QA's model).** The distance is horizontal (XZ, frame T) from the
+*previous stop's look point* to each remaining room's look point (the room centre); ties go to plan order. After an
+overview, the walk starts from the overview's look point, which is the Reset target. Each level's walk starts from
+the last stop before it (the overview for the lowest level, else the last room of the level below). This is QA's
+`anchor: 'look', metric: '2d'` reading.
+
+**G1 with a stored draft.** Load sample first asks to replace the draft: 5 taps on a phone (Load sample, its confirm,
+Skip to 3D, Tour tab, Start), 4 on desktop. Both counts are tested.
+
+**Changes made during implementation** (justified in `impl-notes.md` §2):
+- the curves are uniform Catmull-Rom in pose space (a look-point curve plus a (θ unwrapped, φ, radius) curve), not
+  centripetal eye / look curves;
+- soft floors on the radius, φ and the eye height, so the hard clamp never bites mid-path;
+- the first and last legs ease in from and out to rest;
+- a 1.2 s lead-in flight to the overview when the camera is elsewhere at Start (τ stays 0 during it).

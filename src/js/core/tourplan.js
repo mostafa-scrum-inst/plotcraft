@@ -1,8 +1,8 @@
 /* PC.tourplan: the F5-T2 drone tour plan (A-14 as built; F5-T2 plan + plan review). Pure, frame T, seconds.
    build(house, aspect) -> { stops: [{ kind: 'overview' | 'room', id, level, eye, look, t }], duration, eyeFloor } | null
    - Stops: the overview (the Reset pose for the canvas aspect), then each level from the lowest, every room once in
-     nearest-neighbour order (XZ distance from the previous stop's eye to the room centre; ties by plan order), then
-     the overview again.
+     nearest-neighbour order (XZ distance from the previous stop's look point to the room centre: after an overview
+     its look point, the Reset target = the plot centre; ties by plan order), then the overview again.
    - Room eye: 0.6 x max(w, d) + 2 m from the room centre away from the footprint centre (street side, +Z, when the
      room is central), at max(baseY, 0) + storeyH + 2.5; a basement room: 1.5 m towards the footprint centre at
      storeyH + 4. Look: the room centre at floorY + 0.5 (as the finder).
@@ -44,7 +44,7 @@
     build: function (house, aspect) {
       var k = K(), reset = PC.cam.reset(house, aspect), ovEye = PC.cam.position(reset), floor = T.eyeFloor();
       ovEye[1] = Math.max(ovEye[1], floor);
-      var stops = [{ kind: 'overview', id: null, level: 'all', eye: ovEye, look: reset.target.slice() }], prev = ovEye;
+      var stops = [{ kind: 'overview', id: null, level: 'all', eye: ovEye, look: reset.target.slice() }], prev = reset.target;
       house.levels.slice().sort(function (a, b) { return a.index - b.index; }).forEach(function (lv) {
         var left = lv.rooms.slice();
         while (left.length) {
@@ -55,7 +55,7 @@
           }
           var room = left.splice(best, 1)[0], s = T.roomStop(house, lv, room);
           stops.push({ kind: 'room', id: room.id, level: lv.id, eye: s.eye, look: s.look });
-          prev = s.eye;
+          prev = s.look;
         }
       });
       if (stops.length < 2) return null;

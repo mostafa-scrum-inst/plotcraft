@@ -44,13 +44,13 @@ test('whole tour at 60 fps (sample, maximum house, one room, basement house): ey
     }
     // the stop callbacks: one per stop after the start, in order
     assert.deepEqual(plain(stops.map((s) => s.kind === 'room' ? s.id : 'o')), plain(plan.stops.slice(1).map((s) => s.kind === 'room' ? s.id : 'o')));
-    // no jump: per-frame eye step <= 3 x the mean eye speed (path length / time) of this leg or the one before x dt;
+    // no jump: per-frame eye step <= 3 x the mean eye speed (path length / time) of this leg or a neighbouring one x dt (the speed at a stop is shared by both legs);
     // and consecutive steps differ by less than 25 %; no sharp turn: the
     // eye's direction turns less than 60 degrees between frames
     const s = plan.stops, legOf = (f) => Math.min(s.length - 1, E.PC.tourplan.target(plan, f.tau)), path = {};
     for (let i = 1; i < frames.length; i++) { const k = legOf(frames[i]); path[k] = (path[k] || 0) + dist(frames[i - 1].eye, frames[i].eye); }
     for (let i = 2; i < frames.length; i++) {
-      const k = legOf(frames[i]), lm = (j) => j >= 1 && path[j] ? path[j] / (s[j].t - s[j - 1].t) : 0, mean = Math.max(lm(k), lm(k - 1));   // the speed is continuous across a stop
+      const k = legOf(frames[i]), lm = (j) => j >= 1 && path[j] ? path[j] / (s[j].t - s[j - 1].t) : 0, mean = Math.max(lm(k - 1), lm(k), lm(k + 1));   // the speed is continuous across a stop
       const a = frames[i - 1].eye, b = frames[i].eye, c = frames[i - 2].eye, step = dist(a, b);
       assert.ok(step <= 3 * mean * FR / 1000 + 1e-6, `${tag}: frame ${i} step ${step.toFixed(3)} m, leg mean ${mean.toFixed(2)} m/s`);
       const prevStep = dist(c, a);
@@ -82,19 +82,41 @@ test('Pause freezes the pose and requests no frames; Resume continues from the s
   for (let i = 0; i < 5; i++) E.raf.tick(FR);
   assert.deepEqual(plain(V(E).pose()), plain(p)); assert.equal(TR(E).state().tau, tau); assert.equal(E.raf.pending(), 0, 'paused: no frames');
   assert.equal(TR(E).state().paused, true);
+  // a frame for another reason while paused (a Light preset) renders, but the paused tour does not step
+  V(E).setLook({ hour: 12 }); for (let i = 0; i < 3; i++) E.raf.tick(FR);
+  assert.deepEqual(plain(V(E).pose()), plain(p), 'paused: a repaint does not step'); assert.equal(TR(E).state().tau, tau);
   E.raf.clock += 30000;
   TR(E).resume(); E.raf.tick(FR);
   assert.equal(TR(E).state().tau, tau, 'first frame after Resume has dt 0');
   E.raf.tick(FR);
   assert.ok(Math.abs(TR(E).state().tau - tau - FR / 1000) < 1e-9);
   // speed: fast advances tau 1.8 x
-  const a = V(E).pose(), t0 = TR(E).state().tau;
+  const e0 = E.PC.cam.position(V(E).pose()); E.raf.tick(FR);
+  const e1 = E.PC.cam.position(V(E).pose()), t0 = TR(E).state().tau, slow1 = dist(e0, e1);
   TR(E).setSpeed('fast'); E.raf.tick(FR);
   assert.ok(Math.abs(TR(E).state().tau - t0 - 1.8 * FR / 1000) < 1e-9);
-  assert.ok(dist(E.PC.cam.position(a), E.PC.cam.position(V(E).pose())) < 0.5, 'no jump on a speed change');
+  const fast1 = dist(e1, E.PC.cam.position(V(E).pose()));
+  assert.ok(fast1 / slow1 > 1.5 && fast1 / slow1 < 2.1, `a speed change scales the step (x${(fast1 / slow1).toFixed(2)}), no jump`);
   TR(E).setSpeed('slow'); E.raf.tick(FR);
   TR(E).setSpeed('normal');
   assert.equal(TR(E).speed(), 'normal');
+});
+
+test('the driver calls end(reason) exactly once per animation, on every cancel path (plan review Q6)', () => {
+  for (const how of ['stop', 'input', 'reset', 'close', 'replaced', 'done']) {
+    const E = opened(), got = [];
+    let n = 0;
+    V(E).animate({ step: () => ({ pose: V(E).pose(), done: how === 'done' && ++n > 3 }), end: (r) => got.push(r) });
+    E.raf.tick(FR);
+    if (how === 'stop') V(E).stopAnimation();
+    else if (how === 'input') E.canvas.dispatch('keydown', { key: 'ArrowLeft' });
+    else if (how === 'reset') V(E).resetView();
+    else if (how === 'close') V(E).close();
+    else if (how === 'replaced') V(E).animate({ step: () => ({ pose: V(E).pose(), done: true }), end: () => {} });
+    for (let i = 0; i < 6; i++) E.raf.tick(FR);
+    V(E).stopAnimation();
+    assert.deepEqual(got, [how], how);
+  }
 });
 
 test('Stop and a gesture end the tour once, leave the camera in place and return orbit control; a gesture while paused ends it too', () => {
