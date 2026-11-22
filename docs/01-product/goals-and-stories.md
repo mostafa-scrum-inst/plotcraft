@@ -3,6 +3,12 @@
 Owner: PM. Source: `docs/00-brief.md`. Status: approved by the CTO (round 2); round 3 edits made at the F1 feature review; round 4 edits apply the client's binding decisions `docs/01-product/client-decisions.md` (CD-1 to CD-3); round 5 edits made at the F2 feature review; rounds 6 and 7 fix user-facing texts at the F3-T2 and F3-T3 plan reviews; round 8 edits made at the F3 feature review; round 9 fixes the stage-5 level selector labels at the F4-T1 plan review; round 10 applies CD-4 / CD-5 and answers the F4-T2 plan questions; round 11 records the default-camera decision and the vegetation-shortfall warning at the F4-T3 start; round 12 fixes the room-finder caption and dropdown state at the F5-T1 plan; round 13 answers the F5-T2 tour questions; round 14 gives the F5-T3a saving texts and labels; round 15 answers the F6-T1 Roof-on-at-open questions.
 This document says **what** and **how we know it works**. How it is built is the Tech Lead's call.
 
+## Changes in round 16 (2026-11-22, F6-T1b: a lower Reset camera; no story IDs or criteria changed)
+
+| Item | Decision |
+|---|---|
+| Reset pitch, resetPhi 50° → about 62° (Designer request, TL recommends yes for T1b) | **Agreed for F6-T1b**, so the CD-8 sky and fog show by default. Conditions, judged on the Designer's Reset shots at 360x640, 640x360 and 1280x800 (sample, Roof on per CD-9): the **whole plot** stays framed (F4-S2: "frames the whole plot from the street side" is unchanged and binds); the house and its front read clearly; the garden seating stays at least partly visible (`camera-decision.md`). The pool stays hidden at Reset (an accepted limit). If a lower angle loses the plot's far edge on a phone, the Designer picks the largest angle that keeps it, not 62°. The tour overview follows Reset (A-14). No story text changes, because no criterion names the angle. |
+
 ## Changes in round 15 (2026-11-22, F6-T1 plan, CD-8 realism: Roof on at open; no story IDs changed)
 
 FS plan `docs/03-tasks/F6-T1/plan.md` §11, Q-P1 and Q-P2, forwarded by the TL. Whether stage 5 opens with the Roof on is on a client decision card that is still pending; the plan assumes yes (`PC.C.VIEW3D.roofOnOpen`).
