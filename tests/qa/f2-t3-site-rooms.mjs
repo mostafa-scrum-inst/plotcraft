@@ -21,6 +21,10 @@ const session = sessions({ R, shots: SHOTS, noShots });
 const { sync, kit } = stage2Kit({ R, session });
 const VP = Object.fromEntries(VIEWPORTS.map((v) => [v.tag, v]));
 const PHONE = VP['360x640'], LAND = VP['640x360'], TAB = VP['768x1024'], DESK = VP['1280x800'];
+// Run-time trim (QA batch 13, TL F5-T2 ruling 3): the sections marked FULL run at 360x640 + 1280x800 by default and at
+// every listed viewport with QA_FULL=1 (standing condition: run QA_FULL=1 before each feature review and whenever the
+// code these sweeps guard changes).
+const FULL = (...vps) => (process.env.QA_FULL ? vps : vps.filter((v) => v === PHONE || v === DESK));
 const rect = (w, h) => [[0, 0], [w, 0], [w, h], [0, h]];
 const SAMPLE = [[0, 0], [20, 0], [20, 30], [8, 30], [0, 26]];
 const COMB = [[0, 0], [50, 0], [50, 40], [40, 40], [40, 12], [30, 12], [30, 40], [20, 40], [20, 12], [10, 12], [10, 40], [0, 40]];   // 12 vertices
@@ -132,7 +136,7 @@ try {
   }
 
   // ======================= B. Item 2: edge overrides by touch / mouse =======================
-  if (want('B')) for (const vp of [PHONE, LAND, DESK]) {
+  if (want('B')) for (const vp of FULL(PHONE, LAND, DESK)) {
     const V = vp.tag;
     for (const [pname, plot] of [['sample', null], ['12-vertex comb', COMB]]) {
       const S = await kit(browser, vp, plot ? { plot } : {});
@@ -290,7 +294,7 @@ try {
   if (want('F')) {
     const STAIR = [[0, 0], [27, 0], [27, 1], [28, 1], [28, 2], [29, 2], [29, 3], [30, 3], [30, 30], [0, 30]];
     let reached = 0;
-    for (const vp of [PHONE, LAND, DESK]) for (const [pname, pts] of [['corner staircase', STAIR], ['small plot steps', [[0, 0], [9, 0], [9, 6], [8, 6], [8, 7], [7, 7], [7, 8], [6, 8], [6, 9], [0, 9]]]]) {
+    for (const vp of FULL(PHONE, LAND, DESK)) for (const [pname, pts] of [['corner staircase', STAIR], ['small plot steps', [[0, 0], [9, 0], [9, 6], [8, 6], [8, 7], [7, 7], [7, 8], [6, 8], [6, 9], [0, 9]]]]) {
       const S = await kit(browser, vp, { plot: pts }); await setTap(S, 'class');
       // through the edge list (the touch targets of 1 m edges overlap; the list is the F2-S4 alternative)
       await S.act('q-edges-toggle'); const n = pts.length;
@@ -501,7 +505,7 @@ try {
   }
 
   // ======================= M. Item 15: layout at every viewport; screenshots =======================
-  if (want('M')) for (const vp of [PHONE, LAND, TAB, DESK]) {
+  if (want('M')) for (const vp of FULL(PHONE, LAND, TAB, DESK)) {
     const V = vp.tag;
     { const S = await kit(browser, vp, { plot: rect(20, 30), ans: { rooms: [], pairs: [] } }); await S.openGroup('rooms'); await S.layout(`${V} M rooms empty`); await S.shot('M-rooms-empty'); await S.end(`${V} M empty`); }
     // A-16 trim (F4-T1 QA round): the room-row "names and areas not cut off (m, ft; master bedroom at 80 m²)" block is

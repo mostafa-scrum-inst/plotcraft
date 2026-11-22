@@ -160,7 +160,9 @@ try {
   }
 
   // ================= layout per viewport and scenario =================
-  for (const vp of VIEWPORTS) {
+  // run-time trim (QA batch 13, TL F5-T2 ruling 3): 768x1024 only with QA_FULL=1 (standing condition: before each feature
+  // review and whenever shell / layout CSS changes); 360x640, 640x360 and 1280x800 by default
+  for (const vp of VIEWPORTS.filter((v) => process.env.QA_FULL || v.tag !== '768x1024' || only === v.tag)) {
     if (only && vp.tag !== only) continue;
     metrics[vp.tag] = {};
     for (const [name, stage, setup, flags = {}] of SCENARIOS) {

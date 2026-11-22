@@ -21,6 +21,10 @@ const R = collector('F2-T2 questions');
 const session = sessions({ R, shots: SHOTS, noShots });
 const VP = Object.fromEntries(VIEWPORTS.map((v) => [v.tag, v]));
 const PHONE = VP['360x640'], LAND = VP['640x360'], TAB = VP['768x1024'], DESK = VP['1280x800'];
+// Run-time trim (QA batch 13, TL F5-T2 ruling 3): the sections marked FULL run at 360x640 + 1280x800 by default and at
+// every listed viewport with QA_FULL=1 (standing condition: run QA_FULL=1 before each feature review and whenever the
+// code these sweeps guard changes).
+const FULL = (...vps) => (process.env.QA_FULL ? vps : vps.filter((v) => v === PHONE || v === DESK));
 import { M2, DOT, LEVEL, lab, fmtLen, fmtArea, r1, streetOf, expectFor, northText, northStored, sizeChanges, lOf, READ, syncProblems, stage2Kit, seedPlans, hintProblems } from './stage2kit.mjs';
 const { sync, kit } = stage2Kit({ R, session });
 
@@ -170,7 +174,7 @@ try {
 
   // ======================= C. Item 5: site preview =======================
   if (want('C')) {
-    for (const vp of [PHONE, DESK, LAND]) {
+    for (const vp of FULL(PHONE, DESK, LAND)) {
       const V = vp.tag;
       for (const [name, plot, ans] of [['sample', null, null], ['U-plot', U_PLOT, { setbacks: { front: 3, back: 2, side: 2 } }], ['thin 10x50', THIN, { footprintPct: 30 }], ['rotated rect', ROT, null]]) {
         const S = await kit(browser, vp, plot ? { plot, ans } : {});
@@ -397,7 +401,7 @@ try {
   }
 
   // ======================= G. Item 9: layout of live states at every viewport, screenshots =======================
-  if (want('G')) for (const vp of [PHONE, TAB, DESK, LAND]) {
+  if (want('G')) for (const vp of FULL(PHONE, TAB, DESK, LAND)) {
     const V = vp.tag, S = await kit(browser, vp, { max5: true });
     // A-16 trim (F4-T1 QA round): the Site and Rooms groups of the sample in m are no longer judged here. Twins: f2-t3-site-rooms.mjs
     // M "sample street mode (m)" (Site group) and M "rooms sample" (Rooms group): the same sample, the same F1-T1 layout rules
@@ -419,7 +423,7 @@ try {
   }
 
   // ======================= K. Round 2: keyboard regression (Enter / Go in every number field), with and without plans ===
-  if (want('K')) for (const vp of [PHONE, LAND, DESK]) {
+  if (want('K')) for (const vp of FULL(PHONE, LAND, DESK)) {
     const V = vp.tag;
     const FIELDS = [['q-setback-front', 'site', (a) => a.setbacks.front], ['q-setback-back', 'site', (a) => a.setbacks.back], ['q-setback-side', 'site', (a) => a.setbacks.side], ['q-parking-cars', 'outdoor', (a) => a.parking.cars]];
     for (const plans of [false, true]) {
