@@ -68,6 +68,7 @@
             <label class="pc-opt"><input type="radio" name="unit-toggle" value="m" data-pc="unit-m" checked><span class="pc-seg__txt">m</span></label>
             <label class="pc-opt"><input type="radio" name="unit-toggle" value="ft" data-pc="unit-ft"><span class="pc-seg__txt">ft</span></label>
           </div>
+      <button class="pc-btn pc-btn--icon pc-btn--quiet pc-nosave" type="button" data-pc="nosave-chip" aria-label="Drafts are not saved on this device" title="Drafts are not saved on this device" hidden><svg class="pc-i" aria-hidden="true"><use href="#i-nosave"/></svg></button>
     </div>
     <nav class="pc-stepper" aria-label="Stages" data-pc="stepper">
       <button class="pc-step is-current" type="button" data-pc="step-1" aria-current="step">
@@ -382,7 +383,7 @@
           <button class="pc-btn pc-btn--icon pc-preview__toggle" type="button" aria-expanded="true" aria-label="Hide or show site preview" data-pc="site-preview-toggle"><span>Site preview</span><svg class="pc-i" aria-hidden="true"><use href="#i-chev-up"/></svg></button>
           <p class="pc-taphint" data-pc="site-tap-hint" hidden>Tap a boundary to switch back / side &middot; *&nbsp;=&nbsp;set&nbsp;by&nbsp;you</p>
           <ul class="pc-legend" aria-label="Legend" data-pc="site-legend">
-            <li><i></i>Front</li><li><i class="pc-legend__back"></i>Back</li><li><i class="pc-legend__side"></i>Side</li><li><i class="pc-legend__setback"></i>Setback</li><li><i class="pc-legend__fp"></i>Footprint</li><li class="pc-legend__mark" data-pc="site-legend-mark" hidden><b aria-hidden="true">*</b>set by you</li>
+            <li><i></i>Front</li><li><i class="pc-legend__back"></i>Back</li><li><i class="pc-legend__side"></i>Side</li><li><i class="pc-legend__setback"></i>Setback</li><li><i class="pc-legend__fp"></i>Footprint</li><li class="pc-legend__opt" data-pc="site-legend-parking" hidden><i class="pc-legend__parking"></i>Parking</li><li class="pc-legend__opt" data-pc="site-legend-pool" hidden><i class="pc-legend__pool"></i>Pool</li><li class="pc-legend__mark" data-pc="site-legend-mark" hidden><b aria-hidden="true">*</b>set by you</li>
           </ul>
         </div>
 

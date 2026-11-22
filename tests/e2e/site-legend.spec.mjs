@@ -17,8 +17,9 @@ const measure = (page) => page.evaluate(() => {
   return {
     preview: R(q('site-preview')), canvas: R(q('site-canvas')), legend: R(lg), shown, pos: getComputedStyle(lg).position,
     overflow: [lg.scrollWidth, lg.clientWidth],
-    // hidden entries (site-legend-mark until an override exists, F2-T3) take no place in the strip
-    items: [...lg.children].filter((li) => !li.hidden).map((li) => ({ ...R(li), text: li.textContent.trim(), clipped: li.scrollWidth > li.clientWidth + 0.5 })),
+    // hidden entries (site-legend-mark until an override exists, F2-T3) take no place in the strip; nor do the ones the
+    // phone strip does not show (the mark, Parking and Pool: display none by CSS, F5-T3a)
+    items: [...lg.children].filter((li) => !li.hidden && getComputedStyle(li).display !== 'none').map((li) => ({ ...R(li), text: li.textContent.trim(), clipped: li.scrollWidth > li.clientWidth + 0.5 })),
     scroll: R(document.querySelector('[data-stage="2"] .pc-qs__scroll')).h,
     scale: PC.debug.view('site').scale
   };

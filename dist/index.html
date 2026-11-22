@@ -252,6 +252,11 @@ canvas { display: block; }
   .pc-panel { border-top: 0; border-left: 1px solid var(--ink); overflow-y: auto; overscroll-behavior: contain; }
 }
 
+/* F5-T3a: header no-save chip beside the unit toggle (shown by the FS when storage is unavailable, all stages).
+   44 px target, quiet ink, the full sentence in its accessible name and tooltip. */
+.pc-nosave { flex: none; width: 44px; min-width: 44px; padding: 0; color: var(--ink-3); }
+.pc-nosave[hidden] { display: none; }
+
 /* css/30-components.css */
 /* Controls: buttons, segmented, number stepper, slider, switch, select, fields, chips, tabs, cards, readouts */
 
@@ -664,6 +669,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 .pc-legend .pc-legend__side { border-top: 2px dashed var(--border); }
 .pc-legend .pc-legend__setback { border-top: 2px dashed var(--danger); }
 .pc-legend .pc-legend__fp { height: 10px; border: 2px solid var(--accent); background: var(--accent-tint); }
+/* F5-T3a: shown by the FS only when the plan has the item; swatches = PC.data.palette2d parking / pool fill + stroke */
+.pc-legend .pc-legend__parking { height: 10px; border: 1px solid #46535F; background: #E3E1DA; }
+.pc-legend .pc-legend__pool { height: 10px; border: 1px solid #1B4F8F; background: #BFE0EE; }
+.pc-legend > li[hidden] { display: none; }
 
 /* Edge tap mode (F2-T3 pre-step D): floating top left of the canvas; hint at the legend's place, hiding it */
 .pc-tapmode { position: absolute; top: var(--s2); left: var(--s2); z-index: 2; border-radius: var(--r2); box-shadow: var(--e1); }
@@ -795,7 +804,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   .pc-legend { position: static; flex-wrap: nowrap; overflow: hidden; gap: 4px; padding: 2px 6px 3px; }
   .pc-legend > li { flex: none; padding: 0 3px; }
   .pc-legend { height: 24px; align-items: center; padding-top: 0; padding-bottom: 0; }
-  .pc-legend > .pc-legend__mark { display: none; }
+  .pc-legend > .pc-legend__mark, .pc-legend > .pc-legend__opt { display: none; }   /* 360 strip has no room; both stay on >= 600 */
   .pc-taphint { left: 0; right: 0; bottom: 0; height: 24px; display: flex; align-items: center; border-width: 0; background: var(--canvas); white-space: nowrap; overflow: hidden; }
 }
 
@@ -974,6 +983,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   .pc-plans .pc-toolrow > .pc-toolrow__end { flex: 1 1 auto; }
   .pc-plans__regen-txt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .pc-plans .pc-msg { font-size: var(--fs-cap); }
+  /* F5-T3a: no room selected -> one line ("None selected"), not two more "–" rows; the FS sets .is-empty */
+  .pc-plans__readout.is-empty .pc-tb__cell + .pc-tb__cell { display: none; }
 }
 
 /* F4-T2 Step 0: one-step Undo between Regenerate and Approve (Designer, docs/03-tasks/F4-T2/designer-plan.md §1) */
@@ -1025,6 +1036,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   .pc-interior__col { padding: var(--s5) var(--s4); gap: var(--s5); }
   .pc-interior .pc-cards { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
   .pc-interior .pc-card { display: flex; }
+  /* F5-T3a (TL F3-T3 note 4): the phone grid's align-self end / start would push name + radio to the right edge of the
+     flex column; both start at the description's left edge */
+  .pc-interior .pc-card__name, .pc-interior .pc-card__desc { align-self: stretch; }
   .pc-hint { height: 96px; }
 }
 
@@ -1096,7 +1110,11 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   .pc-v3row { flex-wrap: wrap; }
   .pc-v3row > .pc-select { flex: 1 1 120px; }
   .pc-v3pane > h3 { display: block; font-size: var(--fs-cap); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
-  .pc-caption { left: calc((100% - 320px - var(--s4)) / 2); }
+  /* centred over the uncovered canvas left of the 320 px card; never reaches the card (F5-T3a) */
+  .pc-caption { left: calc((100% - 320px - var(--s4)) / 2); max-width: calc(100% - 320px - 3 * var(--s4)); }
+  .pc-v3:has(> .pc-v3panel.is-collapsed) > .pc-caption { left: 50%; max-width: calc(100% - 2 * var(--s2)); }
+  .pc-v3__center { right: calc(320px + var(--s4)); }
+  .pc-v3:has(> .pc-v3panel.is-collapsed) > .pc-v3__center { right: 0; }
 }
 
 @media (max-height: 480px) and (orientation: landscape) and (max-width: 899px) {
@@ -1108,7 +1126,12 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   .pc-v3panel.is-collapsed .pc-tabs { display: none; }
   .pc-v3panel.is-collapsed .pc-v3panel__toggle { border-right: 0; }
   .pc-v3row { flex-wrap: wrap; }
-  .pc-caption { left: calc((100% - var(--panel-w-short)) / 2); max-width: calc(100% - var(--panel-w-short) - 2 * var(--s2)); }
+  /* F5-T3a (TL ruling 1): side by side, not an overlay. While the panel is open the canvas (and the centred cards and
+     caption) take only the width left of it, so nothing of the model is covered (was 42.5 %). Collapsed: full width
+     under the 44 px toggle. Without :has() the old overlay remains (still usable). */
+  .pc-v3:has(> .pc-v3panel:not(.is-collapsed)) > canvas { width: calc(100% - var(--panel-w-short)); }   /* a replaced element: width, not right */
+  .pc-v3:has(> .pc-v3panel:not(.is-collapsed)) > .pc-v3__center { right: var(--panel-w-short); }
+  .pc-v3:has(> .pc-v3panel:not(.is-collapsed)) > .pc-caption { left: calc((100% - var(--panel-w-short)) / 2); max-width: calc(100% - var(--panel-w-short) - 2 * var(--s2)); }
 }
 
 /* Day / night track on the time slider (Designer F4-T3 plan 3): 6 px, stops at h / 24 in each PC.data.sky key's
@@ -1183,6 +1206,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
             <label class="pc-opt"><input type="radio" name="unit-toggle" value="m" data-pc="unit-m" checked><span class="pc-seg__txt">m</span></label>
             <label class="pc-opt"><input type="radio" name="unit-toggle" value="ft" data-pc="unit-ft"><span class="pc-seg__txt">ft</span></label>
           </div>
+      <button class="pc-btn pc-btn--icon pc-btn--quiet pc-nosave" type="button" data-pc="nosave-chip" aria-label="Drafts are not saved on this device" title="Drafts are not saved on this device" hidden><svg class="pc-i" aria-hidden="true"><use href="#i-nosave"/></svg></button>
     </div>
     <nav class="pc-stepper" aria-label="Stages" data-pc="stepper">
       <button class="pc-step is-current" type="button" data-pc="step-1" aria-current="step">
@@ -1497,7 +1521,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
           <button class="pc-btn pc-btn--icon pc-preview__toggle" type="button" aria-expanded="true" aria-label="Hide or show site preview" data-pc="site-preview-toggle"><span>Site preview</span><svg class="pc-i" aria-hidden="true"><use href="#i-chev-up"/></svg></button>
           <p class="pc-taphint" data-pc="site-tap-hint" hidden>Tap a boundary to switch back / side &middot; *&nbsp;=&nbsp;set&nbsp;by&nbsp;you</p>
           <ul class="pc-legend" aria-label="Legend" data-pc="site-legend">
-            <li><i></i>Front</li><li><i class="pc-legend__back"></i>Back</li><li><i class="pc-legend__side"></i>Side</li><li><i class="pc-legend__setback"></i>Setback</li><li><i class="pc-legend__fp"></i>Footprint</li><li class="pc-legend__mark" data-pc="site-legend-mark" hidden><b aria-hidden="true">*</b>set by you</li>
+            <li><i></i>Front</li><li><i class="pc-legend__back"></i>Back</li><li><i class="pc-legend__side"></i>Side</li><li><i class="pc-legend__setback"></i>Setback</li><li><i class="pc-legend__fp"></i>Footprint</li><li class="pc-legend__opt" data-pc="site-legend-parking" hidden><i class="pc-legend__parking"></i>Parking</li><li class="pc-legend__opt" data-pc="site-legend-pool" hidden><i class="pc-legend__pool"></i>Pool</li><li class="pc-legend__mark" data-pc="site-legend-mark" hidden><b aria-hidden="true">*</b>set by you</li>
           </ul>
         </div>
 
@@ -4525,7 +4549,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     grid: { minor: '#E1E3E0', major: '#AEB7BB', label: '#46535F', bounds: '#7C8791' },
     plot: { fill: 'rgba(27,79,143,0.08)', stroke: '#16212B', open: '#16212B', live: '#1B4F8F' },
     vertex: { fill: '#FFFFFF', stroke: '#1B4F8F', first: '#C2410C', active: '#C2410C' },
-    label: { text: '#16212B', halo: '#FBFAF6', muted: '#46535F' },
+    label: { text: '#16212B', halo: '#FBFAF6', muted: '#46535F', area: '#46535F' },   // area: room area line (F5-T3a)
     edge: { front: '#1B4F8F', back: '#46535F', side: '#7C8791', focus: '#C2410C' },   // focus: edge highlighted from the Q6 edge list (F2-T3)
     setback: { fill: 'rgba(168,35,28,0.10)', line: '#A8231C' },
     buildable: { line: '#1C6B46' },
@@ -4552,7 +4576,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     font: {
       label: '600 12px ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace',
       room: '600 12px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif',
-      roomSmall: '600 10px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif'   // tiny room labels (F3-T2)
+      roomSmall: '600 10px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif',   // tiny room labels (F3-T2)
+      area: '500 12px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif'   // room area line under the name (F5-T3a)
     }
   };
 })(globalThis.PC = globalThis.PC || {});
@@ -4732,7 +4757,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
    keys: hour key-frames, h strictly increasing from 0 to 24, the last equal to the first. Colours sRGB '#RRGGBB';
    sunI / hemiI are light intensities. Night keys (h < 5 or h > 20): hemiI >= 0.25 so the model stays visible, sunI
    (the moon) at most a quarter of noon. With this rig a sunlit horizontal face gets a light sum of about 1.0 at
-   noon, 0.5 in the morning, 0.25 in the evening and 0.12 at night.
+   noon, 0.5 in the morning, 0.25 in the evening and 0.12 at night. The 17 / 18 h keys carry more direct and less sky
+   light (F5-T3a, QA O-1) so the low evening sun still casts readable shadows on the grass.
    seasons: elevMax = noon sun elevation in degrees; tint / tintAmount blend sunColor, hemiSky and background toward
    the season, weighted by daylight (A-13); canopy / shrub / ground are vegetation and plot-ground colours; winter has
    bare trees (canopyVisible false) with snow on shrubs and ground. Summer (tintAmount 0) is the untinted baseline.
@@ -4747,8 +4773,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       { h: 7.5, background: '#A9CBE6', sunColor: '#FFE2BC', sunI: 0.55, hemiSky: '#C9DCEE', hemiGround: '#7F7564', hemiI: 0.44 },
       { h: 12, background: '#8EC3EA', sunColor: '#FFF7E8', sunI: 0.70, hemiSky: '#D6E6F5', hemiGround: '#8F8672', hemiI: 0.48 },
       { h: 16, background: '#9CC5E4', sunColor: '#FFEBCF', sunI: 0.65, hemiSky: '#D2E0EE', hemiGround: '#8A7F69', hemiI: 0.46 },
-      { h: 17, background: '#D8B994', sunColor: '#FFC98A', sunI: 0.60, hemiSky: '#D9C7B8', hemiGround: '#7F6F5C', hemiI: 0.42 },
-      { h: 18, background: '#E59A6E', sunColor: '#FF9A5C', sunI: 0.40, hemiSky: '#A894B8', hemiGround: '#54463E', hemiI: 0.36 },
+      { h: 17, background: '#D8B994', sunColor: '#FFC98A', sunI: 0.75, hemiSky: '#D9C7B8', hemiGround: '#7F6F5C', hemiI: 0.34 },
+      { h: 18, background: '#E59A6E', sunColor: '#FF9A5C', sunI: 0.55, hemiSky: '#A894B8', hemiGround: '#54463E', hemiI: 0.30 },
       { h: 19.5, background: '#2C3556', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#6E7BA6', hemiGround: '#2A2A38', hemiI: 0.32 },
       { h: 21, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30 },
       { h: 24, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30 }

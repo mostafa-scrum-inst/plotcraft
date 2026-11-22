@@ -2,7 +2,8 @@
    keys: hour key-frames, h strictly increasing from 0 to 24, the last equal to the first. Colours sRGB '#RRGGBB';
    sunI / hemiI are light intensities. Night keys (h < 5 or h > 20): hemiI >= 0.25 so the model stays visible, sunI
    (the moon) at most a quarter of noon. With this rig a sunlit horizontal face gets a light sum of about 1.0 at
-   noon, 0.5 in the morning, 0.25 in the evening and 0.12 at night.
+   noon, 0.5 in the morning, 0.25 in the evening and 0.12 at night. The 17 / 18 h keys carry more direct and less sky
+   light (F5-T3a, QA O-1) so the low evening sun still casts readable shadows on the grass.
    seasons: elevMax = noon sun elevation in degrees; tint / tintAmount blend sunColor, hemiSky and background toward
    the season, weighted by daylight (A-13); canopy / shrub / ground are vegetation and plot-ground colours; winter has
    bare trees (canopyVisible false) with snow on shrubs and ground. Summer (tintAmount 0) is the untinted baseline.
@@ -17,8 +18,8 @@
       { h: 7.5, background: '#A9CBE6', sunColor: '#FFE2BC', sunI: 0.55, hemiSky: '#C9DCEE', hemiGround: '#7F7564', hemiI: 0.44 },
       { h: 12, background: '#8EC3EA', sunColor: '#FFF7E8', sunI: 0.70, hemiSky: '#D6E6F5', hemiGround: '#8F8672', hemiI: 0.48 },
       { h: 16, background: '#9CC5E4', sunColor: '#FFEBCF', sunI: 0.65, hemiSky: '#D2E0EE', hemiGround: '#8A7F69', hemiI: 0.46 },
-      { h: 17, background: '#D8B994', sunColor: '#FFC98A', sunI: 0.60, hemiSky: '#D9C7B8', hemiGround: '#7F6F5C', hemiI: 0.42 },
-      { h: 18, background: '#E59A6E', sunColor: '#FF9A5C', sunI: 0.40, hemiSky: '#A894B8', hemiGround: '#54463E', hemiI: 0.36 },
+      { h: 17, background: '#D8B994', sunColor: '#FFC98A', sunI: 0.75, hemiSky: '#D9C7B8', hemiGround: '#7F6F5C', hemiI: 0.34 },
+      { h: 18, background: '#E59A6E', sunColor: '#FF9A5C', sunI: 0.55, hemiSky: '#A894B8', hemiGround: '#54463E', hemiI: 0.30 },
       { h: 19.5, background: '#2C3556', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#6E7BA6', hemiGround: '#2A2A38', hemiI: 0.32 },
       { h: 21, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30 },
       { h: 24, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30 }

@@ -33,6 +33,10 @@
 .pc-legend .pc-legend__side { border-top: 2px dashed var(--border); }
 .pc-legend .pc-legend__setback { border-top: 2px dashed var(--danger); }
 .pc-legend .pc-legend__fp { height: 10px; border: 2px solid var(--accent); background: var(--accent-tint); }
+/* F5-T3a: shown by the FS only when the plan has the item; swatches = PC.data.palette2d parking / pool fill + stroke */
+.pc-legend .pc-legend__parking { height: 10px; border: 1px solid #46535F; background: #E3E1DA; }
+.pc-legend .pc-legend__pool { height: 10px; border: 1px solid #1B4F8F; background: #BFE0EE; }
+.pc-legend > li[hidden] { display: none; }
 
 /* Edge tap mode (F2-T3 pre-step D): floating top left of the canvas; hint at the legend's place, hiding it */
 .pc-tapmode { position: absolute; top: var(--s2); left: var(--s2); z-index: 2; border-radius: var(--r2); box-shadow: var(--e1); }
@@ -164,7 +168,7 @@
   .pc-legend { position: static; flex-wrap: nowrap; overflow: hidden; gap: 4px; padding: 2px 6px 3px; }
   .pc-legend > li { flex: none; padding: 0 3px; }
   .pc-legend { height: 24px; align-items: center; padding-top: 0; padding-bottom: 0; }
-  .pc-legend > .pc-legend__mark { display: none; }
+  .pc-legend > .pc-legend__mark, .pc-legend > .pc-legend__opt { display: none; }   /* 360 strip has no room; both stay on >= 600 */
   .pc-taphint { left: 0; right: 0; bottom: 0; height: 24px; display: flex; align-items: center; border-width: 0; background: var(--canvas); white-space: nowrap; overflow: hidden; }
 }
 
