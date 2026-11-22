@@ -203,3 +203,9 @@ If the runs are still over: QA measures f1-t1-layout 640x360 next, and any furth
   - The release step is expected at about 246 s (NOTE at 260 s, limit 300 s).
   - The f1-t1 640x360 pass stays in the default run, because CD-7 is still open.
 - **Exit:** two quiet default runs ≤ 420 s, target ≤ 412 s. If they are still over, the next lever is FS's view3d-real file (TL with FS).
+- **Result (QA, 97b812f on fa8674d, quiet machine):**
+  - default runs 411.9 s and 413.1 s, so the exit is met;
+  - release step 246.1 s, 9 of 9, under the 260 s NOTE;
+  - 452 checks moved, all 456 held in the release rows.
+- **Accepted as the merge gate.** After FS merges 97b812f and re-times the durations, one quiet confirm run of ≤ 420 s on f6t1 is enough.
+- **Margin:** about 7 s, and the T1c tests may add at most +5 s. The next feature after T1c that adds tests brings its own buy-back.
