@@ -36,3 +36,20 @@ The runner's command line, exit code and per-file output lines are unchanged. On
 - The browser files are independent processes (A-16), so the order cannot change a result.
 
 QA shot and metrics files rewritten by the runs (`tests/qa/shots/F1-T1/metrics.json`) were restored and are not committed.
+
+## TL ruling (2026-11-22)
+
+**Accepted as is.**
+- **Result.** Two green full runs at `--jobs 3`: 405.3 s and 412.2 s.
+  - Run 1 is at the scheduling floor: 1166.6 s of work / 3 slots, plus 16.1 s for unit and three, gives 405.0 s.
+  - The 7 s gap between the runs is per-file noise.
+  - Real headroom to the 420 s line is 8–15 s.
+- **No QA trim now.** Moving a real-r128 section behind `QA_FULL=1` would give up default coverage with no time problem to solve. The next batch is reviews, with no new tests.
+- **Standing rules:**
+  - Any later task that adds test time buys it back in the same task (outcome F5-T3a §8 item 4).
+  - The noise rule stands: a single run of 420–440 s is re-run once; two in a row over 420 s, or any run over 440 s, require a trim.
+  - 480 s is never exceeded.
+  - `tests/durations.json` is refreshed with `--write-durations` after the green release-gate run.
+- **Contract check (A-16 rule):** done and sufficient. The output format and exit code are unchanged, and no script parses the order.
+
+VERDICT: APPROVED
