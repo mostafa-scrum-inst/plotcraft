@@ -65,9 +65,9 @@
   three.tour = {
     // o: { onStop(stop, index), onEnd(reason) }. Returns false when there is nothing to tour.
     start: function (o) {
-      var V = PC.view3d, h = V.house(), size = V.info().size;
+      var V = PC.view3d, h = V.house(), inf = V.info();
       if (!h || !V.pose()) return false;
-      var plan = PC.tourplan.build(h, size[0] && size[1] ? size[0] / size[1] : 1);
+      var plan = PC.tourplan.build(h, inf.aspect || 1);   // the visible aspect (F5-T3a lens shift)
       if (!plan) return false;
       if (V.selected() !== null) V.select(null);
       V.setRoof(false);

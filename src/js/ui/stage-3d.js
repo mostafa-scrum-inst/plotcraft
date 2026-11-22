@@ -139,6 +139,17 @@
     renderLevels();
     PC.view3d.open(house, ui.$('v3-canvas'), onState);
     if (house) PC.view3d.setLevel(level);
+    occlusion();
+  }
+  // F5-T3a desktop framing (TL ruling 2): the canvas width covered by the floating panel card, measured, so the lens
+  // shift follows the CSS. 0 when the panel is collapsed, docked across the bottom (it spans the canvas width) or
+  // beside the canvas (640x360 side by side); occl.bottom stays 0 until F5-T3b (CTO condition a).
+  function occlusion() {
+    if (!open) return;
+    var p = ui.$('v3-panel'), c = ui.$('v3-canvas').getBoundingClientRect(), r = p.getBoundingClientRect(), o = 0;
+    if (!p.classList.contains('is-collapsed') && r.width > 0 && c.width > 0 && r.left > c.left + 1 && r.left < c.right && r.top < c.bottom && r.bottom > c.top)
+      o = c.right - r.left;
+    PC.view3d.setOcclusion({ right: o, bottom: 0 });
   }
   function hhmm(h) {
     var m = Math.round(h * 60), hh = Math.floor(m / 60), mm = m % 60;
@@ -189,7 +200,9 @@
         var p = ui.$('v3-panel'), collapsed = !p.classList.contains('is-collapsed');
         p.classList.toggle('is-collapsed', collapsed);
         ui.$('v3-panel-toggle').setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        occlusion();
       });
+      if (typeof addEventListener === 'function') addEventListener('resize', occlusion);
       TABS.forEach(function (t) { ui.on(ui.$('v3-tab-' + t), 'click', function () { tab(t); }); });
       Object.assign(PC.debug = PC.debug || {}, {
         house: function () { return house; },

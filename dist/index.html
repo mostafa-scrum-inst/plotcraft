@@ -4119,7 +4119,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
    the eye is 1 m or more above ground.
    F5-T1 room finder (A-14): roomOf(house, id), roomGroups(house) (levels lowest first, rooms in plan order, plan names)
    and forRoom(house, id, current, limits): target = room centre at floorY + 0.5, theta kept, phi 35 degrees (15 for a
-   basement room, plan review item 1), radius = clamp(1.6 x max(w, d) + storeyH, 6, 3 x house.radius), then clamped. */
+   basement room, plan review item 1), radius = clamp(1.6 x max(w, d) + storeyH, 6, 3 x house.radius), then clamped.
+   F5-T3a desktop framing: viewOffset(W, H, occl) (a lens shift into the uncovered rectangle) and visibleAspect. */
 (function (PC) {
   'use strict';
   var D = Math.PI / 180;
@@ -4151,6 +4152,21 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
           z0: Math.min.apply(null, zs), z1: Math.max.apply(null, zs) },
         eyeMin: k.eyeMin
       };
+    },
+    // Desktop framing under the floating panel (TL F5-T3a plan review ruling 2, A-12): a lens shift. The 6 arguments
+    // of r128's PerspectiveCamera.setViewOffset(fullW, fullH, x, y, w, h) that put the principal point at the centre
+    // of the uncovered rectangle x in [0, W - o] (o = occl.right px), with the vertical scale and fov unchanged (the
+    // camera's aspect is then fullW / fullH); null when nothing is covered (clearViewOffset). occl.bottom is held at 0
+    // until F5-T3b (CTO condition a) and is ignored here.
+    viewOffset: function (W, H, occl) {
+      var o = occl && occl.right > 0 ? Math.round(occl.right) : 0;
+      if (!(W > 0 && H > 0) || !o || o >= W) return null;
+      return [W + o, H, o, 0, W, H];
+    },
+    // The aspect of the uncovered rectangle, used for the radius fits (reset, limits, the tour plan).
+    visibleAspect: function (W, H, occl) {
+      var v = C.viewOffset(W, H, occl);
+      return W > 0 && H > 0 ? (W - (v ? v[2] : 0)) / H : 1;
     },
     reset: function (house, aspect) {
       return { target: [0, 0, 0], radius: C.resetRadius(house, aspect), theta: K().resetTheta * D, phi: K().resetPhi * D };
@@ -5513,9 +5529,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   three.tour = {
     // o: { onStop(stop, index), onEnd(reason) }. Returns false when there is nothing to tour.
     start: function (o) {
-      var V = PC.view3d, h = V.house(), size = V.info().size;
+      var V = PC.view3d, h = V.house(), inf = V.info();
       if (!h || !V.pose()) return false;
-      var plan = PC.tourplan.build(h, size[0] && size[1] ? size[0] / size[1] : 1);
+      var plan = PC.tourplan.build(h, inf.aspect || 1);   // the visible aspect (F5-T3a lens shift)
       if (!plan) return false;
       if (V.selected() !== null) V.select(null);
       V.setRoof(false);
@@ -5593,7 +5609,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   var three = PC.three = PC.three || {};
   var S = {
     renderer: null, scene: null, camera: null, world: null, hemi: null, sun: null, mats: null, canvas: null,
-    house: null, builtKey: null, pose: null, limits: null, size: [0, 0],
+    house: null, builtKey: null, pose: null, limits: null, size: [0, 0], occl: { right: 0, bottom: 0 }, view: null,
     active: false, lost: false, dirty: false, frame: 0, building: 0, token: 0, onState: null,
     meshes: [], level: 'all', roof: false, renders: 0, builds: 0, restores: 0, looks: 0,
     look: { hour: 12, season: 'summer' },
@@ -5681,7 +5697,19 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     S.renderer.render(S.scene, cam);
     S.renders++;
   }
-  function aspect() { return S.size[0] && S.size[1] ? S.size[0] / S.size[1] : 1; }
+  // The radius fits use the aspect of the canvas part the panel leaves uncovered (F5-T3a, TL ruling 2).
+  function aspect() { return S.size[0] && S.size[1] ? PC.cam.visibleAspect(S.size[0], S.size[1], S.occl) : 1; }
+  // The lens shift: the projection centre in the uncovered rectangle; poses, pivot and clamps are unchanged.
+  function lens() {
+    var w = S.size[0], h = S.size[1], cam = S.camera;
+    if (!cam || !w || !h) return;
+    var v = PC.cam.viewOffset(w, h, S.occl);
+    if (v) { cam.aspect = v[0] / v[1]; cam.setViewOffset(v[0], v[1], v[2], v[3], v[4], v[5]); }
+    else { cam.aspect = w / h; cam.clearViewOffset(); }
+    S.view = v;
+    cam.updateProjectionMatrix();
+  }
+  function refit() { if (S.house) { S.limits = PC.cam.limits(S.house, aspect()); if (S.pose) S.pose = PC.cam.clamp(S.pose, S.limits); } }
   function resize(inFrame) {
     var c = S.canvas;
     if (!c || !S.renderer) return;
@@ -5694,8 +5722,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     S.renderer.setPixelRatio(dpr());
     S.renderer.setSize(w, h, false);
     S.size = [w, h];
-    S.camera.aspect = w / h; S.camera.updateProjectionMatrix();
-    if (S.house) { S.limits = PC.cam.limits(S.house, aspect()); if (S.pose) S.pose = PC.cam.clamp(S.pose, S.limits); }
+    lens(); refit();
     if (!inFrame) invalidate();
   }
 
@@ -5703,6 +5730,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     S.canvas = canvas;
     S.scene = new THREE.Scene();
     S.camera = new THREE.PerspectiveCamera(PC.C.CAM.fov, 1, PC.C.CAM.nearMin, 100);
+    lens();
     S.hemi = new THREE.HemisphereLight(three.col('#FFFFFF'), three.col('#FFFFFF'), 1); S.hemi.name = 'hemi';
     S.sun = new THREE.DirectionalLight(three.col('#FFFFFF'), 1); S.sun.name = 'sun';
     S.sun.castShadow = true;
@@ -5717,7 +5745,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       if (S.house) { S.builtKey = null; build(S.house); }
       invalidate();
     });
-    if (typeof ResizeObserver === 'function' && canvas.parentElement) new ResizeObserver(function () { resize(); }).observe(canvas.parentElement);
+    // the wrap and the canvas itself: at 640x360 the canvas narrows beside the expanded panel (F5-T3a, Designer CSS)
+    // while the wrap keeps its size; a double fire is harmless (resize() returns early on an unchanged size)
+    if (typeof ResizeObserver === 'function' && canvas.parentElement) { var ro = new ResizeObserver(function () { resize(); }); ro.observe(canvas.parentElement); ro.observe(canvas); }
     else if (typeof addEventListener === 'function') addEventListener('resize', function () { resize(); });
     if (typeof document !== 'undefined' && document.addEventListener) {
       document.addEventListener('visibilitychange', function () { if (visible()) invalidate(); else cancelFrame(); });
@@ -5822,6 +5852,14 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       if (S.house && S.mats) { lights(S.house); invalidate(); }
     },
     look: function () { return { hour: S.look.hour, season: S.look.season }; },
+    // F5-T3a: the canvas area covered by overlays, in CSS px ({ right, bottom }; bottom held at 0). Re-fits the lens
+    // and the limits and marks the frame dirty; the pose moves only if the new limits clamp it.
+    setOcclusion: function (o) {
+      var r = o && o.right > 0 ? Math.round(o.right) : 0;
+      if (r === S.occl.right) return;
+      S.occl = { right: r, bottom: 0 };
+      lens(); refit(); invalidate();
+    },
     resetView: function () { if (!S.house) return; stopAnim('reset'); S.pose = PC.cam.reset(S.house, aspect()); invalidate(); },
     setOnInput: function (fn) { S.onInput = fn; },
     // F5-T1: the animation driver, flights and the room selection (A-12, A-14 as built).
@@ -5843,7 +5881,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
         building: !!S.building, frame: !!S.frame, dirty: S.dirty, renders: S.renders, builds: S.builds, restores: S.restores,
         meshCount: S.meshes.length + (S.highlight ? 1 : 0), meshes: S.meshes.concat(S.highlight ? [S.highlight] : []),
         flight: S.anim && S.anim.kind === 'flight' ? { from: PC.cam.copy(S.anim.from), to: PC.cam.copy(S.anim.to), t: S.anim.t, ms: S.anim.ms } : null,
-        animating: !!S.anim, selected: S.selected, highlight: S.highlight, highlightsMade: S.hlMade, level: S.level, roof: S.roof, look: { hour: S.look.hour, season: S.look.season }, looks: S.looks, size: S.size.slice(), renderNow: function () { if (S.house && !S.lost) render(); } };
+        animating: !!S.anim, selected: S.selected, highlight: S.highlight, highlightsMade: S.hlMade, level: S.level, roof: S.roof, look: { hour: S.look.hour, season: S.look.season }, looks: S.looks, size: S.size.slice(), occl: { right: S.occl.right, bottom: S.occl.bottom }, viewOffset: S.view ? S.view.slice() : null, aspect: aspect(), renderNow: function () { if (S.house && !S.lost) render(); } };
     }
   };
 })(globalThis.PC = globalThis.PC || {});
@@ -8465,6 +8503,17 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     renderLevels();
     PC.view3d.open(house, ui.$('v3-canvas'), onState);
     if (house) PC.view3d.setLevel(level);
+    occlusion();
+  }
+  // F5-T3a desktop framing (TL ruling 2): the canvas width covered by the floating panel card, measured, so the lens
+  // shift follows the CSS. 0 when the panel is collapsed, docked across the bottom (it spans the canvas width) or
+  // beside the canvas (640x360 side by side); occl.bottom stays 0 until F5-T3b (CTO condition a).
+  function occlusion() {
+    if (!open) return;
+    var p = ui.$('v3-panel'), c = ui.$('v3-canvas').getBoundingClientRect(), r = p.getBoundingClientRect(), o = 0;
+    if (!p.classList.contains('is-collapsed') && r.width > 0 && c.width > 0 && r.left > c.left + 1 && r.left < c.right && r.top < c.bottom && r.bottom > c.top)
+      o = c.right - r.left;
+    PC.view3d.setOcclusion({ right: o, bottom: 0 });
   }
   function hhmm(h) {
     var m = Math.round(h * 60), hh = Math.floor(m / 60), mm = m % 60;
@@ -8515,7 +8564,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
         var p = ui.$('v3-panel'), collapsed = !p.classList.contains('is-collapsed');
         p.classList.toggle('is-collapsed', collapsed);
         ui.$('v3-panel-toggle').setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        occlusion();
       });
+      if (typeof addEventListener === 'function') addEventListener('resize', occlusion);
       TABS.forEach(function (t) { ui.on(ui.$('v3-tab-' + t), 'click', function () { tab(t); }); });
       Object.assign(PC.debug = PC.debug || {}, {
         house: function () { return house; },

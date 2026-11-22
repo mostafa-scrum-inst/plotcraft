@@ -23,7 +23,7 @@
   var three = PC.three = PC.three || {};
   var S = {
     renderer: null, scene: null, camera: null, world: null, hemi: null, sun: null, mats: null, canvas: null,
-    house: null, builtKey: null, pose: null, limits: null, size: [0, 0],
+    house: null, builtKey: null, pose: null, limits: null, size: [0, 0], occl: { right: 0, bottom: 0 }, view: null,
     active: false, lost: false, dirty: false, frame: 0, building: 0, token: 0, onState: null,
     meshes: [], level: 'all', roof: false, renders: 0, builds: 0, restores: 0, looks: 0,
     look: { hour: 12, season: 'summer' },
@@ -111,7 +111,19 @@
     S.renderer.render(S.scene, cam);
     S.renders++;
   }
-  function aspect() { return S.size[0] && S.size[1] ? S.size[0] / S.size[1] : 1; }
+  // The radius fits use the aspect of the canvas part the panel leaves uncovered (F5-T3a, TL ruling 2).
+  function aspect() { return S.size[0] && S.size[1] ? PC.cam.visibleAspect(S.size[0], S.size[1], S.occl) : 1; }
+  // The lens shift: the projection centre in the uncovered rectangle; poses, pivot and clamps are unchanged.
+  function lens() {
+    var w = S.size[0], h = S.size[1], cam = S.camera;
+    if (!cam || !w || !h) return;
+    var v = PC.cam.viewOffset(w, h, S.occl);
+    if (v) { cam.aspect = v[0] / v[1]; cam.setViewOffset(v[0], v[1], v[2], v[3], v[4], v[5]); }
+    else { cam.aspect = w / h; cam.clearViewOffset(); }
+    S.view = v;
+    cam.updateProjectionMatrix();
+  }
+  function refit() { if (S.house) { S.limits = PC.cam.limits(S.house, aspect()); if (S.pose) S.pose = PC.cam.clamp(S.pose, S.limits); } }
   function resize(inFrame) {
     var c = S.canvas;
     if (!c || !S.renderer) return;
@@ -124,8 +136,7 @@
     S.renderer.setPixelRatio(dpr());
     S.renderer.setSize(w, h, false);
     S.size = [w, h];
-    S.camera.aspect = w / h; S.camera.updateProjectionMatrix();
-    if (S.house) { S.limits = PC.cam.limits(S.house, aspect()); if (S.pose) S.pose = PC.cam.clamp(S.pose, S.limits); }
+    lens(); refit();
     if (!inFrame) invalidate();
   }
 
@@ -133,6 +144,7 @@
     S.canvas = canvas;
     S.scene = new THREE.Scene();
     S.camera = new THREE.PerspectiveCamera(PC.C.CAM.fov, 1, PC.C.CAM.nearMin, 100);
+    lens();
     S.hemi = new THREE.HemisphereLight(three.col('#FFFFFF'), three.col('#FFFFFF'), 1); S.hemi.name = 'hemi';
     S.sun = new THREE.DirectionalLight(three.col('#FFFFFF'), 1); S.sun.name = 'sun';
     S.sun.castShadow = true;
@@ -147,7 +159,9 @@
       if (S.house) { S.builtKey = null; build(S.house); }
       invalidate();
     });
-    if (typeof ResizeObserver === 'function' && canvas.parentElement) new ResizeObserver(function () { resize(); }).observe(canvas.parentElement);
+    // the wrap and the canvas itself: at 640x360 the canvas narrows beside the expanded panel (F5-T3a, Designer CSS)
+    // while the wrap keeps its size; a double fire is harmless (resize() returns early on an unchanged size)
+    if (typeof ResizeObserver === 'function' && canvas.parentElement) { var ro = new ResizeObserver(function () { resize(); }); ro.observe(canvas.parentElement); ro.observe(canvas); }
     else if (typeof addEventListener === 'function') addEventListener('resize', function () { resize(); });
     if (typeof document !== 'undefined' && document.addEventListener) {
       document.addEventListener('visibilitychange', function () { if (visible()) invalidate(); else cancelFrame(); });
@@ -252,6 +266,14 @@
       if (S.house && S.mats) { lights(S.house); invalidate(); }
     },
     look: function () { return { hour: S.look.hour, season: S.look.season }; },
+    // F5-T3a: the canvas area covered by overlays, in CSS px ({ right, bottom }; bottom held at 0). Re-fits the lens
+    // and the limits and marks the frame dirty; the pose moves only if the new limits clamp it.
+    setOcclusion: function (o) {
+      var r = o && o.right > 0 ? Math.round(o.right) : 0;
+      if (r === S.occl.right) return;
+      S.occl = { right: r, bottom: 0 };
+      lens(); refit(); invalidate();
+    },
     resetView: function () { if (!S.house) return; stopAnim('reset'); S.pose = PC.cam.reset(S.house, aspect()); invalidate(); },
     setOnInput: function (fn) { S.onInput = fn; },
     // F5-T1: the animation driver, flights and the room selection (A-12, A-14 as built).
@@ -273,7 +295,7 @@
         building: !!S.building, frame: !!S.frame, dirty: S.dirty, renders: S.renders, builds: S.builds, restores: S.restores,
         meshCount: S.meshes.length + (S.highlight ? 1 : 0), meshes: S.meshes.concat(S.highlight ? [S.highlight] : []),
         flight: S.anim && S.anim.kind === 'flight' ? { from: PC.cam.copy(S.anim.from), to: PC.cam.copy(S.anim.to), t: S.anim.t, ms: S.anim.ms } : null,
-        animating: !!S.anim, selected: S.selected, highlight: S.highlight, highlightsMade: S.hlMade, level: S.level, roof: S.roof, look: { hour: S.look.hour, season: S.look.season }, looks: S.looks, size: S.size.slice(), renderNow: function () { if (S.house && !S.lost) render(); } };
+        animating: !!S.anim, selected: S.selected, highlight: S.highlight, highlightsMade: S.hlMade, level: S.level, roof: S.roof, look: { hour: S.look.hour, season: S.look.season }, looks: S.looks, size: S.size.slice(), occl: { right: S.occl.right, bottom: S.occl.bottom }, viewOffset: S.view ? S.view.slice() : null, aspect: aspect(), renderNow: function () { if (S.house && !S.lost) render(); } };
     }
   };
 })(globalThis.PC = globalThis.PC || {});
