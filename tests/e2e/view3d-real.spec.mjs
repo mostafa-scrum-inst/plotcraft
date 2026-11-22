@@ -409,9 +409,9 @@ async function maxBudget(page, tag) {
   });
   T.ok(r.on[0] <= 160 && r.off[0] <= 160 && r.on[1] <= 300000 && r.off[1] <= 300000, `${tag} maximum house: draw calls ${r.on[0]} / ${r.off[0]} <= 160, triangles ${r.on[1]} / ${r.off[1]} <= 300 000 (Roof on / off)`);
   const best = Math.min(...r.build);
-  // Regression guard only (TL ruling): <= 800 ms in every run, other browser files running beside it. C-4.8 itself
+  // Regression guard only (TL ruling; raised to 1200 ms after loaded runs read up to 970 ms): <= 1200 ms in every run, other browser files running beside it. C-4.8 itself
   // (<= 400 ms) is tests/solo/build-time.mjs, which run-all runs alone under QA_FULL=1.
-  T.ok(best <= 800, `${tag} maximum house build ${best.toFixed(0)} ms (best of ${r.build.map((x) => x.toFixed(0)).join(', ')}) <= 800 ms (regression guard; C-4.8 is the QA_FULL solo step)`);
+  T.ok(best <= 1200, `${tag} maximum house build ${best.toFixed(0)} ms (best of ${r.build.map((x) => x.toFixed(0)).join(', ')}) <= 1200 ms (regression guard, TL 2026-11-22: loaded runs read 414-970 ms; C-4.8 is the QA_FULL solo step)`);
   console.log(`  [record] ${tag} max house: calls ${r.on[0]} / ${r.off[0]}, triangles ${r.on[1]} / ${r.off[1]}, build best ${best.toFixed(0)} ms (loaded), meshes ${r.meshes}`);
 }
 
