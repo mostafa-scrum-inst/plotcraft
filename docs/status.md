@@ -299,3 +299,4 @@
 - [TL] F6-T1a QA trim accepted (3db2b02, ~70 s → release step); release step limit 300 s (NOTE > 260), runs every impl-review gate + release; FS rerunning QA_FULL.
 - [FS] F6-T1a gate complete on f6t1 (QA trim merged): QA_FULL=1 green 462.8 s (C-4.8 solo 112 ms), release step --only leak-max green 176.1 s (limit 300), default runs 405.0 / 400.6 s; impl-notes 2c
 - [TL] F6-T1a impl review — APPROVED unconditionally: QA_FULL 462.8 s, release step 176.1 s, C-4.8 solo 112 ms (f6t1 42bd8ae); T1b may start with resetPhi 62.
+- [FS] F6-T1b on f6t1 72aa281 (resetPhi 62, openings, contact darkening, blobs, lump trees, winter meadow; Designer c540c49 / 8a27f00 and QA 2aae57d merged): default runs 417.3 / 418.2 s (one 422.0 s under load), QA_FULL=1 464.1 s (C-4.8 solo 139 ms), release step 193.3 s; durations re-timed; O-1 8 h drop traced to resetPhi 62; impl-notes T1b-1..7; impl review requested from TL
