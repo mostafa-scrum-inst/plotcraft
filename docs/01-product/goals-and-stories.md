@@ -1,7 +1,16 @@
 # PlotCraft — Product goals and user stories (prototype)
 
-Owner: PM. Source: `docs/00-brief.md`. Status: approved by the CTO (round 2); round 3 edits made at the F1 feature review; round 4 edits apply the client's binding decisions `docs/01-product/client-decisions.md` (CD-1 to CD-3); round 5 edits made at the F2 feature review; rounds 6 and 7 fix user-facing texts at the F3-T2 and F3-T3 plan reviews; round 8 edits made at the F3 feature review; round 9 fixes the stage-5 level selector labels at the F4-T1 plan review; round 10 applies CD-4 / CD-5 and answers the F4-T2 plan questions; round 11 records the default-camera decision and the vegetation-shortfall warning at the F4-T3 start; round 12 fixes the room-finder caption and dropdown state at the F5-T1 plan; round 13 answers the F5-T2 tour questions; round 14 gives the F5-T3a saving texts and labels.
+Owner: PM. Source: `docs/00-brief.md`. Status: approved by the CTO (round 2); round 3 edits made at the F1 feature review; round 4 edits apply the client's binding decisions `docs/01-product/client-decisions.md` (CD-1 to CD-3); round 5 edits made at the F2 feature review; rounds 6 and 7 fix user-facing texts at the F3-T2 and F3-T3 plan reviews; round 8 edits made at the F3 feature review; round 9 fixes the stage-5 level selector labels at the F4-T1 plan review; round 10 applies CD-4 / CD-5 and answers the F4-T2 plan questions; round 11 records the default-camera decision and the vegetation-shortfall warning at the F4-T3 start; round 12 fixes the room-finder caption and dropdown state at the F5-T1 plan; round 13 answers the F5-T2 tour questions; round 14 gives the F5-T3a saving texts and labels; round 15 answers the F6-T1 Roof-on-at-open questions.
 This document says **what** and **how we know it works**. How it is built is the Tech Lead's call.
+
+## Changes in round 15 (2026-11-22, F6-T1 plan, CD-8 realism: Roof on at open; no story IDs changed)
+
+FS plan `docs/03-tasks/F6-T1/plan.md` §11, Q-P1 and Q-P2, forwarded by the TL. Whether stage 5 opens with the Roof on is on a client decision card that is still pending; the plan assumes yes (`PC.C.VIEW3D.roofOnOpen`).
+
+| Item | Decision |
+|---|---|
+| Q-P1 story text | **Yes, the stories change if the client chooses Roof on; no help line is added.** The amendment below applies only on a "yes" (on a "no", today's text stands). F4-S1 bullet 2, last sentence, becomes: "**The view opens on "All" with the Roof on, showing the outside of the house; switching Roof off (or choosing a floor) shows the interiors.**" Section 3.3, last bullet, becomes: "A separate "Roof" switch in the 3D view is **on** when the view opens; the roof (with the closed exterior, round 10) is drawn only when it is on and the level selector is "All". Choosing a single floor, using the room finder or starting the tour shows the interiors (the finder and the tour switch it off)." There is **no new help text in the panel**: the Roof switch already shows its state next to the floor selector, the phone panel is at its 33 % limit, and the testing doc / release notes say it in one line: "The 3D view opens on the outside of the house; switch Roof off to see inside." |
+| Q-P2 Roof after the finder / tour | **No change** (FS and TL recommendation): the Roof stays off after a room pick or the tour ends, like the camera and the level (round 13). Turning it back on would hide the room the user just went to. Roof on is one tap. |
 
 ## Changes in round 14 (2026-11-22, F5-T3a Designer plan: saving texts and two shorter labels; no story IDs changed)
 
