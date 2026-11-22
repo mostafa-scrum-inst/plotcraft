@@ -1,7 +1,17 @@
 # PlotCraft — Product goals and user stories (prototype)
 
-Owner: PM. Source: `docs/00-brief.md`. Status: approved by the CTO (round 2); round 3 edits made at the F1 feature review; round 4 edits apply the client's binding decisions `docs/01-product/client-decisions.md` (CD-1 to CD-3); round 5 edits made at the F2 feature review; rounds 6 and 7 fix user-facing texts at the F3-T2 and F3-T3 plan reviews; round 8 edits made at the F3 feature review; round 9 fixes the stage-5 level selector labels at the F4-T1 plan review; round 10 applies CD-4 / CD-5 and answers the F4-T2 plan questions; round 11 records the default-camera decision and the vegetation-shortfall warning at the F4-T3 start; round 12 fixes the room-finder caption and dropdown state at the F5-T1 plan; round 13 answers the F5-T2 tour questions.
+Owner: PM. Source: `docs/00-brief.md`. Status: approved by the CTO (round 2); round 3 edits made at the F1 feature review; round 4 edits apply the client's binding decisions `docs/01-product/client-decisions.md` (CD-1 to CD-3); round 5 edits made at the F2 feature review; rounds 6 and 7 fix user-facing texts at the F3-T2 and F3-T3 plan reviews; round 8 edits made at the F3 feature review; round 9 fixes the stage-5 level selector labels at the F4-T1 plan review; round 10 applies CD-4 / CD-5 and answers the F4-T2 plan questions; round 11 records the default-camera decision and the vegetation-shortfall warning at the F4-T3 start; round 12 fixes the room-finder caption and dropdown state at the F5-T1 plan; round 13 answers the F5-T2 tour questions; round 14 gives the F5-T3a saving texts and labels.
 This document says **what** and **how we know it works**. How it is built is the Tech Lead's call.
+
+## Changes in round 14 (2026-11-22, F5-T3a Designer plan: saving texts and two shorter labels; no story IDs changed)
+
+| Item | Final text |
+|---|---|
+| Toast when saving stops mid-session (F1 polish, once per session) | "Saving has stopped: this browser's storage is full or blocked. Your work stays on screen but will be lost when you close or reload the page." The FS proposal "stays open until you close the page" undersold the risk (a reload loses it too). |
+| No-save header chip (`#i-nosave`, shown only while saving is off) | `aria-label` and tooltip (`title`): "Drafts are not saved on this device" (the start panel's note, so one wording). Tap shows the toast: "Drafts are not saved on this device. Your work will be lost when you close or reload the page." No visible text in the chip. |
+| Site legend override entry (§8 item 2) | "\* by you" instead of "\* set by you". It keeps the edge list's "(set by you)" wording; "yours" was ambiguous. Use it only if the measurement shows the 1280x800 wrap; otherwise keep "\* set by you". The 12 px font is not used for the legend. |
+| Pool-size note (§8 item 5) | "S 3 × 6 · M 4 × 8 · L 5 × 10 m": whole metres without ".0", the same values, following the unit. In ft: "S 9.8 × 19.7 · M 13.1 × 26.2 · L 16.4 × 32.8 ft" (R4, one decimal). If the ft line still wraps at 360 px, that note alone may use 12 px; the "18 / 32 / 50 m²" area form is not used, since an architect places a pool by its sides. |
+| New legend entries (§8 item 4) | "Parking" and "Pool", shown only when the item exists. |
 
 ## Changes in round 13 (2026-11-22, F5-T2 plan: drone-tour caption, highlight, end state, speed; no story IDs changed)
 
