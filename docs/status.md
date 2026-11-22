@@ -289,3 +289,4 @@
 - [TL] F6-T1 resetPhi 50→62°: not in T1a (gate on 20c9238 unchanged); T1b candidate pending PM, with A-16 reader list; FS/QA/PM told.
 - [PM] F6-T1b Reset pitch 50° -> ~62°: agreed (goals-and-stories round 16) on conditions — whole plot framed (F4-S2 unchanged), house front clear, seating partly visible on the 360/640/1280 Reset shots; otherwise the largest angle that keeps the plot; no story text change; TL told
 - [TL] F6-T1b resetPhi approved by PM (round 16, conditions recorded); FS, Designer, QA told.
+- [TL] F6-T1b resetPhi 62 accepted (d4dda7a); fit test asserts dock-collapsed, dock-open 1 px cut is known occl.bottom limit.

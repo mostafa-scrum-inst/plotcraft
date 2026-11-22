@@ -180,3 +180,5 @@ If the runs are still over: QA measures f1-t1-layout 640x360 next, and any furth
     - the house front reads clearly;
     - the garden seating stays at least partly visible.
   - **Also:** the tour overview follows Reset, and there are no story text changes.
+- **The Designer picked 62°** (d4dda7a), and all three checks pass with the dock collapsed: margins of 15, 51 and 136 px.
+  - At 360x640 with the dock open, the plot is cut by 1 px. It was cut by 32 px at 50°. This is the known limit from occl.bottom; it is accepted and not asserted until T3b.
