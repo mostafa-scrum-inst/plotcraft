@@ -297,3 +297,4 @@
 - [TL] F6-T1a impl review (f6t1 ac985f8) — APPROVED, conditional on one green QA_FULL=1 ≤ 480 s after the leak-max move (addendum to follow); required changes 1/2 met, shadow on-demand meets CTO conditions; shots: windows, Reset horizon and contact shadows are T1b; Designer to check noon shadow legibility and 360 evening tone.
 - [TL] F6-T1a QA_FULL 488.1 s after leak split (leak-max 112.7 s, solo 128 ms) — still over; QA trims ~60 s work (f5-t3 first); verdict condition open.
 - [TL] F6-T1a QA trim accepted (3db2b02, ~70 s → release step); release step limit 300 s (NOTE > 260), runs every impl-review gate + release; FS rerunning QA_FULL.
+- [FS] F6-T1a gate complete on f6t1 (QA trim merged): QA_FULL=1 green 462.8 s (C-4.8 solo 112 ms), release step --only leak-max green 176.1 s (limit 300), default runs 405.0 / 400.6 s; impl-notes 2c
