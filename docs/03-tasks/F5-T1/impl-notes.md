@@ -129,3 +129,13 @@ duration check (1.0–1.5 s wall clock): the keyboard pick took 1.70 s, and the 
   - e2e shell 47.1 s.
 - **Keeping under 420 s** needs a trim in QA's suites. Per A-16 that is QA's call (for example `run-f5-t1` section A
   picks 13 rooms on real r128). I did not change `tests/qa`.
+
+## 5. After the TL implementation review (round 1, `impl-review.md`)
+
+- **Flight duration (§3):** the TL ruled option (a). The cap stays at 100 ms and QA adapts its check.
+- **Required item:** `tests/unit/footprint.test.mjs` "deterministic; and fast enough on the largest plot" now times
+  the cold site analysis as the best of 3 runs (A-6, like the step-4b timing test). The old single cold run flaked at
+  531–657 ms under load after F4-T3 added the scatter to `PC.site.analyse`. The 500 ms bound and the memo-hit check are
+  unchanged.
+  - Focused run: `node --test tests/unit/footprint.test.mjs`, 18 passed.
+  - The full run is left to QA, after its trim.

@@ -128,8 +128,11 @@ test('rotated plot (street edge not axis-aligned) gives the same footprint as it
 test('deterministic; and fast enough on the largest plot', () => {
   const big = () => plot([[0, 0], [100, 0], [100, 100], [70, 100], [70, 40], [60, 40], [60, 100], [40, 100], [40, 40], [30, 40], [30, 100], [0, 100]], (a) => { a.pool.on = true; a.parking.cars = 4; });
   const strip = (x) => { const c = { ...x }; delete c.mask; delete c.frame; return JSON.stringify(c); };
-  S.clearMemo(); let t = Date.now(); const one = S.analyse(big()); const first = Date.now() - t;
-  assert.ok(first < 500, `analyse on a 12-vertex 100 x 100 m concave plot took ${first} ms`);
+  // cold analysis, best of three (A-6, like step 4b below; TL F5-T1 impl review: one cold run flaked under load
+  // since the F4-T3 scatter joined PC.site.analyse)
+  let one = null, first = Infinity, t;
+  for (let k = 0; k < 3; k++) { S.clearMemo(); t = Date.now(); one = S.analyse(big()); first = Math.min(first, Date.now() - t); }
+  assert.ok(first < 500, `analyse on a 12-vertex 100 x 100 m concave plot took ${first} ms (best of 3, cold)`);
   t = Date.now(); assert.equal(S.analyse(big()), one); assert.ok(Date.now() - t < 5, 'memo hit');
   S.clearMemo(); assert.equal(strip(S.analyse(big())), strip(one), 'same input, same result');
   assert.ok(one.footprint && one.footprint.moved, 'the centre of this plot is not buildable');
