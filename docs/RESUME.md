@@ -59,10 +59,15 @@ Everything lives on disk under /home/claude/plotcraft (cloud sessions: /home/use
 ## Batch 14 result: F5-T3a DONE
 - Lens-shift framing, 640x360 side-by-side, caption/tour bar placement, O-1 shadow data, tour pacing (overview 4.5 s, bEyeUp 2.5), legend Parking/Pool, A-15 label culling, saving-stopped toast + no-save chip + read-only resume. QA round 2 PASSED 419.8 s. TL outcome APPROVED. App v7; testing doc https://claude.ai/artifact/SCCTR7B12rB9kFeCdKDsUb
 
-## Next batch (batch 15): F5-T3c + F4/F5 feature reviews
-1. F5-T3c (FS): run-all longest-first scheduling from tests/durations.json; accept = two green full runs <= ~405 s.
-2. QA_FULL=1 green once on the review commit; then F4 and F5 feature reviews (PM + CTO, TL inputs), CTO verdict conditional on the phone gate.
-3. Release after the client's phone-gate choice (card open): option 1 -> F5-T3b; option 2 -> hosted-page Chrome check; option 3 -> waiver recorded. Release commit checklist in docs/03-tasks/F5-T3/outcome-review.md.
+## Batch 15 result: F5-T3c + F4/F5 reviews (conditional)
+- run-all longest-first (tests/durations.json); default run 398.8 s, QA_FULL=1 450.4 s on aaaddae, 0 failures (docs/04-feature-reviews/qa-full-gate.md).
+- F4.md and F5.md: PM APPROVED; CTO VERDICT: CHANGES REQUESTED only for the CD-6 phone gate (no code change). Closing table per gate option in the CTO sections (2c63a0a).
+
+## Waiting on the client: phone-gate decision card (sent 2026-11-22)
+- Option 1 (name phone checker, rec): record CD-6 a-c answers -> F4 APPROVED; run F5-T3b on findings -> QA incl. QA_FULL=1 -> republish -> F5 APPROVED.
+- Option 2 (desktop Chrome via Claude in Chrome): check published URL (three.js loads from cdnjs in iframe, stage 5 draws, 0 console errors, mouse orbit/zoom/pan, level, Roof, room pick, tour start/stop, screenshots) -> both APPROVED with risk recorded; F5-T3b items -> limits.
+- Option 3 (waive): new CD entry in client-decisions.md -> APPROVED "waived by client"; release note says never seen on a real device.
+- Then release commit (checklist in docs/03-tasks/F5-T3/outcome-review.md) + final publish. Release note draft: docs/05-release/release-notes.md (PM).
 
 ## Known limits owned by Designer F5-T3b (after F5-T3a; detail in docs/03-tasks/F5-T3/impl-notes.md)
 - Legend at 1280x800 wraps to 2 lines (46 px) when Parking, Pool and "* set by you" all show; "* by you" does not fix it, PM text kept. Accepted unless the phone/desktop pass says otherwise.
