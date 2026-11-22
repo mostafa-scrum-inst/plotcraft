@@ -12,6 +12,7 @@ This document says **what** and **how we know it works**. How it is built is the
 | Site legend override entry (§8 item 2) | "\* by you" instead of "\* set by you". It keeps the edge list's "(set by you)" wording; "yours" was ambiguous. Use it only if the measurement shows the 1280x800 wrap; otherwise keep "\* set by you". The 12 px font is not used for the legend. |
 | Pool-size note (§8 item 5) | "S 3 × 6 · M 4 × 8 · L 5 × 10 m": whole metres without ".0", the same values, following the unit. In ft: "S 9.8 × 19.7 · M 13.1 × 26.2 · L 16.4 × 32.8 ft" (R4, one decimal). If the ft line still wraps at 360 px, that note alone may use 12 px; the "18 / 32 / 50 m²" area form is not used, since an architect places a pool by its sides. |
 | New legend entries (§8 item 4) | "Parking" and "Pool", shown only when the item exists. |
+| Empty stage-3 readout (QA F5-T3 O-2) | **"None selected"**, as built and kept. It sits under the "Room" label ("Room: None selected"), where "Tap a room" reads badly and suits mouse users less. One line at 640x360. The Designer plan's "Tap a room" is withdrawn. |
 
 ## Changes in round 13 (2026-11-22, F5-T2 plan: drone-tour caption, highlight, end state, speed; no story IDs changed)
 
