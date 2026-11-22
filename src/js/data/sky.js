@@ -7,6 +7,8 @@
    seasons: elevMax = noon sun elevation in degrees; tint / tintAmount blend sunColor, hemiSky and background toward
    the season, weighted by daylight (A-13); canopy / shrub / ground are vegetation and plot-ground colours; winter has
    bare trees (canopyVisible false) with snow on shrubs and ground. Summer (tintAmount 0) is the untinted baseline.
+   F6-T1b: meadow = the outer ground (groundOuter) colour per season (Designer; summer = siteColors.groundOuter,
+   winter trampled snow).
    groundBounce: weight of the season ground in hemiGround at full daylight (snow bounce).
    F6-T1a: background is also the sky dome's horizon row and the fog colour (raw, not tone-mapped: they read as the
    hex); skyMid / skyZenith are the dome's 15 / 90 degree rows (read values too); exposure = toneMappingExposure (ACES).
@@ -33,10 +35,10 @@
       { h: 24, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30, skyMid: '#0F1A2E', skyZenith: '#060B16', exposure: 1.3 }
     ],
     seasons: {
-      spring: { elevMax: 52, tint: '#F1F7E4', tintAmount: 0.08, canopy: '#558739', canopyVisible: true, shrub: '#67A344', ground: '#76A953' },
-      summer: { elevMax: 72, tint: '#FFF4DE', tintAmount: 0, canopy: '#477338', canopyVisible: true, shrub: '#507A3C', ground: '#668748' },
-      autumn: { elevMax: 52, tint: '#F6C58E', tintAmount: 0.15, canopy: '#A85D27', canopyVisible: true, shrub: '#8A5A2F', ground: '#877F4D' },
-      winter: { elevMax: 32, tint: '#D3E0F2', tintAmount: 0.20, canopy: '#5F5C53', canopyVisible: false, shrub: '#CDEDFE', ground: '#FFFFFF' }
+      spring: { elevMax: 52, tint: '#F1F7E4', tintAmount: 0.08, canopy: '#558739', canopyVisible: true, shrub: '#67A344', ground: '#76A953', meadow: '#76865A' },
+      summer: { elevMax: 72, tint: '#FFF4DE', tintAmount: 0, canopy: '#477338', canopyVisible: true, shrub: '#507A3C', ground: '#668748', meadow: '#727E58' },
+      autumn: { elevMax: 52, tint: '#F6C58E', tintAmount: 0.15, canopy: '#A85D27', canopyVisible: true, shrub: '#8A5A2F', ground: '#877F4D', meadow: '#857D55' },
+      winter: { elevMax: 32, tint: '#D3E0F2', tintAmount: 0.20, canopy: '#5F5C53', canopyVisible: false, shrub: '#CDEDFE', ground: '#FFFFFF', meadow: '#E4E8EA' }
     },
     groundBounce: 0.25
   };

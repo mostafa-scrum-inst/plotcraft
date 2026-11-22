@@ -3,8 +3,9 @@
    applyLook writes the light colours (PC.three.col) and intensities, the sun position (target + sunDir x sunDist x
    radius; target = footprint centre at Y 0), scene.background (raw hex), the plot ground / canopy / shrub material
    colours and the canopies' visibility, then refits the shadow camera. It creates and disposes no geometry,
-   material or mesh and never touches the camera: the caller only marks the frame dirty. groundOuter and trunk keep
-   their build colours (the season never touches them; neither do house, furniture or site items).
+   material or mesh and never touches the camera: the caller only marks the frame dirty. The trunk keeps its build
+   colour (the season never touches it; neither do house, furniture or site items); F6-T1b: groundOuter follows
+   L.meadowColor (the season's meadow, winter snow).
    fitShadow: the content box (footprint up to the roof top, parking + canopy, pool + rim, seating, every tree and
    shrub at its scale; the boundary wall is left out) as 8 corners in the light's view (the basis three's lookAt
    gives the shadow camera: z = light direction, x = up x z, y = z x x), plus a 0.5 m margin; each side capped at
@@ -67,6 +68,7 @@
     c.updateProjectionMatrix();
     ctx.scene.background = new THREE.Color(L.background);
     ctx.mats.ground.color.copy(col(L.groundColor));
+    if (L.meadowColor) ctx.mats.groundOuter.color.copy(col(L.meadowColor));
     if (ctx.mats.groundRing) ctx.mats.groundRing.color.copy(col(L.groundColor));
     ctx.mats.canopy.color.copy(col(L.canopyColor));
     ctx.mats.shrub.color.copy(col(L.shrubColor));
@@ -84,7 +86,7 @@
     }
     var outer = ctx.world.getObjectByName('groundOuter'), sk = outer && outer.userData.skirt;
     if (sk) {
-      var h = col(L.skyHorizon), m = col(PC.data.siteColors.groundOuter), a = sk.colors.array;
+      var h = col(L.skyHorizon), m = col(L.meadowColor || PC.data.siteColors.groundOuter), a = sk.colors.array;
       var q = [Math.min(1, h.r / (m.r || 1)), Math.min(1, h.g / (m.g || 1)), Math.min(1, h.b / (m.b || 1))];
       sk.outer.forEach(function (i) { a[i * 3] = q[0]; a[i * 3 + 1] = q[1]; a[i * 3 + 2] = q[2]; });
       sk.colors.needsUpdate = true;

@@ -13,9 +13,9 @@ function snapshot(E) {
     pose: JSON.stringify(E.PC.view3d.pose()), cam: [cam.position.x, cam.position.y, cam.position.z, cam.near, cam.far].join(), builds: E.info().builds };
 }
 
-test('setLook: lights, background, ground / canopy / shrub colours and canopy visibility follow PC.sky.compute; nothing created, disposed or moved', () => {
+test('setLook: lights, background, ground / meadow (F6-T1b) / canopy / shrub colours and canopy visibility follow PC.sky.compute; nothing created, disposed or moved', () => {
   const E = opened(), PC = E.PC, sc = E.info().scene, before = snapshot(E), col = (h) => PC.three.col(h);
-  const outer = E.world.getObjectByName('groundOuter').material.color.clone(), trunk = E.world.getObjectByName('trunks').material.color.clone();
+  const trunk = E.world.getObjectByName('trunks').material.color.clone();
   for (const season of ['spring', 'summer', 'autumn', 'winter']) for (const hour of [0, 6, 8, 12, 17.5, 22, 24]) {
     PC.view3d.setLook({ hour, season });
     const L = PC.sky.compute(hour, season, E.house.northDeg), sun = sc.getObjectByName('sun'), hemi = sc.getObjectByName('hemi');
@@ -30,7 +30,8 @@ test('setLook: lights, background, ground / canopy / shrub colours and canopy vi
     assert.ok(eqc(E.world.getObjectByName('groundPlot').material.color, col(L.groundColor)), at + ' plot ground');
     assert.ok(eqc(E.world.getObjectByName('canopies').material.color, col(L.canopyColor)) && eqc(E.world.getObjectByName('shrubs').material.color, col(L.shrubColor)));
     assert.equal(E.world.getObjectByName('canopies').visible, season !== 'winter', at + ' canopies');
-    assert.ok(eqc(E.world.getObjectByName('groundOuter').material.color, outer) && eqc(E.world.getObjectByName('trunks').material.color, trunk), 'groundOuter / trunk unchanged');
+    assert.ok(eqc(E.world.getObjectByName('groundOuter').material.color, col(L.meadowColor)), at + ' F6-T1b: groundOuter = the season meadow');
+    assert.ok(eqc(E.world.getObjectByName('trunks').material.color, trunk), 'trunk unchanged');
     assert.deepEqual(plain(E.info().look), { hour, season });
   }
   const after = snapshot(E);

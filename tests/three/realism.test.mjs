@@ -85,7 +85,7 @@ test('lite groundOuter: the B-1 footprint hole kept, inner ring white, the skirt
   }
   for (const [hour, season] of [[12, 'summer'], [22, 'winter']]) {
     PC.view3d.setLook({ hour, season });
-    const L = PC.sky.compute(hour, season, h.northDeg), hz = lin(E, L.skyHorizon), m = lin(E, PC.data.siteColors.groundOuter), want = hz.map((x, k) => Math.min(1, x / m[k]));
+    const L = PC.sky.compute(hour, season, h.northDeg), hz = lin(E, L.skyHorizon), m = lin(E, L.meadowColor), want = hz.map((x, k) => Math.min(1, x / m[k]));
     for (let k = 0; k < col.length / 3; k++) {
       const c = [col[3 * k], col[3 * k + 1], col[3 * k + 2]];
       if (sk.outer.includes(k)) assert.ok(near3(c, want), `outer ${k}`); else assert.ok(near3(c, [1, 1, 1]), `inner ${k}`);
