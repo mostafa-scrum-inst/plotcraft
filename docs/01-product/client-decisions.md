@@ -37,3 +37,10 @@ Decisions made directly by the client (Mostafa). They override any conflicting t
 ### CD-6 Phone check of the first 3D right after F4-T1
 - Context: CTO question at the F3 feature review (F1 real-device gate; CTO will not approve the F4 review without one real-phone look).
 - Decision: **the client (or someone he names) checks the 3D on a phone right after the F4-T1 publish** (~5 min: loads + Skip to 3D, one-finger orbit / two-finger zoom-pan without page scroll, colours and contrast, room drag/resize, delete a room + reopen -> Resume). Answers go into docs/04-feature-reviews/F1.md / F4 review.
+
+## 2026-11-22 08:10 UTC — Phone gate (CTO card, batch 14)
+
+### CD-7 Close the real-device gap with a named phone checker
+- Context: CD-6 phone answers had not arrived; the CTO offered three ways to close the gap (docs/04-feature-reviews/F4-cto-gate.md).
+- Decision: **the client (or someone he names) does the 5-minute phone check** (testing doc https://claude.ai/artifact/TVkPgkC5K4Fbah3cgtEVha section 6, on app v7).
+- Consequence: F4 closes when CD-6 a–c pass; F5 closes after F5-T3b runs on the findings, QA incl. QA_FULL=1, republish (CTO table in F4.md/F5.md).
