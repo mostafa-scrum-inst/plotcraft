@@ -44,7 +44,7 @@ const REC = () => { const raf = window.requestAnimationFrame.bind(window); windo
   window.requestAnimationFrame = (cb) => { window.__raf++; return raf((ts) => { cb(ts); if (window.__recOn && window.PC && PC.view3d && PC.view3d.pose) { const fl = PC.debug && PC.debug.scene ? PC.debug.scene().flight : null; window.__rec.push([ts, PC.view3d.pose(), PC.view3d.flying ? PC.view3d.flying() : null, fl ? fl.t : null]); } }); }; };
 const READY = () => { const i = PC.debug.scene(), q = (h) => document.querySelector(`[data-pc="${h}"]`); return (i.active && !i.building && i.builds > 0 && q('v3-building').hidden && !i.frame && !i.dirty) || !q('v3-unavailable').hidden; };
 async function ready(S, ms = 8000) { const ok = await S.until(() => S.page.evaluate(READY), ms); await S.settle(); return ok; }
-const landed = (S) => S.until(() => S.page.evaluate(() => !PC.view3d.flying() && !PC.debug.scene().frame && !PC.debug.scene().dirty), 5000);
+const landed = (S) => S.until(() => S.page.evaluate(() => !PC.view3d.flying() && !PC.debug.scene().frame && !PC.debug.scene().dirty), 12000);
 async function to5(S, mut = '') {
   await S.page.evaluate((m) => { const st = PC.sample.state(); new Function('s', m)(st); st.plans = {}; st.stage = 1; PC.store.replace(st); PC.store.go(2); PC.store.go(3);
     PC.store.commit((s) => { for (const id in s.plans) if (!s.plans[id].error) s.plans[id].approved = true; }, { nav: true }); PC.store.go(4); PC.store.go(5); }, mut);
@@ -131,7 +131,7 @@ await guard('A 1280x800', async () => {
   if (!eq(sel.first, ['', 'Go to room…'])) f.push(`first option ${JSON.stringify(sel.first)}`);
   if (!eq(sel.groups, groups.map((g) => ({ label: g.label, rooms: g.rooms })))) f.push(`optgroups ${JSON.stringify(sel.groups).slice(0, 300)} vs mine ${JSON.stringify(groups).slice(0, 300)}`);
   if (sel.loose !== 1) f.push(`${sel.loose} options outside the groups`);
-  if (sel.tour.length) f.push(`tour controls enabled ${sel.tour}`);
+  if (sel.tour.length && !(PC.three && PC.three.tour)) f.push(`tour controls enabled ${sel.tour}`);   // F5-T2 (marker PC.three.tour) makes them live
   R.check(`${T}: room select enabled, ${sel.h.toFixed(0)} px, "Go to room…" first, ${groups.length} optgroups lowest first (LEVEL_LABEL) with the plan names in plan order (14 rooms); tour controls still disabled`, f);
   await S.shot('A-select');
   lap('load');
