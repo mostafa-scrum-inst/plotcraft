@@ -56,10 +56,13 @@ Everything lives on disk under /home/claude/plotcraft (cloud sessions: /home/use
 - App v6 same URL; testing doc https://claude.ai/artifact/Fi6GyeFc5Cyyr4bejW5GUX
 - Run-time rule (TL): target 420 s; 420-440 re-run once; 2 in a row >420 or any >440 => trim before merge; hard cap 480 s. QA_FULL=1 list must be green before F5 feature review.
 
-## Next batch (batch 14): F5-T3a Designer pass (non-phone part)
-1. TL split F5-T3: T3a now (screens at 4 viewports, 3D panel layout incl. 42.5 % at 640x360, tour bar/caption placement, desktop framing under side panel = FS camera change with unit test, tour pacing + summer-evening shadow data, F1 polish not tied to phone); T3b after client phone answers.
-2. CTO asked (a53e7c8c7a110e595): go for T3a before device evidence; substitute for the phone gate if the client never answers -> client decision card. Answer in docs/04-feature-reviews/F4-cto-gate.md.
-3. Then F4 review, F5-T3b, F5 feature review, final release.
+## Batch 14 result: F5-T3a DONE
+- Lens-shift framing, 640x360 side-by-side, caption/tour bar placement, O-1 shadow data, tour pacing (overview 4.5 s, bEyeUp 2.5), legend Parking/Pool, A-15 label culling, saving-stopped toast + no-save chip + read-only resume. QA round 2 PASSED 419.8 s. TL outcome APPROVED. App v7; testing doc https://claude.ai/artifact/SCCTR7B12rB9kFeCdKDsUb
+
+## Next batch (batch 15): F5-T3c + F4/F5 feature reviews
+1. F5-T3c (FS): run-all longest-first scheduling from tests/durations.json; accept = two green full runs <= ~405 s.
+2. QA_FULL=1 green once on the review commit; then F4 and F5 feature reviews (PM + CTO, TL inputs), CTO verdict conditional on the phone gate.
+3. Release after the client's phone-gate choice (card open): option 1 -> F5-T3b; option 2 -> hosted-page Chrome check; option 3 -> waiver recorded. Release commit checklist in docs/03-tasks/F5-T3/outcome-review.md.
 
 ## Known limits owned by Designer F5-T3b (after F5-T3a; detail in docs/03-tasks/F5-T3/impl-notes.md)
 - Legend at 1280x800 wraps to 2 lines (46 px) when Parking, Pool and "* set by you" all show; "* by you" does not fix it, PM text kept. Accepted unless the phone/desktop pass says otherwise.
