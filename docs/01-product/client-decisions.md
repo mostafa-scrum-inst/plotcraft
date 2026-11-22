@@ -44,3 +44,10 @@ Decisions made directly by the client (Mostafa). They override any conflicting t
 - Context: CD-6 phone answers had not arrived; the CTO offered three ways to close the gap (docs/04-feature-reviews/F4-cto-gate.md).
 - Decision: **the client (or someone he names) does the 5-minute phone check** (testing doc https://claude.ai/artifact/TVkPgkC5K4Fbah3cgtEVha section 6, on app v7).
 - Consequence: F4 closes when CD-6 a–c pass; F5 closes after F5-T3b runs on the findings, QA incl. QA_FULL=1, republish (CTO table in F4.md/F5.md).
+
+## 2026-11-22 18:20 UTC — Visual realism (client request)
+
+### CD-8 Upgrade the 3D visuals: current look is "too far from realistic"
+- Request (client, verbatim): "do another batch to upgrade the visuals as it is too far from realistic".
+- Scope (coordinator brief): 3D view first — materials and textures, lighting and shadows, sky and ground, landscaping, window and roof detail.
+- Binding constraints carried over: single-file dist, three.js r128 from cdnjs only (no extra downloads; textures procedural or inline), G6 budgets, test run ≤ 420 s, phone gate CD-7 still open (the phone check should run on the upgraded build).
