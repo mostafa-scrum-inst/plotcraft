@@ -61,5 +61,10 @@ Everything lives on disk under /home/claude/plotcraft (cloud sessions: /home/use
 2. CTO asked (a53e7c8c7a110e595): go for T3a before device evidence; substitute for the phone gate if the client never answers -> client decision card. Answer in docs/04-feature-reviews/F4-cto-gate.md.
 3. Then F4 review, F5-T3b, F5 feature review, final release.
 
-## Known limits owned by Designer F5-T3
-Overridden-edge label pile-up; legend wraps at 1280x800 with "* set by you"; area label wider than narrow footprints; no Parking/Pool legend entries; pool-size note wrap at 360 px.
+## Known limits owned by Designer F5-T3b (after F5-T3a; detail in docs/03-tasks/F5-T3/impl-notes.md)
+- Legend at 1280x800 wraps to 2 lines (46 px) when Parking, Pool and "* set by you" all show; "* by you" does not fix it, PM text kept. Accepted unless the phone/desktop pass says otherwise.
+- Zero rooms: PC.house.build returns null, stage 5 shows "3D view unavailable" (FS/PM: block Next from stage 3 or a dedicated empty-house message).
+- Tour: eyes-on frames at stops and leg quartiles not taken (r128 frame capture too slow in CI); numbers only (verify/tour.mjs). Do it in the real-device pass.
+- Stage-3 warnings chip vs a label at the default fit: not reproduced in the sweep; re-check on the phone screenshots.
+- Stage-3 640x360 blocking message: no clamp (Approve stays in view at 4.5 lines); revisit only if a longer note text appears.
+- Phone-only tuning waits for device evidence (CTO condition a): closing radius, gesture thresholds, pixel ratio, shadow map size, occl.bottom for the phone bottom dock.

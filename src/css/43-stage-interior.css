@@ -34,6 +34,9 @@
   .pc-interior__col { padding: var(--s5) var(--s4); gap: var(--s5); }
   .pc-interior .pc-cards { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
   .pc-interior .pc-card { display: flex; }
+  /* F5-T3a (TL F3-T3 note 4): the phone grid's align-self end / start would push name + radio to the right edge of the
+     flex column; both start at the description's left edge */
+  .pc-interior .pc-card__name, .pc-interior .pc-card__desc { align-self: stretch; }
   .pc-hint { height: 96px; }
 }
 

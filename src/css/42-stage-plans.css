@@ -118,6 +118,8 @@
   .pc-plans .pc-toolrow > .pc-toolrow__end { flex: 1 1 auto; }
   .pc-plans__regen-txt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .pc-plans .pc-msg { font-size: var(--fs-cap); }
+  /* F5-T3a: no room selected -> one line ("None selected"), not two more "–" rows; the FS sets .is-empty */
+  .pc-plans__readout.is-empty .pc-tb__cell + .pc-tb__cell { display: none; }
 }
 
 /* F4-T2 Step 0: one-step Undo between Regenerate and Approve (Designer, docs/03-tasks/F4-T2/designer-plan.md §1) */

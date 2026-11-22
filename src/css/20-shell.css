@@ -136,3 +136,8 @@
   .pc-stage--canvas { grid-template-columns: minmax(0, 1fr) var(--panel-w-short); grid-template-rows: minmax(0, 1fr); }
   .pc-panel { border-top: 0; border-left: 1px solid var(--ink); overflow-y: auto; overscroll-behavior: contain; }
 }
+
+/* F5-T3a: header no-save chip beside the unit toggle (shown by the FS when storage is unavailable, all stages).
+   44 px target, quiet ink, the full sentence in its accessible name and tooltip. */
+.pc-nosave { flex: none; width: 44px; min-width: 44px; padding: 0; color: var(--ink-3); }
+.pc-nosave[hidden] { display: none; }

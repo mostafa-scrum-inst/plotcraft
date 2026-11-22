@@ -7,7 +7,7 @@
     grid: { minor: '#E1E3E0', major: '#AEB7BB', label: '#46535F', bounds: '#7C8791' },
     plot: { fill: 'rgba(27,79,143,0.08)', stroke: '#16212B', open: '#16212B', live: '#1B4F8F' },
     vertex: { fill: '#FFFFFF', stroke: '#1B4F8F', first: '#C2410C', active: '#C2410C' },
-    label: { text: '#16212B', halo: '#FBFAF6', muted: '#46535F' },
+    label: { text: '#16212B', halo: '#FBFAF6', muted: '#46535F', area: '#46535F' },   // area: room area line (F5-T3a)
     edge: { front: '#1B4F8F', back: '#46535F', side: '#7C8791', focus: '#C2410C' },   // focus: edge highlighted from the Q6 edge list (F2-T3)
     setback: { fill: 'rgba(168,35,28,0.10)', line: '#A8231C' },
     buildable: { line: '#1C6B46' },
@@ -34,7 +34,8 @@
     font: {
       label: '600 12px ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace',
       room: '600 12px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif',
-      roomSmall: '600 10px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif'   // tiny room labels (F3-T2)
+      roomSmall: '600 10px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif',   // tiny room labels (F3-T2)
+      area: '500 12px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif'   // room area line under the name (F5-T3a)
     }
   };
 })(globalThis.PC = globalThis.PC || {});
