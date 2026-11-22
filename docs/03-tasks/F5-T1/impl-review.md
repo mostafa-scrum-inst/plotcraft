@@ -84,4 +84,16 @@ The highlight casts and receives no shadows. The look is untouched (tested at 22
 9. **Version markers:** `v3-room` is enabled. The tour controls stay disabled until F5-T2.
 10. **Full run:** ≤ 420 s at `--jobs 3` after your trim and finding 7.
 
+## Addendum (TL, QA B-1), 2026-11-22
+- **Fix 88dd164 (main): approved.** `groundOuter` is now a ShapeGeometry square of `outerK x R` with the footprint as its hole, built from the same `footHole()` path as `groundPlot`.
+  - The winding is counter-clockwise, so after the −π/2 turn the normal is +Y and the u/v → X/Z mapping matches `groundPlot`.
+  - Mesh count, material and the 0.05 m drop are unchanged.
+  - With `groundCap` shown (every view except B), the footprint is covered as before.
+- **Why the footprint hole:** it is the minimal opening, and it avoids the step a plot-outline hole would leave at the plot edge. Hiding `groundOuter` for B was rejected (the outside ground would vanish).
+- **Regression tests:** the `shell.test` outline and hole check, and 2 real-r128 checks. The raycast to the basement highlight and the level-B first hit both fail on the old code.
+- **My re-run in main:** `--three --e2e --only shell,view3d-real` passed in 52.7 s (three 77, shell 596, view3d-real 50).
+- **Visual check:** the QA shot `A-basement-1280x800.png` shows the Maid's room with its highlight in the open pit.
+- **Process note:** the bug dates from F4-T1. My F4-T1 / F4-T2 reviews looked at the basement through the mock and the sample, which has no basement; no real-r128 basement shot was taken. From now on, real-r128 checks of a level-dependent view include a basement house.
+- **QA:** re-test B-1 at 360x640 and 1280x800 (finder pick and the Basement level radio), then run the full run at 420 s or less.
+
 VERDICT: APPROVED
