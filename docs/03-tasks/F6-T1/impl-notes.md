@@ -3,9 +3,12 @@
 Date: 2026-11-22. Scope: plan.md §A + steps 1–4 and 6 of F6-T1a (pipeline and world). Step 5 (the Designer's ACES
 colour retune and the sky golden regeneration) is not in this commit. `roofOnOpen: true` is final (CD-9).
 
-**Status: FS side green. The full run is not green yet:** 7 QA suites fail, and every failure is an expected contract
-change listed in §6. QA owns those rows (A-16) and updates them on this branch. The two green full runs (≤ 420 s, and
-`QA_FULL=1` ≤ 480 s) come after that, so the T1a impl review is not requested yet.
+**Status:**
+- **Gate runs** on f6t1 at 817ce31: the FS work, the Designer retune 20c9238, and main merged in with QA's rows 5ab49de.
+  - Full run 1 (with `--write-durations`): **green, 405.0 s**.
+  - Full run 2: **green, 400.6 s**.
+  - `QA_FULL=1`: **green, but 545.6 s**, over the 480 s line. See §2a.
+- The QA shot and metrics files rewritten by the runs were restored.
 
 ## 1. What changed
 
@@ -86,6 +89,27 @@ change listed in §6. QA owns those rows (A-16) and updates them on this branch.
 - Most of the saving from spike to T1a comes from the on-demand shadow map: camera-only frames no longer re-draw the 2048 map. The QA_FULL moves account for the rest.
 - `view3d-real` grew by about 13 s for the new checks (TL allowance: +15 s).
 - The QA suites will change once QA updates its rows, so the gate numbers come from the two green runs.
+
+## 2a. The QA_FULL=1 run (545.6 s, over the 480 s line)
+
+- **C-4.8 solo step:** best of 3 is 113 ms (113, 122, 126), and the build alone (to "ready") is 13 ms. It ran alone, before the pool, and its line was printed again at the end of the report.
+- **Where the time goes** (sum of file times: 1 175.5 s in the default run, 1 589.9 s under `QA_FULL`, +414 s):
+
+  | File | default (s) | QA_FULL (s) | delta (s) | owner |
+  |---|---:|---:|---:|---|
+  | qa f6-t1 (leak, maximum house, 200 ops: 175 s on its own) | 35.0 | 218.4 | +183 | QA |
+  | qa f5-t3 | 21.2 | 73.4 | +52 | QA |
+  | qa f4-t2-step0 / f2-t2 / f1-t1 / f4-t1 / f4-t2 / f2-t3 / f1-t3 / f5-t2 | — | — | +11 to +25 each | QA |
+  | e2e view3d-real (context loss and restore) | 26.9 | 38.8 | +12 | FS |
+  | e2e device-sweep | 9.0 | 19.9 | +11 | Designer |
+  | solo build-time | — | 3.9 | +4 | FS |
+
+- **Scheduling makes it worse.** `run-all` starts files longest-first using `durations.json`, which holds the default-run times. So f6-t1 (35 s there) started late and became the 218 s tail.
+- **Even with ideal scheduling** the run would take about 1 590 / 3 ≈ 530 s, so the 480 s line also needs the QA_FULL work cut.
+- **The largest single item is QA's 200-op leak run on the maximum house.** Options for the TL:
+  - QA reduces it;
+  - it becomes its own release step;
+  - `run-all` gets a QA_FULL durations table so the long files start first.
 
 ## 3. On-demand shadow map (TL Q-T8 follow-up, CTO conditions)
 
