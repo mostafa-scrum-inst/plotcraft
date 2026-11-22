@@ -61,7 +61,9 @@ function pool(tasks) {
     const start = () => {
       if (next >= tasks.length) { if (!running) resolve(failed); return; }
       const task = tasks[next++], t = Date.now(), out = []; running++;
-      const child = spawn(process.execPath, task.argv, { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
+      // QA_RELEASE belongs to the release step alone: pool files never see it (run-f6-t1 would switch streams)
+      const env = Object.assign({}, process.env); delete env.QA_RELEASE;
+      const child = spawn(process.execPath, task.argv, { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] });
       child.stdout.on('data', (d) => out.push(d)); child.stderr.on('data', (d) => out.push(d));
       child.on('close', (code) => {
         console.log(`\n=== ${task.label} ===`); process.stdout.write(Buffer.concat(out));
