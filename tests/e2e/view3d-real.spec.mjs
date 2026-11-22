@@ -5,7 +5,6 @@
 // Usage: node tests/e2e/view3d-real.spec.mjs [--shots]   (--shots writes docs/03-tasks/F4-T3/shots/, never in run-all;
 // the F4-T1 shots stay as that task's record)
 import vm from 'node:vm';
-import os from 'node:os';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
@@ -352,8 +351,7 @@ async function maxBudget(page, tag) {
     }
     V.setRoof(true);
     const h = PC.debug.house(), c = document.querySelector('[data-pc="v3-canvas"]'), t = [];
-    // best of 3; under a loaded full run (3 browser files at once) up to 3 more tries, best of all kept
-    for (let k = 0; k < 6 && (k < 3 || Math.min(...t) > 400); k++) {
+    for (let k = 0; k < 3; k++) {
       const h2 = Object.assign({}, h, { key: h.key + '-b' + k });
       const t0 = performance.now();
       await new Promise((res) => V.open(h2, c, (st) => { if (st === 'ready') res(); }));
@@ -365,11 +363,10 @@ async function maxBudget(page, tag) {
   });
   T.ok(r.on[0] <= 160 && r.off[0] <= 160 && r.on[1] <= 300000 && r.off[1] <= 300000, `${tag} maximum house: draw calls ${r.on[0]} / ${r.off[0]} <= 160, triangles ${r.on[1]} / ${r.off[1]} <= 300 000 (Roof on / off)`);
   const best = Math.min(...r.build);
-  // C-4.8 is <= 400 ms on a quiet machine (measured alone: 324-390 ms). Inside a full run three browser files share
-  // the 4 cores (load average > 2) and the same build takes 590-720 ms, so the bar there is 2 x (a hang still fails).
-  const load = os.loadavg()[0], bar = load > 2 ? 800 : 400;
-  T.ok(best <= bar, `${tag} maximum house build ${best.toFixed(0)} ms (best of ${r.build.map((x) => x.toFixed(0)).join(', ')}) <= ${bar} ms (C-4.8; load ${load.toFixed(1)})`);
-  console.log(`  [record] ${tag} max house: calls ${r.on[0]} / ${r.off[0]}, triangles ${r.on[1]} / ${r.off[1]}, build best ${best.toFixed(0)} ms (load ${load.toFixed(1)}), meshes ${r.meshes}`);
+  // Regression guard only (TL ruling): <= 800 ms in every run, other browser files running beside it. C-4.8 itself
+  // (<= 400 ms) is tests/solo/build-time.mjs, which run-all runs alone under QA_FULL=1.
+  T.ok(best <= 800, `${tag} maximum house build ${best.toFixed(0)} ms (best of ${r.build.map((x) => x.toFixed(0)).join(', ')}) <= 800 ms (regression guard; C-4.8 is the QA_FULL solo step)`);
+  console.log(`  [record] ${tag} max house: calls ${r.on[0]} / ${r.off[0]}, triangles ${r.on[1]} / ${r.off[1]}, build best ${best.toFixed(0)} ms (loaded), meshes ${r.meshes}`);
 }
 
 // Lite tier smoke (CTO C-4.7): a fresh page with the tier switched by data before stage 5 opens renders a frame.

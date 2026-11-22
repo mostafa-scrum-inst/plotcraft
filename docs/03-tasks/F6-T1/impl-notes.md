@@ -44,8 +44,22 @@ change listed in §6. QA owns those rows (A-16) and updates them on this branch.
 - **Maximum house on real r128, 1280x800, Reset, including the shadow pass:**
   - draw calls 24 (Roof on) / 23 (Roof off), against a limit of 160;
   - triangles 8 433 / 8 229, against 300 000.
-- **Build** (best of 3, including textures and the first frame): 324–390 ms measured alone (C-4.8 ≤ 400 ms).
-  - Inside a full run (3 browser files, load > 2) it is 590–720 ms. The check therefore uses 800 ms when the load average is above 2 and says so in its message. **TL call:** keep this, or make C-4.8 a solo-only measurement.
+- **Build time (C-4.8; TL ruling and CTO conditions after 17f291e).** There are two checks:
+  - **The budget:** `tests/solo/build-time.mjs` measures the maximum house at 1280x800 on real r128, best of 3, from `open()` to the end of the first frame after the build. That covers geometry, materials, cached textures, their GPU upload and the 2048 shadow map.
+    - `run-all` runs it only under `QA_FULL=1`, through `spawnSync` before the browser pool starts. The runner therefore enforces that nothing runs beside it, rather than relying on scheduling.
+    - The `[C-4.8]` line is printed again at the end of every `QA_FULL` report.
+    - Above 380 ms, a NOTE line asks for a TL review.
+    - `--only build-time` runs it on its own.
+  - **The regression guard:** `view3d-real` keeps a best-of-3 check of ≤ 800 ms in every run. It never counts as meeting the budget.
+  - **Measured:**
+
+    | Run | build + first frame | build alone (to `ready`) |
+    |---|---:|---:|
+    | solo, 4 runs | 105 / 110 / 114 / 132 ms | 6–13 ms |
+    | loaded: `view3d-real` alone | — | 324–402 ms |
+    | loaded: full run 1 | — | 590–720 ms |
+
+    In `view3d-real` three pages render side by side in one browser, and in the full run three browser files also share the 4 cores.
 - **Seam** at 12 / 17.5 / 22 h, phiMax and rMax, both viewports: 0–1 per channel. Both sides of the horizon equal the horizon hex within ±1.
   - Fully fogged ground equals the raw horizon hex in 20 of 25 columns at 1280 and 16 of 25 at 360. The other columns have the house or trees in front.
 - **Sky pixel** at about 16° elevation: equal to the dome gradient, ±0.

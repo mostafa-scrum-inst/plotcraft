@@ -8,6 +8,9 @@
 //   node tests/run-all.mjs --qa --only f1-t3       one QA suite
 //   --jobs N                                       browser files run N at a time (default 3: two green full runs at 3
 //                                                  on this 4-core machine, TL F4-T1 outcome review; target <= 420 s)
+//   QA_FULL=1 node tests/run-all.mjs               release gate: the QA_FULL-only checks too, and first, alone, the C-4.8
+//                                                  build-time step (tests/solo/build-time.mjs); its number is reprinted
+//                                                  at the end
 //   --write-durations                              after a green full run, rewrite tests/durations.json (commit it
 //                                                  with the run)
 //
@@ -73,8 +76,21 @@ if (want('--three')) { const f = list('three', '.test.mjs'); if (f.length) run(`
 const browser = [];
 if (want('--e2e')) for (const f of picked(list('e2e', '.spec.mjs'))) browser.push({ label: 'e2e ' + f.slice(here.length + 1), argv: [f] });
 if (want('--qa')) for (const f of picked(list('qa', '.mjs').filter((f) => /[\\/]run-[^\\/]+\.mjs$/.test(f)))) browser.push({ label: 'qa ' + f.slice(here.length + 1), argv: [f, '--no-shots'] });
+// C-4.8 solo step (CTO / TL, F6-T1a): under QA_FULL=1 the build-time budget runs alone, to its end, before the
+// browser pool starts, so nothing else runs beside it; its number is printed again at the end of the report.
+const soloFailed = [], soloLines = [];
+if (process.env.QA_FULL && want('--e2e') && (!words.length || words.some((w) => 'solo/build-time'.includes(w)))) {
+  const f = join(here, 'solo', 'build-time.mjs'), label = 'solo solo/build-time.mjs', t = Date.now();
+  console.log(`\n=== ${label} (alone, before the pool) ===`);
+  const r = spawnSync(process.execPath, [f], { cwd: root, encoding: 'utf8' });
+  process.stdout.write((r.stdout || '') + (r.stderr || ''));
+  soloLines.push(...(r.stdout || '').split('\n').filter((l) => l.includes('[C-4.8]')));
+  console.log(`(${label}: ${r.status === 0 ? 'ok' : 'FAILED, exit ' + r.status}, ${secs(Date.now() - t)})`);
+  if (r.status !== 0) soloFailed.push(label);
+}
 if (browser.length) console.log(`\n${browser.length} browser file(s), ${jobs} at a time`);
-const failed = await pool(longestFirst(browser));
+const failed = soloFailed.concat(await pool(longestFirst(browser)));
+if (soloLines.length) console.log('\n' + soloLines.join('\n'));
 if (failed.length) console.log('\nfailed: ' + failed.join(', '));
 if (args.includes('--write-durations')) {
   if (failed.length || only.length || words.length) console.log('\nrun-all: durations not written (needs a green full run)');
