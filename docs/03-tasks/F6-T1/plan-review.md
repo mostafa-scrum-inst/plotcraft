@@ -115,3 +115,27 @@ Two technical points must change (required items 1 and 2). The rest is approved 
 - **CTO** (9030f68): Q-T5, the raw fog colour and required changes 1 and 2 are accepted. C-4.4 and §0 are corrected, and the seam check (≤ 3 per channel at noon, evening and night) stays. The test for required change 2 checks the dome against `far` at `rMax`, with `frustumCulled` false.
 
 VERDICT: APPROVED
+
+## Addendum: Q-T8 QA_FULL=1 moves agreed (TL, 2026-11-22)
+
+QA's input is `qa-full-moves.md` (64ca07c).
+- The spike puts the work at +146 s for real-r128 and +31 s for FS e2e.
+- The need is about 170 to 200 s of work, or 55 to 65 s of wall time.
+
+**Agreed:**
+1. **QA's 8 rows move behind QA_FULL=1, as listed (about 86 s of work).**
+   - These stay in the default run: the wheel cancel, one recorded flight, every 1280x800 pass and the hour presets.
+2. **f6-t1-leak default.** The default run is 50 operations on the sample at 960x600 (about 10 s saved). The 200-operation maximum-house stream at 1280x800 stays QA_FULL only.
+3. **FS duplicate checks.** The FS view3d and view3d-real checks that duplicate a QA section (roof switch, loop idle, context loss) run only under QA_FULL. QA gives FS the pairs of check and covering section. The new F6 checks stay in the default run: seam, dome clip, fog near and the colour-pipeline quad.
+4. **Shadow updates (FS product change, a per-frame cut).**
+   - `shadowMap.autoUpdate = false`, with `needsUpdate` set on build, in `applyLook` and on resize or refit. Camera-only frames reuse the map, because the shadow camera is fitted to the plot.
+   - Tests: a mock test that a camera-only frame sets no `needsUpdate`, and a mutation where the update is missed after `applyLook`, which the real-r128 shadow check must catch.
+   - FS re-times the spike with this change and records the before and after numbers in impl-notes.md. The CTO was informed.
+5. **Rejected:** forcing `tier: lite` in the behaviour suites.
+
+**Gate on the T1a build:**
+- two full runs ≤ 420 s;
+- QA_FULL=1 ≤ 480 s, with the new leak stream;
+- `tests/durations.json` refreshed.
+
+If the runs are still over: QA measures f1-t1-layout 640x360 next, and any further cut is a TL call. Each moved check keeps its coverage at 1280x800 or on the sample, and QA_FULL=1 restores the full set.
