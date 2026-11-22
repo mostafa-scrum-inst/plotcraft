@@ -51,3 +51,7 @@ Decisions made directly by the client (Mostafa). They override any conflicting t
 - Request (client, verbatim): "do another batch to upgrade the visuals as it is too far from realistic".
 - Scope (coordinator brief): 3D view first — materials and textures, lighting and shadows, sky and ground, landscaping, window and roof detail.
 - Binding constraints carried over: single-file dist, three.js r128 from cdnjs only (no extra downloads; textures procedural or inline), G6 budgets, test run ≤ 420 s, phone gate CD-7 still open (the phone check should run on the upgraded build).
+
+### CD-9 Stage 5 opens with the Roof on (2026-11-22 19:16 UTC)
+- Decision: **open the 3D view with the roof on**, showing the finished house (PC.C.VIEW3D.roofOnOpen: true). Turning Roof off or picking a room shows the inside.
+- Consequence: PM round-15 story wording for F4-S1 / §3.3 goes in; roof stays off after a finder pick or tour (PM Q-P2).

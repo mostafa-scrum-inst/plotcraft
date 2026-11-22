@@ -3,13 +3,19 @@
 Owner: PM. Source: `docs/00-brief.md`. Status: approved by the CTO (round 2); round 3 edits made at the F1 feature review; round 4 edits apply the client's binding decisions `docs/01-product/client-decisions.md` (CD-1 to CD-3); round 5 edits made at the F2 feature review; rounds 6 and 7 fix user-facing texts at the F3-T2 and F3-T3 plan reviews; round 8 edits made at the F3 feature review; round 9 fixes the stage-5 level selector labels at the F4-T1 plan review; round 10 applies CD-4 / CD-5 and answers the F4-T2 plan questions; round 11 records the default-camera decision and the vegetation-shortfall warning at the F4-T3 start; round 12 fixes the room-finder caption and dropdown state at the F5-T1 plan; round 13 answers the F5-T2 tour questions; round 14 gives the F5-T3a saving texts and labels; round 15 answers the F6-T1 Roof-on-at-open questions.
 This document says **what** and **how we know it works**. How it is built is the Tech Lead's call.
 
+## Changes in round 16 (2026-11-22, F6-T1b: a lower Reset camera; no story IDs or criteria changed)
+
+| Item | Decision |
+|---|---|
+| Reset pitch, resetPhi 50° → about 62° (Designer request, TL recommends yes for T1b) | **Agreed for F6-T1b**, so the CD-8 sky and fog show by default. Conditions, judged on the Designer's Reset shots at 360x640, 640x360 and 1280x800 (sample, Roof on per CD-9): the **whole plot** stays framed (F4-S2: "frames the whole plot from the street side" is unchanged and binds); the house and its front read clearly; the garden seating stays at least partly visible (`camera-decision.md`). The pool stays hidden at Reset (an accepted limit). If a lower angle loses the plot's far edge on a phone, the Designer picks the largest angle that keeps it, not 62°. The tour overview follows Reset (A-14). No story text changes, because no criterion names the angle. |
+
 ## Changes in round 15 (2026-11-22, F6-T1 plan, CD-8 realism: Roof on at open; no story IDs changed)
 
 FS plan `docs/03-tasks/F6-T1/plan.md` §11, Q-P1 and Q-P2, forwarded by the TL. Whether stage 5 opens with the Roof on is on a client decision card that is still pending; the plan assumes yes (`PC.C.VIEW3D.roofOnOpen`).
 
 | Item | Decision |
 |---|---|
-| Q-P1 story text | **Yes, the stories change if the client chooses Roof on; no help line is added.** The amendment below applies only on a "yes" (on a "no", today's text stands). F4-S1 bullet 2, last sentence, becomes: "**The view opens on "All" with the Roof on, showing the outside of the house; switching Roof off (or choosing a floor) shows the interiors.**" Section 3.3, last bullet, becomes: "A separate "Roof" switch in the 3D view is **on** when the view opens; the roof (with the closed exterior, round 10) is drawn only when it is on and the level selector is "All". Choosing a single floor, using the room finder or starting the tour shows the interiors (the finder and the tour switch it off)." There is **no new help text in the panel**: the Roof switch already shows its state next to the floor selector, the phone panel is at its 33 % limit, and the testing doc / release notes say it in one line: "The 3D view opens on the outside of the house; switch Roof off to see inside." |
+| Q-P1 story text | **Yes, the stories change if the client chooses Roof on; no help line is added.** The amendment below applies only on a "yes" (on a "no", today's text stands). **Applied: the client chose Roof on (CD-9).** F4-S1 bullet 2, last sentence, becomes: "**The view opens on "All" with the Roof on, showing the outside of the house; switching Roof off (or choosing a floor) shows the interiors.**" Section 3.3, last bullet, becomes: "A separate "Roof" switch in the 3D view is **on** when the view opens; the roof (with the closed exterior, round 10) is drawn only when it is on and the level selector is "All". Choosing a single floor, using the room finder or starting the tour shows the interiors (the finder and the tour switch it off)." There is **no new help text in the panel**: the Roof switch already shows its state next to the floor selector, the phone panel is at its 33 % limit, and the testing doc / release notes say it in one line: "The 3D view opens on the outside of the house; switch Roof off to see inside." |
 | Q-P2 Roof after the finder / tour | **No change** (FS and TL recommendation): the Roof stays off after a room pick or the tour ends, like the camera and the level (round 13). Turning it back on would hide the room the user just went to. Roof on is one tap. |
 
 ## Changes in round 14 (2026-11-22, F5-T3a Designer plan: saving texts and two shorter labels; no story IDs changed)
@@ -277,7 +283,7 @@ Product answers:
 - **Pitched:** two-slope gable roof, ridge along the longer footprint side.
 - **Terrace:** flat slab with a tall parapet (about 1 m) and a pergola block.
 - **Usable roof = yes** (Q7): Pitched is unavailable; if Pitched was selected it changes to Flat with an inline note. A usable roof shows a stair-head block on the roof and at least the tall parapet.
-- **The roof never hides interiors by default:** a separate "Roof" toggle in the 3D view is **off** by default; the roof is drawn only when it is on **and** the level selector is "All", and then the exterior walls are drawn up to it (closed house, round 10). Using the room finder or starting the tour switches it off.
+- **Roof switch (CD-9, round 15):** a separate "Roof" switch in the 3D view is **on** when the view opens; the roof (with the closed exterior, round 10: exterior walls drawn up to it) is drawn only when it is on **and** the level selector is "All". Choosing a single floor, using the room finder or starting the tour shows the interiors (the finder and the tour switch it off, and it stays off after they end).
 
 ## 4. Defaults and numbers (single source; the TL may propose changes here, in one place)
 
@@ -494,7 +500,7 @@ Draw the land as a polygon with live measurements; includes the stage navigation
 
 **F4-S1 See the house on the plot.** As an architect, I want a block-style dollhouse of the approved plans on my plot so that I and my client can read the design at a glance.
 - The 3D view shows the plot at the drawn shape, the building at the footprint position (3.1), and one storey per plan level at the Q8 height; rooms match the approved plans in position and size.
-- Dollhouse: no ceilings, and walls are cut away/lowered so room interiors are visible from above. A level selector (All / each plan level, labelled "All / Basement / Ground / First / Second" with the full floor names for screen readers, round 9) hides everything above the chosen level. **The view opens on "All" with the roof off, so the top floor's interiors are visible immediately.**
+- Dollhouse: no ceilings, and walls are cut away/lowered so room interiors are visible from above. A level selector (All / each plan level, labelled "All / Basement / Ground / First / Second" with the full floor names for screen readers, round 9) hides everything above the chosen level. **The view opens on "All" with the Roof on, showing the outside of the house; switching Roof off (or choosing a floor) shows the interiors (CD-9, round 15).**
 - A "Roof" toggle (default off) shows the Q9 roof per 3.3 when the level selector is "All"; flat, pitched and terrace are visibly different, and a usable roof shows its stair head. With the roof on the house is shown closed: exterior walls run up to the roof, which never floats (round 10).
 - Selecting Basement opens the ground inside the footprint so basement rooms are visible from above (3.2).
 - Each room has a fixed set of block furniture for its type (e.g. bed in bedroom, counter in kitchen, sofa in living, table in dining, floor seating in majlis, desk in office, fixtures in bathroom, shelves in storage, machines in laundry). Q18 changes colours/finishes only; Q19 "sparse" shows visibly fewer pieces than "full". Furniture stays inside its room.
@@ -568,7 +574,7 @@ One tap on the first screen. It must pass every validation with **no warnings**,
 - Parking: 2 x 12.5 = 25 m2 (5 x 5 m) fits the 8 m front yard. Pool S 3 x 6 m with clearance needs 5 x 8 m, fits the 7 m back yard (14.75 − 5.25 = 9.5 m wide behind the house, 20 m wide overall).
 - Area budget: footprint 142.5 + vegetation 146 + parking 25 + pool 18 = 331.5 m2 <= 584 m2; footprint % + vegetation % = 50 <= 100. No conflict, no warning.
 
-**Reviewer path on a phone:** Load sample -> Skip to 3D -> (3D opens at noon, summer, "All" levels, roof off, overview) -> Start tour. At most 6 taps. The user can also step back from the sample into any stage and edit it like a normal project (which removes "Skip to 3D").
+**Reviewer path on a phone:** Load sample -> Skip to 3D -> (3D opens at noon, summer, "All" levels, Roof on (CD-9), overview) -> Start tour. At most 6 taps. The user can also step back from the sample into any stage and edit it like a normal project (which removes "Skip to 3D").
 
 ## 7. Traceability (question -> where asked -> where it shows)
 

@@ -39,9 +39,24 @@ const O1_ROWS = { spring: ['#E0B088', '#FEB77B', 0.65, '#C5B3BB', '#767355', 0.3
 export const SKY_GOLD_O1 = SKY_GOLD.map((r) => (r[1] === 17.5 ? [r[0], r[1], ...O1_ROWS[r[0]]] : r));
 const keysAre = (sky, K) => [17, 18].every((h) => { const k = (sky.keys || []).find((x) => x.h === h); return k && Math.abs(k.sunI - K[h][0]) < 1e-9 && Math.abs(k.hemiI - K[h][1]) < 1e-9; });
 // which golden applies to this build's sky table: { rows, o1 } or null (keys match neither version)
+// F6-T1a Designer ACES retune (f6t1 20c9238, C-6.5; values entered by hand from the Designer's table, never copied from the
+// generated GOLD literals): changed key fields, the season materials, the noon look and the two generated rows the Designer
+// gave to compare with (summer 12 h and 17.5 h). Detected by keys 17 (sunI 0.91, hemiI 0.42) and 18 (0.67, 0.36).
+export const R6_KEYS = { 17: [0.91, 0.42], 18: [0.67, 0.36] };
+export const R6_KEY_EDITS = {
+  6: { sunI: 0.36, hemiGround: '#8A7A66', exposure: 1.15 }, 7.5: { sunI: 0.67, hemiGround: '#B3A890', exposure: 1.1 },
+  12: { background: '#B9D6EE', sunI: 0.85, hemiGround: '#C9BFA6', exposure: 1.1 }, 16: { background: '#BED6EA', sunI: 0.79, hemiGround: '#C2B79C', exposure: 1.1 },
+  17: { sunI: 0.91, hemiGround: '#B3A089', hemiI: 0.42, exposure: 1.4 }, 18: { sunI: 0.67, hemiGround: '#8F7868', hemiI: 0.36, exposure: 1.45 },
+  19.5: { exposure: 1.25 }, 0: { exposure: 1.3 }, 4.5: { exposure: 1.3 }, 21: { exposure: 1.3 }, 24: { exposure: 1.3 } };
+export const R6_ROWS = [['summer', 12, '#B9D6EE', '#FFF7E8', 0.85, '#D6E6F5', '#B0B18F', 0.48], ['summer', 17.5, '#DFAA81', '#FFB273', 0.79, '#C1AEB8', '#938B6E', 0.39]];
+// [ground, canopy, canopy visible, shrub] as SEASON_MATS (winter canopies stay hidden)
+export const R6_MATS = { spring: ['#76A953', '#558739', true, '#67A344'], summer: ['#668748', '#477338', true, '#507A3C'], autumn: ['#877F4D', '#A85D27', true, '#8A5A2F'], winter: ['#FFFFFF', null, false, '#CDEDFE'] };
+export const R6_NOON = { sunColor: '#FFF7E8', sunIntensity: 0.85, hemiSky: '#D6E6F5', hemiIntensity: 0.48, background: '#B9D6EE', hemiGround: '#B0B18F' };
+export const R6_SITE = { ground: '#668748', groundOuter: '#727E58', paving: '#C1B4A1', poolWater: '#398BB5', poolRim: '#F1E3C1', boundaryWall: '#B5A990', carCanopy: '#838D93', seating: '#7E664C', asphalt: '#5D6063' };
 export function skyGold(sky) {
-  if (keysAre(sky, F4T3_KEYS)) return { rows: SKY_GOLD, o1: false };
-  if (keysAre(sky, O1_KEYS)) return { rows: SKY_GOLD_O1, o1: true };
+  if (keysAre(sky, F4T3_KEYS)) return { rows: SKY_GOLD, o1: false, mats: SEASON_MATS, noon: NOON_GOLD };
+  if (keysAre(sky, O1_KEYS)) return { rows: SKY_GOLD_O1, o1: true, mats: SEASON_MATS, noon: NOON_GOLD };
+  if (keysAre(sky, R6_KEYS)) return { rows: R6_ROWS, o1: true, r6: true, mats: R6_MATS, noon: R6_NOON };
   return null;
 }
 // Designer §2 material colours per season (plot ground, canopy (visible), shrub); groundOuter #B3B0A6 always

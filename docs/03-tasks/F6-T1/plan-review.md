@@ -115,3 +115,70 @@ Two technical points must change (required items 1 and 2). The rest is approved 
 - **CTO** (9030f68): Q-T5, the raw fog colour and required changes 1 and 2 are accepted. C-4.4 and §0 are corrected, and the seam check (≤ 3 per channel at noon, evening and night) stays. The test for required change 2 checks the dome against `far` at `rMax`, with `frustumCulled` false.
 
 VERDICT: APPROVED
+
+## Addendum: Q-T8 QA_FULL=1 moves agreed (TL, 2026-11-22)
+
+QA's input is `qa-full-moves.md` (64ca07c).
+- The spike puts the work at +146 s for real-r128 and +31 s for FS e2e.
+- The need is about 170 to 200 s of work, or 55 to 65 s of wall time.
+
+**Agreed:**
+1. **QA's 8 rows move behind QA_FULL=1, as listed (about 86 s of work).**
+   - These stay in the default run: the wheel cancel, one recorded flight, every 1280x800 pass and the hour presets.
+2. **f6-t1-leak default.** The default run is 50 operations on the sample at 960x600 (about 10 s saved). The 200-operation maximum-house stream at 1280x800 stays QA_FULL only.
+3. **FS duplicate checks.** The FS view3d and view3d-real checks that duplicate a QA section (roof switch, loop idle, context loss) run only under QA_FULL. QA gives FS the pairs of check and covering section. The new F6 checks stay in the default run: seam, dome clip, fog near and the colour-pipeline quad.
+4. **Shadow updates (FS product change, a per-frame cut).**
+   - `shadowMap.autoUpdate = false`, with `needsUpdate` set on build, in `applyLook` and on resize or refit. Camera-only frames reuse the map, because the shadow camera is fitted to the plot.
+   - Tests: a mock test that a camera-only frame sets no `needsUpdate`, and a mutation where the update is missed after `applyLook`, which the real-r128 shadow check must catch.
+   - FS re-times the spike with this change and records the before and after numbers in impl-notes.md. The CTO was informed.
+5. **Rejected:** forcing `tier: lite` in the behaviour suites.
+
+**Gate on the T1a build:**
+- two full runs ≤ 420 s;
+- QA_FULL=1 ≤ 480 s, with the new leak stream;
+- `tests/durations.json` refreshed.
+
+If the runs are still over: QA measures f1-t1-layout 640x360 next, and any further cut is a TL call. Each moved check keeps its coverage at 1280x800 or on the sample, and QA_FULL=1 restores the full set.
+
+**Item 4 conditions (CTO, binding, sent to FS):**
+- `needsUpdate` is also set on each of these:
+  - the level selector;
+  - the Roof toggle, including when the finder or the tour forces it, silently or not;
+  - context restore;
+  - a season change of canopy visibility (through `applyLook`);
+  - a run-time tier switch.
+- The highlight never casts a shadow (asserted).
+- `info()` exposes a shadow update count.
+- Mock tests cover each trigger, plus "no update on an orbit or flight frame".
+- A mutation that drops the level trigger must fail a test.
+- On real r128: hide the upper levels, and the ground pixel under the upper storey changes.
+- No change to cto-constraints.md is needed.
+
+## Addendum: C-4.8 build-time check (TL, T1a)
+- The switch on load average is dropped.
+- The default run keeps a regression guard: best of 3 builds of the max house ≤ 800 ms, every time.
+- The C-4.8 check itself (best of 3 ≤ 400 ms) runs as a solo step under QA_FULL=1, the release gate.
+- Measured: 324–390 ms solo; 590–720 ms inside a loaded run.
+- The budget is unchanged. The CTO was informed.
+
+**CTO conditions on C-4.8 (binding):**
+- The runner enforces the solo step, with no other browser jobs.
+- Every QA_FULL report records the solo number. Above 380 ms, the TL reviews before anything more is added to the build.
+- The 800 ms guard never counts as meeting the budget.
+
+## Addendum: Reset camera tilt, `CAM.resetPhi` 50° → about 62° (TL)
+- **Not in T1a.** The gate runs on 20c9238 with resetPhi at 50°.
+- **A candidate for T1b**, as its own first commit, if the PM agrees (asked). If it goes in:
+  - the T1b impl-notes carry an A-16 reader list: Reset fit and rMax (which feed fog near), the tour overview stops, the F5 goldens, QA's Reset checks and the finder;
+  - the fog-near and dome-clip tests run at the narrowest aspect;
+  - the Designer signs off portrait and phone Reset shots.
+- **Winter meadow stays green:** T1b, data only, with the fog and seam tests green.
+- **The PM approved it (round 16):** it goes in T1b's first commit.
+  - **Angle:** the largest up to 62° that passes the PM's checks at 360x640, 640x360 and 1280x800 (sample, Roof on). The Designer picks it from the shots.
+  - **PM checks:**
+    - the whole plot stays in frame (F4-S2);
+    - the house front reads clearly;
+    - the garden seating stays at least partly visible.
+  - **Also:** the tour overview follows Reset, and there are no story text changes.
+- **The Designer picked 62°** (d4dda7a), and all three checks pass with the dock collapsed: margins of 15, 51 and 136 px.
+  - At 360x640 with the dock open, the plot is cut by 1 px. It was cut by 32 px at 50°. This is the known limit from occl.bottom; it is accepted and not asserted until T3b.

@@ -13,6 +13,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT, collector, launch, touchDriver } from './lib.mjs';
 import { sessions } from './session.mjs';
+import { roofOpen, roofTo } from './v3kit.mjs';
 import * as Q from './f2-t1-ref.mjs';
 import * as H from './f4-t1-ref.mjs';
 
@@ -74,16 +75,20 @@ const SHELL0 = H.loadPC3().PC.scatter ? 's.ans.vegPct = 0;' : '';   // F4-T3 (TL
 const TIMES = [], ONLY = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7).split(',').filter(Boolean);   // --only=A,C: sections by letter (mutation runs)
 async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) return; const t = Date.now(); try { await fn(); } catch (e) { R.check(`${label}: ran to the end`, [String(e && e.stack || e).split('\n').slice(0, 3).join(' | ')]); } TIMES.push(`${label} ${((Date.now() - t) / 1000).toFixed(1)} s`); }
 
+// F6-T1 run-time moves (TL Q-T8, docs/03-tasks/F6-T1/qa-full-moves.md): A 360x640, C 640x360 and D loop 360x640 run
+// with QA_FULL=1 only (the 1280x800 passes, C 360x640 and the mock stay in the default run).
+const FULL = !!process.env.QA_FULL;
 const browser = await launch();
 
 // ================= A + B: acceptance and Q14 with real r128 =================
-for (const vp of [VP.desk, VP.phone]) await guard(`A ${vp.tag}`, async () => {
+for (const vp of [VP.desk, ...(FULL ? [VP.phone] : [])]) await guard(`A ${vp.tag}`, async () => {
   const S = await session(browser, vp, { three: 'real' }), T = `A ${vp.tag} real`;
   R.check(`${T}: 3D view ready (Building... gone, frame drawn)`, await to5(S, SHELL0) ? [] : ['not ready after 8 s']);
   let i = await info(S), { s, X } = await expect(S);
   const v3 = await S.v3(), ui = await levelUi(S);
   R.check(`${T}: canvas and panel shown, no overlay`, v3.canvas && v3.panel && !v3.building && !v3.unavailable ? [] : [JSON.stringify(v3)]);
-  R.check(`${T}: opens on All with the Roof off (UI and scene)`, ui[0] && ui[0].v === 'all' && ui[0].checked && ui.filter((x) => x.checked).length === 1 && i.level === 'all' && !i.roof && !(await S.page.evaluate(() => document.querySelector('[data-pc="v3-roof"]').checked)) ? [] : [JSON.stringify(ui), i.level, i.roof]);
+  const RO = await roofOpen(S.page);   // F6-T1: Roof on at open (PC.C.VIEW3D.roofOnOpen); before: off
+  R.check(`${T}: opens on All with the Roof ${RO ? 'on (F6-T1 roofOnOpen)' : 'off'} (UI and scene)`, ui[0] && ui[0].v === 'all' && ui[0].checked && ui.filter((x) => x.checked).length === 1 && i.level === 'all' && !!i.roof === RO && (await S.page.evaluate(() => document.querySelector('[data-pc="v3-roof"]').checked)) === RO ? [] : [JSON.stringify(ui), i.level, i.roof]);
   R.check(`${T}: level options = All + the house's levels lowest first (short label, full aria-label)`, JSON.stringify(ui.map((x) => [x.v, x.text, x.aria])) === JSON.stringify([['all', 'All', 'All floors'], ['G', 'Ground', 'Ground floor'], ['1', 'First', 'First floor']]) ? [] : [JSON.stringify(ui)]);
   R.check(`${T}: scene geometry = my oracle (plot shape, footprint, storeys, rooms = approved plans, tints, stair, Q10 walls)`, cut(H.shellProblems(await world(S), X, D, { level: 'all' })));
   R.check(`${T}: canvas backing store = CSS size x pixel ratio 1`, await S.page.evaluate(() => { const c = document.querySelector('[data-pc="v3-canvas"]'); return c.width === c.clientWidth && c.height === c.clientHeight && PC.debug.scene().renderer.getPixelRatio() === 1; }));
@@ -152,7 +157,8 @@ await guard('A mock', async () => {
   const S = await session(browser, VP.phone, { three: 'mock' }), T = 'A 360x640 mock', f = [];
   if (!(await to5(S, "s.ans.floors = 3; s.ans.basement = true; s.ans.lift = true; for (const l of ['B', '2']) s.ans.rooms.push({ id: 'r' + s.ans.nextRoomId++, type: 'storage', level: l, size: 'S', area: null, master: false });"))) f.push('not ready');
   const ui = await levelUi(S), i = await info(S);
-  if (!ui[0].checked || i.level !== 'all' || i.roof) f.push('not on All with the roof off');
+  const RO = await roofOpen(S.page); if (!ui[0].checked || i.level !== 'all' || !!i.roof !== RO) f.push(`not on All with the roof ${RO ? 'on' : 'off'}`);
+  await roofTo(S, false);   // the level matrix below is judged with the Roof off, as before F6-T1
   for (const v of ['B', 'G', '1', '2', 'all']) {
     await S.act(pick(v)); await ready(S);
     const w = await visOnly(S), want = { B: -1, G: 0, 1: 1, 2: 2, all: 9 }[v];
@@ -260,10 +266,10 @@ async function gestures(vp) {
   await S.layout(`${T} stage 5 after gestures`);
   await S.end(T);
 }
-for (const vp of [VP.phone, VP.land, VP.desk]) await guard(`C ${vp.tag}`, () => gestures(vp));
+for (const vp of [VP.phone, ...(FULL ? [VP.land] : []), VP.desk]) await guard(`C ${vp.tag}`, () => gestures(vp));
 
 // ================= D: render loop (real r128) =================
-for (const vp of [VP.desk, VP.phone]) await guard(`D loop ${vp.tag}`, async () => {   // 360x640 added in Round 1 (F4T1-1 re-test: the stage-4 strip case)
+for (const vp of [VP.desk, ...(FULL ? [VP.phone] : [])]) await guard(`D loop ${vp.tag}`, async () => {   // 360x640 added in Round 1 (F4T1-1 re-test: the stage-4 strip case)
   const S = await session(browser, vp, { three: 'real', init: [RAF] }), T = `D ${vp.tag} real`;
   await to5(S);
   const idle = async (ms = 600) => { await S.page.evaluate(() => { window.__raf = 0; }); const r0 = (await info(S)).renders; await S.page.waitForTimeout(ms); const i = await info(S); return { raf: i.raf, renders: i.renders - r0 }; };   // the idle span is the thing under test
@@ -392,7 +398,7 @@ await guard('G controls', async () => {
   }
   R.check(`${T}: each disabled control (${LOOK_LIVE ? '' : 'presets, season, '}room finder, tour start / pause, speed radios${ROOF_LIVE ? '' : ', Roof'}) renders differently from itself enabled`, g);
   if (ROOF_LIVE) { // F4-T2: the Roof switch is live: a tap turns the roof on (state, roof group shown with All) and changes the render
-    await S.act('v3-tab-view'); await S.act(pick('all')); await ready(S); const c0 = await pixels(S, '[data-pc="v3-canvas"]'), i0 = await info(S);
+    await S.act('v3-tab-view'); await S.act(pick('all')); await roofTo(S, false); await ready(S); const c0 = await pixels(S, '[data-pc="v3-canvas"]'), i0 = await info(S);
     await S.act('v3-roof'); await ready(S); const c1 = await pixels(S, '[data-pc="v3-canvas"]'), i1 = await info(S), v = await visOnly(S);
     const roofG = (v.groups.find((x) => x[0] === 'roof') || [])[1];
     R.check(`${T}: Roof switch (F4-T2): a tap turns the roof on (roof group visible with All) and the render changes`, !i0.roof && i1.roof && roofG === true && differ(c0, c1) ? [] : [JSON.stringify({ before: i0.roof, after: i1.roof, roofG, differ: differ(c0, c1) })]);
@@ -431,5 +437,6 @@ await guard('G controls', async () => {
 });
 
 await browser.close();
+if (!FULL) R.note('A 360x640, C 640x360 and D loop 360x640 run with QA_FULL=1 only (TL Q-T8 run-time moves)');
 R.note(`browser run ${((Date.now() - t0) / 1000).toFixed(1)} s (${TIMES.join(', ')})`);
 process.exit(R.done() ? 0 : 1);

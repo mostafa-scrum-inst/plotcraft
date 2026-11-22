@@ -35,7 +35,7 @@ const SEAT_TEXT = 'Garden seating does not fit in the yard: it is left out of th
 function make(mut) { const s = Q.plain(PC.sample.state()); if (mut) mut(s); s.plans = {}; PC.plans.sync(s); for (const id in s.plans) if (!s.plans[id].error) s.plans[id].approved = true; return s; }
 function scene(house) {
   const world = new THREE.Group(); world.name = 'world';
-  const mats = { batch: new THREE.MeshLambertMaterial({ vertexColors: true }), ground: new THREE.MeshLambertMaterial(), groundOuter: new THREE.MeshLambertMaterial(), poolWater: new THREE.MeshLambertMaterial(), trunk: new THREE.MeshLambertMaterial(), canopy: new THREE.MeshLambertMaterial(), shrub: new THREE.MeshLambertMaterial() };   // F4-T3 vegetation materials (unused before)
+  const mats = { batch: new THREE.MeshLambertMaterial({ vertexColors: true }), paving: new THREE.MeshLambertMaterial({ vertexColors: true }), ui: new THREE.MeshBasicMaterial({ vertexColors: true }), tiles: new THREE.MeshLambertMaterial({ vertexColors: true }), ground: new THREE.MeshLambertMaterial(), groundOuter: new THREE.MeshLambertMaterial(), poolWater: new THREE.MeshLambertMaterial(), trunk: new THREE.MeshLambertMaterial(), canopy: new THREE.MeshLambertMaterial(), shrub: new THREE.MeshLambertMaterial() };   // F4-T3 vegetation materials (unused before)
   const made = PC.three.buildShell(house, world, mats).concat(PC.three.buildInterior(house, world, mats), PC.three.buildRoof(house, world, mats), PC.three.buildSite(house, world, mats));
   world.updateMatrixWorld(true); return { world, made };
 }
@@ -70,6 +70,10 @@ function windingProblems(items, tag) {
 // F4-T3 (marker PC.scatter): one InstancedMesh per vegetation kind with items (trunks + canopies for trees, shrubs)
 const VEG = (h) => (h.site.trees && h.site.trees.length ? 2 : 0) + (h.site.shrubs && h.site.shrubs.length ? 1 : 0);
 const byName = (world, name) => meshes(world).filter((m) => m.name === name);
+// F6-T1a (impl-notes §6): pads, seating pad, pool rim and footpath moved to 'paving', the N needle half to 'northNeedle',
+// the pitched slopes to 'roofTiles'; the site checks read the union of the site meshes (version-aware: absent before F6).
+const F6 = !!(PC.texgen || (PC.C.VIEW3D && PC.C.VIEW3D.tiers)), F6_NEW = ['paving', 'northNeedle', 'roofTiles', 'sky'];
+const siteItems = (world) => ['siteBatch', 'paving', 'northNeedle'].flatMap((n) => byName(world, n).flatMap(itemsOf));
 
 // ================= F. furniture =================
 if (want('F')) {
@@ -289,7 +293,7 @@ if (want('S')) {
   const t = [];
   for (const [tag, mut] of [['sample (back, along u)', null], ['seeded side yard', (s) => { s.plot.pts = [[0, 0], [40, 0], [40, 22], [0, 22]]; s.ans.streetEdge = 0; s.ans.footprintPct = 30; s.ans.pool = { on: false, size: 'S' }; s.ans.setbacks = { front: 3, back: 1, side: 2 }; }]]) {
     const s = make(mut), h = PC.house.build(s); if (!h || !h.site.seating) { t.push(`${tag}: no seating`); continue; }
-    const F = H.frameOf(s), p = h.site.seating, it = itemsOf(byName(scene(h).world, 'siteBatch')[0]), mu = p.u + 1.5, mv = p.v + 1.5, SC = T3.siteColors;
+    const F = H.frameOf(s), p = h.site.seating, it = siteItems(scene(h).world), mu = p.u + 1.5, mv = p.v + 1.5, SC = T3.siteColors;
     const need = [[tb(F, p.u, p.u + 3, p.v, p.v + 3, 0, 0.05), SC.paving, 'pad'], [tb(F, mu - 0.45, mu + 0.45, mv - 0.45, mv + 0.45, 0.05, 0.8), SC.seating, 'table']];
     for (const o of [-0.9, 0.9]) need.push([p.along === 'u' ? tb(F, mu - 0.8, mu + 0.8, mv + o - 0.225, mv + o + 0.225, 0.05, 0.5) : tb(F, mu + o - 0.225, mu + o + 0.225, mv - 0.8, mv + 0.8, 0.05, 0.5), SC.seating, `bench ${o}`]);
     for (const [b, hex, w] of need) if (!it.some((x) => boxEq(x, b) && isCol(x, hex))) t.push(`${tag} (along ${p.along}): no ${w}`);
@@ -303,7 +307,7 @@ if (want('P')) {
   const f = [];
   for (const [tag, mut] of [['sample (pool S, 2 covered cars)', null], ['pool L, 4 covered cars', (s) => { s.plot.pts = [[0, 0], [36, 0], [36, 44], [0, 44]]; s.ans.streetEdge = 0; s.ans.pool = { on: true, size: 'L' }; s.ans.parking = { cars: 4, covered: true }; }], ['open parking', (s) => { s.ans.parking = { cars: 3, covered: false }; }], ['pool off', (s) => { s.ans.pool = { on: false, size: 'S' }; }]]) {
     const s = make(mut), h = PC.house.build(s); if (!h) { f.push(`${tag}: no house`); continue; }
-    const F = H.frameOf(s), { world } = scene(h), it = itemsOf(byName(world, 'siteBatch')[0]), SC = T3.siteColors, q = h.site.pool, p = h.site.parking, water = byName(world, 'poolWater');
+    const F = H.frameOf(s), { world } = scene(h), it = siteItems(world), SC = T3.siteColors, q = h.site.pool, p = h.site.parking, water = byName(world, 'poolWater');
     if (!q) { if (water.length) f.push(`${tag}: poolWater without a pool`); if (it.some((x) => isCol(x, SC.poolRim) && x.kind === 'box')) f.push(`${tag}: pool rim without a pool`); }
     else { if (water.length !== 1) { f.push(`${tag}: ${water.length} poolWater meshes`); } else { const w = water[0]; w.geometry.computeBoundingBox(); const bb = new THREE.Box3().setFromObject(w);
         if (!(near(bb.min.y, 0.03) && near(bb.max.y, 0.03) && near(bb.min.x, F.X(q.u)) && near(bb.max.x, F.X(q.u + q.w)) && near(bb.min.z, F.Z(q.v + q.d)) && near(bb.max.z, F.Z(q.v)))) f.push(`${tag}: water ${JSON.stringify([bb.min, bb.max])} not exactly the pool at Y 0.03`);
@@ -325,7 +329,7 @@ if (want('P')) {
     const F = H.frameOf(s), site = h.site, fp = h.footprint, blocked = myBlocked(F.pL, fp, site.parking, site.pool, s.ans.extras).concat(site.seating ? [site.seating] : []), my = myNeedle(F.pL, blocked), m = site.northMarker;
     if (!m || !near(m.L, my.L, 1e-9) || !near(m.u, my.at[0], 1e-6) || !near(m.v, my.at[1], 1e-6)) g.push(`${tag}: marker ${JSON.stringify(m)}, QA ${JSON.stringify({ u: my.at[0], v: my.at[1], L: my.L, corner: my.corner })}`);
     // N tip along W north (Q5, clockwise from +y; null = +y) mapped to T by QA's own frame
-    const it = itemsOf(byName(scene(h).world, 'siteBatch')[0]).filter((x) => x.kind === 'flat'), Nh = it.find((x) => isCol(x, T3.siteColors.northMarker)), Sh = it.find((x) => isCol(x, T3.siteColors.poolRim));
+    const it = siteItems(scene(h).world).filter((x) => x.kind === 'flat'), Nh = it.find((x) => isCol(x, T3.siteColors.northMarker)), Sh = it.find((x) => isCol(x, T3.siteColors.poolRim));
     if (!Nh || !Sh || it.length !== 2) { nn.push(`${tag}: ${it.length} flat items`); continue; }
     if (!near(Nh.min[1], 0) || !near(Nh.max[1], 0.04)) nn.push(`${tag}: needle height ${Nh.min[1]}..${Nh.max[1]}`);
     const c = [F.X(m.u), F.Z(m.v)], far = (x) => x.v.reduce((b, p) => (Math.hypot(p[0] - c[0], p[2] - c[1]) > Math.hypot(b[0] - c[0], b[2] - c[1]) ? p : b)), tip = far(Nh), stip = far(Sh);
@@ -341,18 +345,19 @@ if (want('P')) {
 // ================= B. budget =================
 if (want('B')) {
   const f = [];
-  const smp = make(), hs = PC.house.build(smp), ms = meshes(scene(hs).world).length;
+  const smp = make(), hs = PC.house.build(smp), sw0 = scene(hs).world, ms = meshes(sw0).length, nNew = (w) => meshes(w).filter((m) => F6_NEW.includes(m.name)).length;
+  const LIM = F6 ? 64 : 18;   // F6-T1: the mesh budget is 64 (plan §8 / C-4); the new meshes are counted by name
   const mx = make((s) => { s.plot.pts = [[0, 0], [60, 0], [60, 50], [0, 50]]; s.ans.streetEdge = 0; s.ans.footprintPct = 40; s.ans.floors = 3; s.ans.basement = true; s.ans.lift = true; s.ans.usableRoof = true; s.ans.roofType = 'terrace';
     s.ans.pool = { on: true, size: 'L' }; s.ans.parking = { cars: 4, covered: true }; s.ans.extras = { wall: true, gate: 'right', seating: true }; s.ans.interior = { style: 'classic', density: 'full' }; s.ans.pairs = []; s.ans.rooms = []; let n = 1;
     for (const l of ['B', 'G', '1', '2']) for (const ty of Object.keys(Q.ROOM_AREA)) s.ans.rooms.push({ id: 'r' + n++, type: ty, level: l, size: 'S', area: null, master: false }); s.ans.nextRoomId = n; });
   const t1 = Date.now(), hm = PC.house.build(mx), tm = Date.now() - t1; let mm = null, tb3 = 0;
   if (!hm) f.push('maximum house: no model'); else { const t2 = Date.now(); const sc = scene(hm); tb3 = Date.now() - t2; mm = meshes(sc.world).length;
     if (mx.ans.rooms.length !== 40) f.push(`${mx.ans.rooms.length} rooms`);
-    const vx = VEG(hm); if (mm > 18 + vx) f.push(`${mm} meshes > 18${vx ? ` + ${vx} vegetation` : ''}`);
+    const vx = VEG(hm); if (mm > LIM + (F6 ? 0 : vx)) f.push(`${mm} meshes > ${LIM}${vx && !F6 ? ` + ${vx} vegetation` : ''}`);
     if (!hm.site.pool || !hm.site.parking || !hm.site.gate || !hm.site.seating || !hm.roof.stairHead || !hm.roof.liftHead) f.push(`items missing: ${JSON.stringify({ pool: !!hm.site.pool, parking: !!hm.site.parking, gate: !!hm.site.gate, seating: !!hm.site.seating, heads: [!!hm.roof.stairHead, !!hm.roof.liftHead] })}`);
     if (hm.levels.some((l) => !l.rooms.every((r) => r.furniture.length))) f.push('a room without furniture'); }
-  if (ms !== 12 + VEG(hs)) f.push(`sample: ${ms} meshes (FS reports 12${VEG(hs) ? ` + ${VEG(hs)} vegetation (F4-T3)` : ''})`);
-  R.check(`B maximum house (4 levels x 10 room types, full, lift, pool L, 4 covered cars, wall, gate, seating, usable terrace): ${mm} meshes <= 18 (+ vegetation from F4-T3), every item present, every room furnished; sample ${ms} meshes`, f);
+  if (ms !== 12 + VEG(hs) + nNew(sw0)) f.push(`sample: ${ms} meshes (FS reports 12${VEG(hs) ? ` + ${VEG(hs)} vegetation (F4-T3)` : ''}${F6 ? ` + ${nNew(sw0)} F6 (paving / needle / tiles / sky)` : ''})`);
+  R.check(`B maximum house (4 levels x 10 room types, full, lift, pool L, 4 covered cars, wall, gate, seating, usable terrace): ${mm} meshes <= ${F6 ? '64 (F6-T1 budget)' : '18 (+ vegetation from F4-T3)'}, every item present, every room furnished; sample ${ms} meshes`, f);
   R.note(`B maximum house: ${mm} meshes, sample ${ms}; model ${tm} ms, batches ${tb3} ms (node, r128 without renderer)`);
 }
 R.note(`node run ${((Date.now() - t0) / 1000).toFixed(1)} s`);

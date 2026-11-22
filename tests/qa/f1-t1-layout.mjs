@@ -119,7 +119,7 @@ try {
       const f = []; const q = (h) => document.querySelector(`[data-pc="${h}"]`);
       for (const [k, v] of Object.entries(D)) { const el = q(k); const got = el.tagName === 'SELECT' ? el.value : (el.querySelector('input:checked') || {}).value; if (got !== v) f.push(`${k}: default ${got}, want ${v}`); }
       const num = { 'q-setback-front': 3, 'q-setback-back': 2, 'q-setback-side': 2, 'q-footprint': 30, 'q-veg': 20, 'q-ceiling': 3, 'q-parking-cars': 1 }; for (const [k, v] of Object.entries(num)) if (parseFloat(q(k).value) !== v) f.push(`${k}: ${q(k).value}, want ${v}`);
-      const sw = { 'q-basement': false, 'q-usable-roof': false, 'q-lift': false, 'q-parking-covered': false, 'q-pool': false, 'q-wall': true, 'q-seating': false, 'v3-roof': false }; for (const [k, v] of Object.entries(sw)) if (q(k).checked !== v) f.push(`${k}: checked ${q(k).checked}, want ${v}`);
+      const sw = { 'q-basement': false, 'q-usable-roof': false, 'q-lift': false, 'q-parking-covered': false, 'q-pool': false, 'q-wall': true, 'q-seating': false, 'v3-roof': false }; if (PC.C.VIEW3D && PC.C.VIEW3D.roofOnOpen !== undefined) delete sw['v3-roof'];   /* F6-T1: stage 5 sets the switch from roofOnOpen on its first enter (f4-t1-view checks it) */ for (const [k, v] of Object.entries(sw)) if (q(k).checked !== v) f.push(`${k}: checked ${q(k).checked}, want ${v}`);
       const rng = { 'q-footprint': [10, 80], 'q-veg': [0, 80], 'q-ceiling': [2.4, 4.5] }; for (const [k, [a, b]] of Object.entries(rng)) if (+q(k).min !== a || +q(k).max !== b) f.push(`${k}: range ${q(k).min}-${q(k).max}, want ${a}-${b}`);
       return f;
     }, DEFAULTS));

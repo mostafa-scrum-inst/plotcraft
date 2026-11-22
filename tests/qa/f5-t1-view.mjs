@@ -24,6 +24,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT, collector, launch } from './lib.mjs';
 import { sessions } from './session.mjs';
+import { roofTo } from './v3kit.mjs';
 import * as H from './f4-t1-ref.mjs';
 import * as F from './f5-t1-ref.mjs';
 
@@ -117,6 +118,10 @@ const clearedProblems = (st, tag) => { const f = []; if (st.caption !== null) f.
 
 const browser = await launch();
 const PXDIFF = ([a, b]) => Promise.all([a, b].map((s) => new Promise((res) => { const im = new Image(); im.onload = () => { const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const x = c.getContext('2d'); x.drawImage(im, 0, 0); res(x.getImageData(0, 0, im.width, im.height).data); }; im.src = 'data:image/png;base64,' + s; }))).then(([p, q]) => { let n = 0; for (let k = 0; k < p.length; k += 4) if (Math.abs(p[k] - q[k]) + Math.abs(p[k + 1] - q[k + 1]) + Math.abs(p[k + 2] - q[k + 2]) > 30) n++; return n; });
+// F6-T1 run-time moves (TL Q-T8, docs/03-tasks/F6-T1/qa-full-moves.md): the mouse-down and arrow-key cancels and the
+// frame-by-frame flight judgement after the first pick run with QA_FULL=1 only (the wheel cancel and the keyboard pick's
+// recorded flight stay in the default run; every pick still lands on my pose).
+const FULL = !!process.env.QA_FULL, flightMore = (rec, tag, o) => (FULL ? flightProblems(rec, tag, o).f : []);
 const OBS = [], LAP = []; let lapT = Date.now(); const lap = (n) => { const t = Date.now(); LAP.push(`${n} ${((t - lapT) / 1000).toFixed(1)}`); lapT = t; };
 const MAXMUT = "s.plot.pts = [[0, 0], [60, 0], [60, 50], [0, 50]]; s.ans.streetEdge = 0; s.ans.footprintPct = 40; s.ans.floors = 3; s.ans.basement = true; s.ans.lift = true; s.ans.usableRoof = true; s.ans.roofType = 'terrace'; s.ans.pool = { on: true, size: 'L' }; s.ans.parking = { cars: 4, covered: true }; s.ans.extras = { wall: true, gate: 'right', seating: true }; s.ans.pairs = []; s.ans.rooms = []; let n = 1; for (const l of ['B', 'G', '1', '2']) for (const ty of ['bedroom', 'bathroom', 'kitchen', 'living', 'dining', 'majlis', 'office', 'maid', 'storage', 'laundry']) s.ans.rooms.push({ id: 'r' + n++, type: ty, level: l, size: 'S', area: null, master: false }); s.ans.nextRoomId = n;";
 
@@ -152,9 +157,9 @@ await guard('A 1280x800', async () => {
   R.check(`${T}: keyboard pick (ArrowDown on the focused select, ground floor): Roof off, the room's level (UI + scene), caption "${F.captionOf(groups[0].rooms[0].name, groups[0].level)}", tour buttons hidden, select keeps the room, focus stays; flight 1.0-1.5 s of summed capped steps without a jump, eye >= 1 m, lands on my A-14 pose; highlight on the room (no shadows, #C2410C); look at 22:00 winter untouched; loop idle after`, cut(g));
   // 2. Roof on through the switch clears (TL Q3); a first-floor pick turns it off again without clearing; the highlight shows in the pixels
   const p = [], up = groups[1].rooms[0];
-  await S.act('v3-roof'); await S.settle(); p.push(...clearedProblems(await S.page.evaluate(STATE), 'Roof on'));
+  await roofTo(S, true); p.push(...clearedProblems(await S.page.evaluate(STATE), 'Roof on'));   // the pick left the Roof off: one tap (F6-T1-safe helper)
   let c = await chooseIn(S, up.id); await landed(S); rec = await recStop(S); st = await S.page.evaluate(STATE);
-  p.push(...selectedProblems(st, h, up.id, up.name), ...flightProblems(rec, up.name).f); let d = F.poseDiff(st.pose, expectPose(h, L, up.id, c.before)); if (d) p.push(`${up.name}: lands at ${d}`);
+  p.push(...selectedProblems(st, h, up.id, up.name), ...flightMore(rec, up.name)); let d = F.poseDiff(st.pose, expectPose(h, L, up.id, c.before)); if (d) p.push(`${up.name}: lands at ${d}`);
   const shot = async () => (await S.page.locator('[data-pc="v3-canvas"]').screenshot()).toString('base64');
   const on = await shot(); await S.page.evaluate(() => { PC.debug.scene().world.getObjectByName('highlight').visible = false; PC.debug.scene().renderNow(); }); await S.settle(); const off = await shot();
   await S.page.evaluate(() => { PC.debug.scene().world.getObjectByName('highlight').visible = true; PC.debug.scene().renderNow(); }); await S.settle();
@@ -169,7 +174,7 @@ await guard('A 1280x800', async () => {
   await chooseIn(S, ra); await S.page.waitForTimeout(500); const mid = await chooseIn(S, rb);
   if (!mid.before || F.poseDist(mid.before, mid.after) > 0.2) r.push(`redirect: pose jumped by ${mid.before && F.poseDist(mid.before, mid.after).toFixed(2)} m at the second pick`);
   await landed(S); rec = await recStop(S); st = await S.page.evaluate(STATE);
-  r.push(...flightProblems(rec, 'after the redirect', { full: false }).f);
+  r.push(...flightMore(rec, 'after the redirect', { full: false }));
   d = F.poseDiff(st.pose, expectPose(h, L, rb, mid.before)); if (d) r.push(`redirect lands at ${d}`); r.push(...selectedProblems(st, h, rb, 'redirect'));
   await S.page.evaluate(() => PC.debug.scene().renderNow()); const g1 = (await S.page.evaluate(STATE)).geoms; if (g1 !== g0) r.push(`renderer geometries ${g0} -> ${g1} over 2 re-selections`);
   R.check(`${T}: a second pick 0.5 s into a flight redirects from the interpolated pose (no jump, theta of that moment kept) and lands on the second room; 2 re-selections keep the renderer's geometry count`, cut(r));
@@ -183,7 +188,7 @@ await guard('A 1280x800', async () => {
   if (Math.abs(w.b.radius - w.a.radius * k) > 1e-6 * w.a.radius || w.b.target.some((x, i) => Math.abs(x - w.a.target[i]) > 1e-9)) cc.push(`wheel: radius ${w.a.radius.toFixed(3)} -> ${w.b.radius.toFixed(3)} (x ${k.toFixed(4)} = ${(w.a.radius * k).toFixed(3)} expected), target moved ${!w.b.target.every((x, i) => Math.abs(x - w.a.target[i]) < 1e-9)}: the delta did not act on the interpolated pose`);
   await S.page.waitForTimeout(150); if (F.poseDist(await S.page.evaluate(() => PC.view3d.pose()), w.b) > 1e-9) cc.push('wheel: the pose kept moving after the cancel');
   let s2 = await S.page.evaluate(STATE); if (s2.caption === null) cc.push('wheel cleared the selection (zoom keeps it)');
-  for (const [name, act, id] of [['mouse down', async () => { await S.page.mouse.move(...box); await S.page.mouse.down(); }, groups[0].rooms[5].id], ['ArrowLeft on the canvas', async () => { await S.page.focus('[data-pc="v3-canvas"]'); await S.page.keyboard.press('ArrowLeft'); }, groups[1].rooms[3].id]]) {
+  for (const [name, act, id] of (FULL ? [['mouse down', async () => { await S.page.mouse.move(...box); await S.page.mouse.down(); }, groups[0].rooms[5].id], ['ArrowLeft on the canvas', async () => { await S.page.focus('[data-pc="v3-canvas"]'); await S.page.keyboard.press('ArrowLeft'); }, groups[1].rooms[3].id]] : [])) {
     await chooseIn(S, id); await S.page.waitForTimeout(250); await act(); const a = await S.page.evaluate(() => ({ p: PC.view3d.pose(), f: PC.view3d.flying() }));
     await S.page.waitForTimeout(150); const b = await S.page.evaluate(() => PC.view3d.pose()); if (name === 'mouse down') await S.page.mouse.up();
     if (a.f) cc.push(`${name}: still flying`); if (F.poseDist(a.p, b) > 1e-9) cc.push(`${name}: the pose kept moving`); }
@@ -204,7 +209,7 @@ await guard('A 1280x800', async () => {
   await recStop(S);
   await S.page.mouse.move(...box); await S.page.mouse.down(); await S.page.mouse.move(box[0] + 80, box[1], { steps: 4 }); await S.page.mouse.up(); await S.settle(); s2 = await S.page.evaluate(STATE);
   if (s2.caption === null || s2.value === '') cc.push('an orbit drag cleared the selection');
-  R.check(`${T}: wheel, mouse down and an arrow key mid-flight cancel at once (wheel: interpolated radius x ${k.toFixed(4)}, target kept, no snap); the pose then stays; Tab does not cancel; a hidden tab mid-flight resumes with one ${PC.C.CAM.dtMax || 100} ms step; zoom, pan and orbit keep the selection`, cc);
+  R.check(`${T}: wheel${FULL ? ', mouse down and an arrow key' : ''} mid-flight cancel${FULL ? '' : 's'} at once (wheel: interpolated radius x ${k.toFixed(4)}, target kept, no snap); the pose then stays; Tab does not cancel; a hidden tab mid-flight resumes with one ${PC.C.CAM.dtMax || 100} ms step; zoom, pan and orbit keep the selection`, cc);
   lap('cancel');
   // 5. clearing (each from a fresh pick, flight still running)
   const cl = [], someRoom = groups[0].rooms[2].id;
@@ -231,11 +236,12 @@ await guard('A 1280x800', async () => {
   const hm = await S.page.evaluate(HOUSE), Lm = await S.page.evaluate(LIMITS), gm = F.myGroups(hm), sm = await S.page.evaluate(SELECT), m0 = (await S.page.evaluate(STATE)).meshes;
   if (sm.groups.length !== 4 || sm.groups.reduce((s, g) => s + g.rooms.length, 0) !== 40 || !eq(sm.groups, gm.map((g) => ({ label: g.label, rooms: g.rooms })))) m.push(`select: ${sm.groups.length} groups, ${sm.groups.reduce((s, g) => s + g.rooms.length, 0)} rooms`);
   const bm = gm[0].rooms[7]; c = await chooseIn(S, bm.id); await landed(S); rec = await recStop(S); st = await S.page.evaluate(STATE);
-  m.push(...selectedProblems(st, hm, bm.id, bm.name), ...flightProblems(rec, bm.name).f); d = F.poseDiff(st.pose, expectPose(hm, Lm, bm.id, c.before)); if (d) m.push(`${bm.name}: lands at ${d}`);
+  m.push(...selectedProblems(st, hm, bm.id, bm.name), ...flightMore(rec, bm.name)); d = F.poseDiff(st.pose, expectPose(hm, Lm, bm.id, c.before)); if (d) m.push(`${bm.name}: lands at ${d}`);
   if (Math.abs(st.pose.phi - 15 * F.D2R) > 1e-6) m.push(`${bm.name}: basement phi ${(st.pose.phi / F.D2R).toFixed(2)} deg`);
   if (!F.pitCrossing(hm, st.pose).ok) m.push(`${bm.name}: the eye line meets ground level outside the footprint`);
   if (st.meshes !== m0 + 1 || st.meshes > 40) m.push(`${bm.name}: ${st.meshes} meshes (${m0} + 1 highlight, <= 40)`);
-  if (st.meshes !== 22) m.push(`${bm.name}: ${st.meshes} meshes with a room selected (22 by the TL count)`);
+  const TLN = (PC.texgen || (PC.C.VIEW3D && PC.C.VIEW3D.tiers)) ? 25 : 22;   // F6-T1a: 24 + the highlight (impl-notes §6)
+  if (st.meshes !== TLN) m.push(`${bm.name}: ${st.meshes} meshes with a room selected (${TLN} by the TL count)`);
   const above = await S.page.evaluate(() => { const w = PC.debug.scene().world, o = []; w.traverse((n) => { if (/^level-?(G|1|2)$/i.test(n.name) || (n.userData && ['G', '1', '2'].includes(n.userData.level) && n.parent === w)) { let v = true; for (let q = n; q; q = q.parent) if (!q.visible) v = false; if (v) o.push(n.name || n.userData.level); } }); return o; });
   if (above.length) m.push(`${bm.name}: levels above still visible ${above}`);
   const on2 = await shot(); await S.page.evaluate(() => { PC.debug.scene().world.getObjectByName('highlight').visible = false; PC.debug.scene().renderNow(); }); await S.settle(); const off2 = await shot();
@@ -254,7 +260,7 @@ await guard('A 1280x800', async () => {
   for (const [lv, roof, side] of [['B', false, false], ['B', false, true], ['all', false, false], ['all', false, true], ['all', true, false], ['all', true, true], ['G', false, true], ['2', true, true]]) {
     const r = await S.page.evaluate(async ([lv, roof, side]) => { const V = PC.view3d, i = PC.debug.scene(), T = THREE, h = i.house, cam = i.camera, asp = i.size[0] / i.size[1];
       V.setLevel(lv); V.setRoof(roof); V.resetView(); if (side) { const p = PC.cam.reset(h, asp); p.theta = 2.2; p.phi = 1.3; p.radius *= 0.8; V.flyTo(PC.cam.clamp(p, PC.cam.limits(h, asp)), 1); } await new Promise((r) => setTimeout(r, side ? 250 : 120));
-      const outer = i.world.getObjectByName('groundOuter'), old = outer.material; outer.material = new T.MeshBasicMaterial({ color: 0xff00ff }); i.renderNow();
+      const outer = i.world.getObjectByName('groundOuter'), old = outer.material; outer.material = new T.MeshBasicMaterial({ color: 0xff00ff, fog: false, toneMapped: false }); i.renderNow();
       const gl = i.renderer.getContext(), w = gl.drawingBufferWidth, hh = gl.drawingBufferHeight, px = new Uint8Array(w * hh * 4); gl.readPixels(0, 0, w, hh, gl.RGBA, gl.UNSIGNED_BYTE, px); outer.material.dispose(); outer.material = old; i.renderNow();
       const fp = h.footprint, X = (u) => u - h.center[0], Z = (v) => -(v - h.center[1]); cam.updateMatrixWorld();
       const poly = [[fp.u, fp.v], [fp.u + fp.w, fp.v], [fp.u + fp.w, fp.v + fp.d], [fp.u, fp.v + fp.d]].map(([u, v]) => { const q = new T.Vector3(X(u), 0, Z(v)).project(cam); return [(q.x + 1) / 2 * w, (q.y + 1) / 2 * hh]; });
@@ -294,5 +300,6 @@ await guard('C 360x640', async () => {
 await browser.close();
 for (const o of OBS) R.note(o);
 if (process.env.QA_LAPS) R.note(`laps: ${LAP.join(', ')}`);
+if (!FULL) R.note('the mouse-down / arrow-key cancels and the per-frame flight judgement after the first pick run with QA_FULL=1 only (TL Q-T8)');
 R.note(`sections: ${TIMES.join(', ')}; run ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 process.exit(R.done() ? 0 : 1);

@@ -23,6 +23,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT, collector, launch, STORAGE_MODES } from './lib.mjs';
 import { sessions } from './session.mjs';
+import { roofTo } from './v3kit.mjs';
 import * as H from './f4-t1-ref.mjs';
 import * as V from './f5-t3-ref.mjs';
 import { stage2Kit, fmtArea } from './stage2kit.mjs';
@@ -60,7 +61,8 @@ async function ready(S, ms = 10000) { const ok = await S.until(() => S.page.eval
 async function to5(S, mut = '') {
   await S.page.evaluate((m) => { const st = PC.sample.state(); new Function('s', m)(st); st.plans = {}; st.stage = 1; PC.store.replace(st); PC.store.go(2); PC.store.go(3);
     PC.store.commit((s) => { for (const id in s.plans) if (!s.plans[id].error) s.plans[id].approved = true; }, { nav: true }); PC.store.go(4); PC.store.go(5); }, mut);
-  return ready(S);
+  const ok = await ready(S); await roofTo(S, false);   // F6-T1: reference frames and metrics stay Roof-off, whatever roofOnOpen says (plan §9.3)
+  return ok;
 }
 const tourTab = async (S) => { if (await S.shown('v3-tab-tour')) await S.act('v3-tab-tour'); };
 const rectOf = (h) => { const e = document.querySelector(`[data-pc="${h}"]`); if (!e || e.hidden || e.closest('[hidden]')) return null; const r = e.getBoundingClientRect(); return r.width && r.height ? { l: r.left, t: r.top, r: r.right, b: r.bottom } : null; };
