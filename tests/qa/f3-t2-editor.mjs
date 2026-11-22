@@ -119,7 +119,12 @@ try {
     // ---- 4. the stair cannot be dragged (a drag there pans); 5. touch: second finger cancels, pinch zooms; no page scroll ----
     // (a selected small room's outward handle may sit over the stair and wins there, by the hit order: observation, see report)
     { const H = await P(), hs = H.handles.filter((h) => h.x >= H.stairBox.l && h.x <= H.stairBox.r && h.y >= H.stairBox.t && h.y <= H.stairBox.b).map((h) => h.kind);
-      if (hs.length) R.note(`${V} 4 the selected ${names[H.selected]}'s ${hs.join(', ')} handle lies over the stair (outward handle of a small room); a press there resizes the room`);
+      // TL F5-T3a ruling 5 (hit order: selected-room handles -> rooms -> pan; the stair is never hit): a press on a handle that
+      // lies over the stair starts a resize. Moved along the edge only (no size change, no commit), so later steps see the same plan.
+      if (hs.length) { const hh = H.handles.find((h) => h.kind === hs[0]), along = hs[0] === 'e' || hs[0] === 'w' ? [0, 1.0] : [1.0, 0]; let k = null;
+        await drag([hh.x, hh.y], along[0], along[1], async (M) => { k = M.drag ? M.drag.kind : null; }); const Z = await P();
+        R.check(`${V} 4 the selected ${names[H.selected]}'s ${hs[0]} handle lies over the stair: a press there starts a resize (TL F5-T3a ruling 5: handles before the stair, which is never hit); moved along its edge, no change`, k === hs[0] && eq(Z.s.plans, H.s.plans) ? [] : [`grabbed ${k}, plans ${eq(Z.s.plans, H.s.plans) ? 'same' : 'changed'}`]); }
+      else R.note(`${V} 4 no handle of the selected room lies over the stair in this state`);
       const c = await S.page.evaluate(() => { const b = document.querySelector('[data-pc="plan-canvas"]').getBoundingClientRect(); return [b.left + 6, b.top + b.height - 6]; }); await S.tapAt(c); }   // tap outside the footprint: selection cleared
     { const X = await P(), c0 = X.commits; let during = null; await S.dragPts(centre(X.stairBox), add(centre(X.stairBox), [30, 20]), async () => { during = (await P()).drag; });
       const Y = await P(); R.check(`${V} 4 drag on the stair (nothing selected): no edit (pans the view), plans unchanged, no commit`, X.selected === null && during === null && !eq(X.view, Y.view) && eq(X.s.plans, Y.s.plans) && Y.commits === c0 ? [] : [JSON.stringify({ during, moved: !eq(X.view, Y.view), commits: Y.commits - c0 })]);

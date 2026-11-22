@@ -309,8 +309,14 @@ if (HAS.look && HAS.scatter) await guard('D extras', async () => {
   for (const n of ['trunks', 'canopies']) await setObj(S, n, 'castShadow', true); await ready(S);
   // summer 17.5 h: the sun at the 0.15 Y clamp grazes the ground, so shadows are faint (~10 levels per channel; observation O-1): count changes > 6
   const c = await pxDiffIn(S, s0, s1, 6); if (!(c.n > 1000 && c.dLum < 0)) f.push(`17.5 h: tree shadows change ${c.n} px (> 6 levels), mean luma ${c.dLum.toFixed(3)} (shadows should darken)`);
+  // F5-T3a O-1 (version-aware): with the O-1 keys the evening shadows must read: >= 15 000 px change by > 30 levels (204 before O-1)
+  const allCast = (on) => S.page.evaluate((on) => { const i = PC.debug.scene(); if (!on) { window.__cast = []; i.scene.traverse((o) => { if (o.castShadow && !o.isLight) { window.__cast.push(o); o.castShadow = false; } }); } else for (const o of window.__cast || []) o.castShadow = true; PC.view3d.invalidate(); }, on);
+  await allCast(false); await ready(S); const s2 = await shotPx(S); await allCast(true); await ready(S);
+  const O1 = !!(V.skyGold(SKY) || {}).o1, c30 = await pxDiffIn(S, s0, s2, 30);
+  if (O1 && !(c30.n >= 15000)) f.push(`O-1: 17.5 h summer shadows (every caster off) change only ${c30.n} px by > 30 levels (>= 15 000 required)`);
+  R.note(`D ${O1 ? 'O-1 merged' : 'O-1 not merged'}: summer 17.5 h shadows (every caster off) change ${c30.n} px by > 30 levels (O-1 target >= 15 000)`);
   await S.shot('D-evening-shadows');
-  R.check(`${T}: winter shows no canopy pixels (frame = canopies forced hidden, ${a.n} px differ with them shown); at 17.5 h the trunks and canopies cast shadows that darken the frame (${c.n} px change by > 6 levels, mean luma ${c.dLum.toFixed(2)})`, f);
+  R.check(`${T}: winter shows no canopy pixels (frame = canopies forced hidden, ${a.n} px differ with them shown); at 17.5 h the trunks and canopies cast shadows that darken the frame (${c.n} px change by > 6 levels, mean luma ${c.dLum.toFixed(2)}${O1 ? `; O-1: ${c30.n} px by > 30 levels, >= 15 000` : ''})`, f);
   // maximum house with the caps: all looks, no create / dispose, mean setLook, the house never clipped by the capped box
   const ok = await to5(S, "s.plot.pts = [[0, 0], [100, 0], [100, 100], [0, 100]]; s.ans.streetEdge = 0; s.ans.footprintPct = 15; s.ans.vegPct = 80; s.ans.floors = 3; s.ans.basement = true; s.ans.lift = true; s.ans.usableRoof = true; s.ans.roofType = 'terrace'; s.ans.pool = { on: true, size: 'L' }; s.ans.parking = { cars: 4, covered: true }; s.ans.extras = { wall: true, gate: 'right', seating: true }; s.ans.pairs = []; s.ans.rooms = []; let n = 1; for (const l of ['B', 'G', '1', '2']) for (const ty of ['bedroom', 'bathroom', 'kitchen', 'living', 'dining', 'majlis', 'office', 'maid', 'storage', 'laundry']) s.ans.rooms.push({ id: 'r' + n++, type: ty, level: l, size: 'S', area: null, master: false }); s.ans.nextRoomId = n;");
   const g = [], times = [], cap = []; const b0 = await snap(S), mem0 = await S.page.evaluate(() => JSON.stringify(PC.debug.scene().renderer.info.memory));

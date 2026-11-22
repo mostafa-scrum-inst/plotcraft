@@ -58,6 +58,8 @@ function labelProblems(L, { overlapsAllowed = false } = {}) {
   if (!overlapsAllowed) for (let i = 0; i < L.labels.length; i++) for (let j = i + 1; j < L.labels.length; j++) if (X(L.labels[i], L.labels[j], 0.5)) f.push(`labels "${L.labels[i].text}" and "${L.labels[j].text}" overlap`);
   return f;
 }
+// F5-T3a A-15 midpoint ticks of culled overrides: a debug hook if the build has one, else "*"-only label entries / tick-flagged entries
+const TICKS = () => { if (PC.debug.siteTicks) return PC.debug.siteTicks(); return PC.debug.siteLabels().filter((l) => l.tick || l.kind === 'tick' || l.text === '*'); };
 const overlapPairs = (L) => { let n = 0; for (let i = 0; i < L.labels.length; i++) for (let j = i + 1; j < L.labels.length; j++) if (X(L.labels[i], L.labels[j], 0.5)) n++; return n; };
 // QA's room naming (F2-S2 "Bedroom 1, Bedroom 2 ..."): per level and type, numbered when there is more than one; the master is "Master bedroom".
 function myNames(a) { const out = {}, num = (id) => parseInt(id.slice(1), 10);
@@ -293,20 +295,36 @@ try {
   // allows that). Contract of that pass: every "front" / "*" label is still drawn and none lies over a floating control.
   if (want('F')) {
     const STAIR = [[0, 0], [27, 0], [27, 1], [28, 1], [28, 2], [29, 2], [29, 3], [30, 3], [30, 30], [0, 30]];
-    let reached = 0;
+    let reached = 0, a15 = 0;
     for (const vp of FULL(PHONE, LAND, DESK)) for (const [pname, pts] of [['corner staircase', STAIR], ['small plot steps', [[0, 0], [9, 0], [9, 6], [8, 6], [8, 7], [7, 7], [7, 8], [6, 8], [6, 9], [0, 9]]]]) {
       const S = await kit(browser, vp, { plot: pts }); await setTap(S, 'class');
       // through the edge list (the touch targets of 1 m edges overlap; the list is the F2-S4 alternative)
       await S.act('q-edges-toggle'); const n = pts.length;
       for (let i = 1; i < n; i++) await S.act(`css:[data-pc="q-edges"] > li[data-edge="${i}"] [data-pc="edge-switch"]`);
       const s = await S.state(), L = await S.page.evaluate(LABELS), stars = L.labels.filter((l) => /\*$/.test(l.text)).length, ov = overlapPairs(L);
+      if (await S.page.evaluate(() => !!(PC.cam && PC.cam.viewOffset))) {
+        // F5-T3a (A-15 as updated by the TL plan review): "*" labels are culled like the others, the street edge stays forced;
+        // a culled override gets a midpoint "*" tick; the q-edges list stays the full reference. No two labels overlap.
+        a15++; const f = [], over = Object.keys(s.ans.edgeOv).map(Number), tk = await S.page.evaluate(TICKS);
+        if (over.length !== n - 1) f.push('overrides ' + JSON.stringify(s.ans.edgeOv));
+        if (!L.labels.some((l) => l.text === 'front')) f.push('the street label "front" is not drawn');
+        const labelled = L.labels.filter((l) => /\*$/.test(l.text) && l.text !== '*').length, ticks = tk.length;
+        if (labelled + ticks < over.length) f.push(`${labelled} "*" labels + ${ticks} ticks for ${over.length} overrides (each needs one)`);
+        if (!labelled && !ticks) f.push('no "*" label or tick at all');
+        const rows = await S.page.evaluate(() => [...document.querySelectorAll('[data-pc="q-edges"] > li')].map((li) => [li.dataset.edge, li.querySelector('[data-pc="edge-class"]').textContent]));
+        if (rows.length !== n || over.some((i) => !rows.some(([e, c]) => Number(e) === i && /\(set by you\)$/.test(c)))) f.push(`edge list: ${rows.length} rows for ${n} edges, overrides not all marked "(set by you)"`);
+        f.push(...labelProblems(L));
+        R.check(`${vp.tag} F ${pname}, ${n - 1} edges overridden (A-15, F5-T3a): "front" forced, ${labelled} "*" labels + ${ticks} midpoint ticks cover every override, no two labels overlap, none over the control, toggle or compass, the edge list holds every edge`, f);
+        if (vp === PHONE && pname === 'corner staircase') await S.shot('F-a15-culled'); await S.end(`${vp.tag} F ${pname}`); continue;
+      }
       if (ov) reached++;
       R.check(`${vp.tag} F ${pname}, ${n - 1} edges overridden: ${Object.keys(s.ans.edgeOv).length} overrides, "front" and every "*" label drawn, none over the control, toggle or compass (second pass ${ov ? 'reached' : 'not needed'}: ${ov} overlapping pairs)`,
         [...(Object.keys(s.ans.edgeOv).length === n - 1 ? [] : ['overrides ' + JSON.stringify(s.ans.edgeOv)]), ...(stars === n - 1 && L.labels.some((l) => l.text === 'front') ? [] : [`${stars} "*" labels for ${n - 1} overrides`]), ...labelProblems(L, { overlapsAllowed: true })]);
       if (vp === PHONE && pname === 'corner staircase') await S.shot('F-second-pass');
       await S.end(`${vp.tag} F ${pname}`);
     }
-    R.check(`F the second last-resort pass is reached by these layouts (${reached} of 6)`, reached > 0 ? [] : ['never reached']);
+    if (a15) R.note(`F A-15 (F5-T3a): ${a15} layouts judged by the culling rule (the second-pass check is retired)`);
+    else R.check(`F the second last-resort pass is reached by these layouts (${reached} of 6)`, reached > 0 ? [] : ['never reached']);
   }
 
   // ======================= G. Item 8: add form =======================

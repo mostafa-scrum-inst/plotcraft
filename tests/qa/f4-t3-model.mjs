@@ -27,7 +27,7 @@ import * as V from './f4-t3-ref.mjs';
 const R = collector('F4-T3 model');
 const only = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7).split(',').filter(Boolean), want = (s) => !only.length || only.includes(s);
 const { PC } = H.loadPC3();
-const T3 = loadTables(), SKY = T3.sky;
+const T3 = loadTables(), SKY = T3.sky, GOLD = V.skyGold(SKY), GROWS = GOLD ? GOLD.rows : [];
 const t0 = Date.now();
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const LOOK_KEYS = ['sunDir', 'sunColor', 'sunIntensity', 'hemiSky', 'hemiGround', 'hemiIntensity', 'background', 'canopyColor', 'canopyVisible', 'shrubColor', 'groundColor'];
@@ -41,7 +41,8 @@ function make(mut, plans = true) { const s = Q.plain(PC.sample.state()); if (mut
 // ================= O. oracle self-check =================
 if (want('O')) {
   const f = [];
-  for (const [season, h, bg, sc, si, hs, hg, hi] of V.SKY_GOLD) {
+  if (!GOLD) f.push(`sky keys 17 / 18 are ${JSON.stringify(SKY.keys.filter((k) => k.h === 17 || k.h === 18).map((k) => [k.h, k.sunI, k.hemiI]))}: neither the F4-T3 nor the O-1 values; QA golden not updated`);
+  for (const [season, h, bg, sc, si, hs, hg, hi] of GROWS) {
     const m = V.mySky(h, season, 0, SKY), tag = `${season} ${h}`;
     for (const [k, w] of [['background', bg], ['sunColor', sc], ['hemiSky', hs], ['hemiGround', hg]]) if (m[k] !== w) f.push(`${tag} ${k}: mine ${m[k]}, golden ${w}`);
     if (Math.abs(m.sunIntensity - si) > 5e-4 || Math.abs(m.hemiIntensity - hi) > 5e-4) f.push(`${tag} intensities ${m.sunIntensity} / ${m.hemiIntensity}`);
@@ -49,7 +50,7 @@ if (want('O')) {
   for (const s of V.SEASONS) { const m = V.mySky(12, s, 0, SKY), w = V.SEASON_MATS[s]; if (m.groundColor !== w[0] || (w[2] && m.canopyColor !== w[1]) || m.canopyVisible !== w[2] || m.shrubColor !== w[3]) f.push(`${s} materials ${JSON.stringify([m.groundColor, m.canopyColor, m.canopyVisible, m.shrubColor])}`); }
   if (T3.siteColors.groundOuter !== '#B3B0A6') f.push(`groundOuter ${T3.siteColors.groundOuter}`);
   const n = V.mySky(12, 'summer', 0, SKY); for (const k in V.NOON_GOLD) if (n[k] !== V.NOON_GOLD[k]) f.push(`noon ${k} ${n[k]}`);
-  R.check('O QA oracle (A-13, two rounded A-10 mix steps) reproduces the Designer\'s 16-row golden table, the season material table and the F4-T1 noon look', f);
+  R.check(`O QA oracle (A-13, two rounded A-10 mix steps) reproduces the Designer\'s 16-row golden table (${GOLD && GOLD.o1 ? 'O-1 17.5 h rows' : 'F4-T3 rows'}), the season material table and the F4-T1 noon look`, f);
 }
 
 // ================= K. PC.sky.compute =================
@@ -61,7 +62,7 @@ if (want('K')) {
     const before = JSON.stringify(PC.data.sky);
     // golden rows
     const g = [];
-    for (const [season, h, bg, sc, si, hs, hg, hi] of V.SKY_GOLD) for (const N of [0, 137]) {
+    for (const [season, h, bg, sc, si, hs, hg, hi] of GROWS) for (const N of [0, 137]) {
       const r = C(h, season, N), tag = `${season} ${h} h N ${N}`;
       for (const [k, w] of [['background', bg], ['sunColor', sc], ['hemiSky', hs], ['hemiGround', hg]]) if (String(r[k]).toUpperCase() !== w) g.push(`${tag} ${k} ${r[k]} != golden ${w}`);
       if (Math.abs(r.sunIntensity - si) > 5e-4 || Math.abs(r.hemiIntensity - hi) > 5e-4) g.push(`${tag} intensities ${r.sunIntensity} / ${r.hemiIntensity} vs ${si} / ${hi}`);

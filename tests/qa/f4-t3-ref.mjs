@@ -31,6 +31,19 @@ export const SKY_GOLD = [
   ['winter', 8, '#ADCEE8', '#F8E3C9', 0.567, '#CBDDEF', '#979083', 0.444], ['winter', 12, '#9CC9EC', '#F6F2EA', 0.7, '#D5E5F4', '#A7A193', 0.48],
   ['winter', 17.5, '#DDB291', '#F9B985', 0.5, '#C4B5C0', '#81766B', 0.39], ['winter', 22, '#141F2F', '#A1B5DA', 0.15, '#7487B0', '#343A4A', 0.3],
 ];
+// F5-T3a O-1 (Designer, f5t3-des 331707f): keys 17 (sunI 0.75, hemiI 0.34) and 18 (0.55, 0.30); only the 17.5 h rows change
+// (reproduced independently by mySky on the modified keys before adoption)
+export const O1_KEYS = { 17: [0.75, 0.34], 18: [0.55, 0.30] }, F4T3_KEYS = { 17: [0.60, 0.42], 18: [0.40, 0.36] };
+const O1_ROWS = { spring: ['#E0B088', '#FEB77B', 0.65, '#C5B3BB', '#767355', 0.32], summer: ['#DFAA81', '#FFB273', 0.65, '#C1AEB8', '#6F6E4F', 0.32],
+  autumn: ['#E2AE83', '#FEB577', 0.65, '#C8B1B2', '#786A50', 0.32], winter: ['#DDB496', '#F7BB8B', 0.65, '#C4B7C3', '#887E74', 0.32] };
+export const SKY_GOLD_O1 = SKY_GOLD.map((r) => (r[1] === 17.5 ? [r[0], r[1], ...O1_ROWS[r[0]]] : r));
+const keysAre = (sky, K) => [17, 18].every((h) => { const k = (sky.keys || []).find((x) => x.h === h); return k && Math.abs(k.sunI - K[h][0]) < 1e-9 && Math.abs(k.hemiI - K[h][1]) < 1e-9; });
+// which golden applies to this build's sky table: { rows, o1 } or null (keys match neither version)
+export function skyGold(sky) {
+  if (keysAre(sky, F4T3_KEYS)) return { rows: SKY_GOLD, o1: false };
+  if (keysAre(sky, O1_KEYS)) return { rows: SKY_GOLD_O1, o1: true };
+  return null;
+}
 // Designer §2 material colours per season (plot ground, canopy (visible), shrub); groundOuter #B3B0A6 always
 export const SEASON_MATS = { spring: ['#9DC46F', '#6AA442', true, '#8CBF5A'], summer: ['#7FAE55', '#4E8A3A', true, '#5E9441'], autumn: ['#A59B5C', '#C8702A', true, '#A8692F'], winter: ['#EDF1F4', null, false, '#DCE4EA'] };
 // F4-T1 opening look, literal (what noonLook / noonSunDir gave before F4-T3; TL ruling 8): summer noon
