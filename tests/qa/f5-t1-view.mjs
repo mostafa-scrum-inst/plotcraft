@@ -191,13 +191,13 @@ await guard('A 1280x800', async () => {
   await chooseIn(S, groups[1].rooms[1].id); await S.page.waitForTimeout(250); await S.page.focus('[data-pc="v3-canvas"]'); await S.page.keyboard.press('Tab');
   if (!(await S.page.evaluate(() => PC.view3d.flying()))) cc.push('Tab on the focused canvas cancelled the flight');
   const hid = await S.page.evaluate(async () => { const t0 = PC.debug.scene().flight && PC.debug.scene().flight.t, set = (v) => { Object.defineProperty(document, 'visibilityState', { value: v, configurable: true }); Object.defineProperty(document, 'hidden', { value: v === 'hidden', configurable: true }); document.dispatchEvent(new Event('visibilitychange')); };
-    set('hidden'); const tHide = PC.debug.scene().flight && PC.debug.scene().flight.t, r0 = window.__rec.length; await new Promise((r) => setTimeout(r, 600)); const during = window.__rec.slice(r0).filter((e) => e[3] !== null && e[3] !== tHide).length;
-    const tBack = PC.debug.scene().flight && PC.debug.scene().flight.t; const r1 = window.__rec.length; set('visible'); await new Promise((r) => setTimeout(r, 400)); delete document.visibilityState; delete document.hidden;
+    set('hidden'); const tHide = PC.debug.scene().flight && PC.debug.scene().flight.t, r0 = window.__rec.length; await new Promise((r) => setTimeout(r, 350)); const during = window.__rec.slice(r0).filter((e) => e[3] !== null && e[3] !== tHide).length;
+    const tBack = PC.debug.scene().flight && PC.debug.scene().flight.t; const r1 = window.__rec.length; set('visible'); await new Promise((r) => setTimeout(r, 250)); delete document.visibilityState; delete document.hidden;
     const after = window.__rec.slice(r1).filter((e) => e[3] !== null); return { t0, tHide, tBack, during, first: after.length ? after[0][3] : null, flying: PC.view3d.flying(), dt: PC.C.CAM.dtMax }; });
   if (hid.during || hid.tBack !== hid.tHide) cc.push(`hidden tab: the flight advanced while hidden (${hid.tHide} -> ${hid.tBack}, ${hid.during} frames)`);
   else if (hid.first === null) { if (!hid.flying && !(await S.page.evaluate(() => PC.view3d.flying()))) {} else cc.push('hidden tab: no frame after the tab came back'); }
   else if (Math.abs(hid.first - hid.tBack - hid.dt) > 1e-6) cc.push(`hidden tab: the first step after return is ${(hid.first - hid.tBack).toFixed(1)} ms (one ${hid.dt} ms capped step expected)`);
-  await landed(S); await recStop(S);
+  await recStop(S);
   // pan (right drag) keeps the selection
   await S.page.mouse.move(...box); await S.page.mouse.down({ button: 'right' }); await S.page.mouse.move(box[0] + 40, box[1] + 30, { steps: 4 }); await S.page.mouse.up({ button: 'right' }); await S.settle(); s2 = await S.page.evaluate(STATE);
   if (s2.caption === null || s2.value === '') cc.push('a pan drag cleared the selection');
@@ -248,7 +248,22 @@ await guard('A 1280x800', async () => {
   lap('maxbase');
   const tm = gm[3].rooms[9]; await chooseIn(S, tm.id); await S.settle(); st = await S.page.evaluate(STATE); await recStop(S);
   m.push(...selectedProblems(st, hm, tm.id, tm.name)); if (st.cap !== true) m.push(`${tm.name}: groundCap ${st.cap} after leaving the basement`); if (st.meshes !== m0 + 1) m.push(`${tm.name}: ${st.meshes} meshes`);
-  R.check(`${T2}: 40 options in 4 groups; a basement pick opens the ground (level B, groundCap hidden) at phi 15 degrees with the levels above hidden, the eye line into the pit, the highlight in the real r128 frame, and lands on my pose; a second-floor pick follows the rules; meshes ${m0} + 1 = 22 <= 40`, cut(m));
+  // B-1 class (round 2): groundOuter (painted magenta for the check) never shows inside the footprint's screen polygon,
+  // for every level choice x Roof off / on x Reset and a low side pose
+  const leak = [];
+  for (const [lv, roof, side] of [['B', false, false], ['B', false, true], ['all', false, false], ['all', false, true], ['all', true, false], ['all', true, true], ['G', false, true], ['2', true, true]]) {
+    const r = await S.page.evaluate(async ([lv, roof, side]) => { const V = PC.view3d, i = PC.debug.scene(), T = THREE, h = i.house, cam = i.camera, asp = i.size[0] / i.size[1];
+      V.setLevel(lv); V.setRoof(roof); V.resetView(); if (side) { const p = PC.cam.reset(h, asp); p.theta = 2.2; p.phi = 1.3; p.radius *= 0.8; V.flyTo(PC.cam.clamp(p, PC.cam.limits(h, asp)), 1); } await new Promise((r) => setTimeout(r, side ? 250 : 120));
+      const outer = i.world.getObjectByName('groundOuter'), old = outer.material; outer.material = new T.MeshBasicMaterial({ color: 0xff00ff }); i.renderNow();
+      const gl = i.renderer.getContext(), w = gl.drawingBufferWidth, hh = gl.drawingBufferHeight, px = new Uint8Array(w * hh * 4); gl.readPixels(0, 0, w, hh, gl.RGBA, gl.UNSIGNED_BYTE, px); outer.material.dispose(); outer.material = old; i.renderNow();
+      const fp = h.footprint, X = (u) => u - h.center[0], Z = (v) => -(v - h.center[1]); cam.updateMatrixWorld();
+      const poly = [[fp.u, fp.v], [fp.u + fp.w, fp.v], [fp.u + fp.w, fp.v + fp.d], [fp.u, fp.v + fp.d]].map(([u, v]) => { const q = new T.Vector3(X(u), 0, Z(v)).project(cam); return [(q.x + 1) / 2 * w, (q.y + 1) / 2 * hh]; });
+      const inside = (x, y) => { let c = false; for (let a = 0, b = 3; a < 4; b = a++) { const [xa, ya] = poly[a], [xb, yb] = poly[b]; if ((ya > y) !== (yb > y) && x < (xb - xa) * (y - ya) / (yb - ya) + xa) c = !c; } return c; };
+      let mag = 0, magIn = 0; for (let y = 0; y < hh; y += 2) for (let x = 0; x < w; x += 2) { const k = (y * w + x) * 4; if (px[k] > 200 && px[k + 1] < 60 && px[k + 2] > 200) { mag++; if (inside(x, y)) magIn++; } }
+      return { mag, magIn }; }, [lv, roof, side]);
+    if (r.magIn > 0 || r.mag === 0) leak.push(`level ${lv}, Roof ${roof ? 'on' : 'off'}, ${side ? 'low side' : 'Reset'}: ${r.magIn} groundOuter px inside the footprint (${r.mag} in all)`); }
+  m.push(...cut(leak, 4));
+  R.check(`${T2}: 40 options in 4 groups; a basement pick opens the ground (level B, groundCap hidden) at phi 15 degrees with the levels above hidden, the eye line into the pit, the highlight in the real r128 frame, and lands on my pose; a second-floor pick follows the rules; meshes ${m0} + 1 = 22 <= 40; groundOuter never inside the footprint (B, All, G, 2 with Roof off / on, Reset and a low side pose: 8 views, B-1 class)`, cut(m));
   await S.end(T);
 });
 

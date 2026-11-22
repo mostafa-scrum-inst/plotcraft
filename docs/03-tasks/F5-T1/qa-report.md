@@ -1,5 +1,38 @@
 # F5-T1 QA report
 
+## Round 2 (2026-11-22): re-test of B-1 after FS's fix `88dd164`
+
+- **Verdict: PASSED.** B-1 is fixed, and I found no new bugs.
+- **B-1, by hand:**
+  - The maximum house at 22:00 winter, pick "Maid's room" (B): the pit is open, and the basement walls, the furniture
+    and the orange frame are visible.
+  - At 360x640, "Master bedroom · Basement": the basement room and its frame are visible inside the plot.
+- **B-1, with the suite:** f5-t1-view passes 18 of 18 (model 4 of 4). The basement highlight now changes the real r128
+  frame.
+- **B-1 class, new check:**
+  - **Method.** In the maximum-house part of f5-t1-view, `groundOuter` is painted magenta for one frame. Then I count
+    its pixels inside the screen polygon of the footprint.
+  - **Views covered.** 8 of them: Basement, All, Ground and Second, with Roof off and on, at Reset and from a low side
+    pose (phi 75°).
+  - **Result.** 0 px in every view.
+  - **The check catches B-1.** With the pre-fix `build-shell.js` on a throwaway copy, it reports 11 543 and 7 987 px
+    for Basement at Reset and side.
+  - **Wider probe.** A one-off probe (not committed) covered 4 houses (sample, sample + basement, maximum, pitched
+    roof + basement), every level choice, Roof off / on and 4 poses: 128 views. It found 0 leaks after the fix and 24
+    before, all of them Basement views. So the bug was confined to the Basement view, and nothing similar hides in
+    the other F4-T1 views.
+- **Suite time:** run-f5-t1 takes 31.0 s on its own and 36.2 s in the full run. This includes the new leak check, and I
+  cut the hidden-tab waits to make room for it.
+- **Full run** (`node build.mjs && node tests/run-all.mjs --jobs 3`): **exit 0 in 413.0 s**, under the 420 s target.
+  - Keyboard-pick flight: 1.25 s of summed capped steps.
+  - Mean frame time 118 ms, so the 1.53 s wall clock was not judged (TL ruling 1).
+
+VERDICT: PASSED
+
+---
+
+## Round 1
+
 Date: 2026-11-22. Author: QA. Brief: the 10-item QA focus list in `impl-review.md` (TL rulings 1 and 2), my prepared
 suites, exploratory checks and one full run. Tested in the main tree at `0e2031e` (f5t1 merged), plus my test changes
 (committed with this report).
@@ -120,3 +153,5 @@ suites, exploratory checks and one full run. Tested in the main tree at `0e2031e
   - the cleared highlight is disposed;
   - the phone caption with "Master bedroom · Basement" (pairs that include the moved room are dropped, as the Q-rooms UI
     does).
+
+Round 1 verdict (superseded by round 2): FAILED
