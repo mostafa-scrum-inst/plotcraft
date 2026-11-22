@@ -1,5 +1,5 @@
 // F6-T1 QA: the CTO's random-operation leak probe as a suite (cto-constraints.md rule 5.1; F4 review probe).
-// Real r128 at 1280x800. A seeded stream of operations through the page's own controls and APIs:
+// Real r128 (default stream 960x600, QA_FULL maximum-house stream 1280x800). A seeded stream of operations through the page's own controls and APIs:
 //   level radio, Roof switch, Light presets / season, finder pick, Reset, tour start / seek / stop, rebuilds (exterior and
 //   ceiling commits: a new house key), stage 5 -> 4 -> 5, WEBGL_lose_context lose / restore, window resize.
 // After every operation, once the view is ready:
@@ -65,13 +65,15 @@ const OP = ([k, x, y]) => {
 const WEIGHTS = [['level', 3], ['roof', 2], ['preset', 2], ['season', 1], ['pick', 3], ['reset', 1], ['tour', 2], ['rebuild', 2], ['reopen', 1], ['lose', 1], ['resize', 1]];
 const kindOf = (u) => { const tot = WEIGHTS.reduce((s, w) => s + w[1], 0); let a = u * tot; for (const [k, w] of WEIGHTS) { if (a < w) return k; a -= w; } return 'level'; };
 
-async function probeRun(browser, label, mut, n, seed) {
-  const S = await session(browser, { tag: '1280x800', w: 1280, h: 800, touch: false }, { three: 'real' }), f = [], rnd = V.rng(seed), seen = {}, kinds = {};
+// TL Q-T8: the default 50-op stream runs at 960x600 (less fill per frame); the QA_FULL maximum-house stream at 1280x800
+const VP_DEF = { tag: '960x600', w: 960, h: 600, touch: false }, VP_FULL = { tag: '1280x800', w: 1280, h: 800, touch: false };
+async function probeRun(browser, label, mut, n, seed, vp = VP_FULL) {
+  const S = await session(browser, vp, { three: 'real' }), f = [], rnd = V.rng(seed), seen = {}, kinds = {};
   await to5(S, mut); if (!(await S.until(() => S.page.evaluate(READY), 15000))) f.push('not ready after the first open');
   let builds0 = await S.page.evaluate(() => PC.debug.scene().builds), maxGeo = 0, maxTex = 0, worst = 0;
   for (let k = 0; k < n && f.length < 12; k++) {
     const kind = kindOf(rnd()), x = rnd(), y = rnd(); let name = kind, t = Date.now();
-    if (kind === 'resize') { const W = 960 + Math.floor(x * 400), H = 640 + Math.floor(y * 200); await S.page.setViewportSize({ width: W, height: H }); name = `resize ${W}x${H}`; await S.settle(); await S.page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(r))))); }
+    if (kind === 'resize') { const W = Math.round(vp.w * (0.75 + x * 0.3)), H = Math.round(vp.h * (0.8 + y * 0.25)); await S.page.setViewportSize({ width: W, height: H }); name = `resize ${W}x${H}`; await S.settle(); await S.page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(r))))); }
     else name = await S.page.evaluate(OP, [kind, x, y]);
     kinds[kind] = (kinds[kind] || 0) + 1;
     if (!(await S.until(() => S.page.evaluate(READY), 12000))) { f.push(`op ${k} ${name}: not ready after 12 s`); continue; }
@@ -98,7 +100,7 @@ async function probeRun(browser, label, mut, n, seed) {
 
 const browser = await launch();
 try {
-  let t = Date.now(); await probeRun(browser, '1280x800 real sample', '', OPS, SEED); TIMES.push(`sample ${((Date.now() - t) / 1000).toFixed(1)} s`);
+  let t = Date.now(); await probeRun(browser, '960x600 real sample', '', OPS, SEED, VP_DEF); TIMES.push(`sample ${((Date.now() - t) / 1000).toFixed(1)} s`);
   if (FULL) { t = Date.now(); await probeRun(browser, '1280x800 real maximum house (QA_FULL)', MAXMUT, 200, SEED + 1); TIMES.push(`maximum house ${((Date.now() - t) / 1000).toFixed(1)} s`); }
   else R.note('the 200-operation maximum-house stream runs with QA_FULL=1 (TL Q-T8, plan §9.5)');
 } finally { await browser.close(); }

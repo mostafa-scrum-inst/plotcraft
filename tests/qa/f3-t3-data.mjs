@@ -3,7 +3,7 @@
 // stage-4 / stage-2 CSS = tables; 3 A-13 season blend over every quarter hour of all four seasons; 4 A-11 placement
 // simulation over seeded random rooms (S-L areas, aspect 1:1-3:1, m and ft grids) plus fixed edge rooms.
 // Run: node tests/qa/f3-t3-data.mjs [--verbose]
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT, collector } from './lib.mjs';
 import { loadTables, mix, Lab, dE, hueDeg, floorOf, blend, topLight, isNight, furnish, rng, ch } from './f3-t3-ref.mjs';
@@ -21,7 +21,11 @@ const TYPES = ['bedroom', 'bathroom', 'kitchen', 'living', 'dining', 'majlis', '
 const AREA = { bedroom: [12, 16, 24], bathroom: [4, 6, 9], kitchen: [9, 14, 20], living: [20, 30, 42], dining: [12, 16, 24], majlis: [16, 24, 36], office: [9, 12, 16], maid: [6, 9, 12], storage: [4, 6, 9], laundry: [4, 6, 9] };
 const EXT = ['sand', 'white', 'terracotta', 'grey'], STY = ['modern', 'classic', 'minimal'], SEAS = ['spring', 'summer', 'autumn', 'winter'];
 const EXT_K = ['wall', 'wallInner', 'slab', 'roof', 'trim', 'parapet'], INT_K = ['fabric', 'wood', 'accent', 'white', 'metal', 'dark', 'floorMix'];
-const SITE_K = ['ground', 'groundOuter', 'paving', 'poolWater', 'poolRim', 'boundaryWall', 'gate', 'carCanopy', 'seating', 'trunk', 'northMarker', 'highlight'];
+// F6-T1a (impl-notes §6, plan §4.4 / §4.1): siteColors gains asphalt (street), each sky key gains skyMid / skyZenith (hex)
+// and exposure (number). Version-aware on the F6 core module src/js/core/texgen.js.
+const F6 = existsSync(join(SRC, 'js/core/texgen.js'));
+const SITE_K = ['ground', 'groundOuter', 'paving', 'poolWater', 'poolRim', 'boundaryWall', 'gate', 'carCanopy', 'seating', 'trunk', 'northMarker', 'highlight', ...(F6 ? ['asphalt'] : [])];
+const SKY_KK = ['h', 'background', 'sunColor', 'sunI', 'hemiSky', 'hemiGround', 'hemiI', ...(F6 ? ['skyMid', 'skyZenith', 'exposure'] : [])];
 const ANCH = ['back', 'front', 'left', 'right', 'bl', 'br', 'fl', 'fr', 'center'], CKEYS = ['fabric', 'wood', 'accent', 'white', 'metal', 'dark'];
 
 // ---------------- 1. schema ----------------
@@ -30,7 +34,7 @@ R.check('1 exteriors: sand, white, terracotta, grey, each exactly the six A-10 r
 R.check('1 interiors: modern, classic, minimal, exactly fabric..dark + floorMix in [0, 0.3]',
   [...eqKeys(D.interiors, STY), ...STY.flatMap((s) => [...eqKeys(D.interiors[s], INT_K), ...CKEYS.filter((k) => !HEX.test(D.interiors[s][k])).map((k) => `${s}.${k}`), ...(typeof D.interiors[s].floorMix === 'number' && D.interiors[s].floorMix >= 0 && D.interiors[s].floorMix <= 0.3 ? [] : [s + ' floorMix'])])]);
 R.check('1 roomTints: the 10 types + hall, stair, lift, all hex', [...eqKeys(D.roomTints, [...TYPES, 'hall', 'stair', 'lift']), ...Object.entries(D.roomTints).filter(([, v]) => !HEX.test(v)).map(([k]) => k)]);
-R.check('1 siteColors: the 12 A-10 keys, all hex; ground = summer ground', [...eqKeys(D.siteColors, SITE_K), ...Object.entries(D.siteColors).filter(([, v]) => !HEX.test(v)).map(([k]) => k), ...(D.siteColors.ground === D.sky.seasons.summer.ground ? [] : ['ground != summer ground'])]);
+R.check(`1 siteColors: the ${SITE_K.length} A-10 keys${F6 ? ' (asphalt from F6-T1)' : ''}, all hex; ground = summer ground`, [...eqKeys(D.siteColors, SITE_K), ...Object.entries(D.siteColors).filter(([, v]) => !HEX.test(v)).map(([k]) => k), ...(D.siteColors.ground === D.sky.seasons.summer.ground ? [] : ['ground != summer ground'])]);
 { const f = [];
   if (JSON.stringify(Object.keys(D.furniture)) !== JSON.stringify(TYPES)) f.push('types ' + Object.keys(D.furniture));
   for (const t of TYPES) { const L = D.furniture[t] || [], sp = L.filter((p) => p.sparse === true);
@@ -47,7 +51,8 @@ R.check('1 siteColors: the 12 A-10 keys, all hex; ground = summer ground', [...e
       if ('off' in p && L.indexOf(p) === 0) f.push(at + ' off on the first piece (nothing to place it around)'); } }
   R.check('1 furniture: 10 types; per type 1+ sparse, 2+ full-only, 8 at most; A-11 keys; sizes > 0; top <= 1.1 m; known anchors and colour keys; |off| <= 1.2', f); }
 { const K = D.sky.keys, f = [];
-  for (const k of K) { if (Object.keys(k).join() !== 'h,background,sunColor,sunI,hemiSky,hemiGround,hemiI') f.push('key keys ' + Object.keys(k)); for (const n of ['background', 'sunColor', 'hemiSky', 'hemiGround']) if (!HEX.test(k[n])) f.push(`${k.h}.${n}`); }
+  for (const k of K) { if (Object.keys(k).join() !== SKY_KK.join()) f.push('key keys ' + Object.keys(k)); for (const n of ['background', 'sunColor', 'hemiSky', 'hemiGround', ...(F6 ? ['skyMid', 'skyZenith'] : [])]) if (!HEX.test(k[n])) f.push(`${k.h}.${n}`);
+    if (F6 && !(typeof k.exposure === 'number' && k.exposure > 0 && k.exposure <= 2)) f.push(`${k.h}.exposure ${k.exposure}`); }
   for (let i = 1; i < K.length; i++) if (!(K[i].h > K[i - 1].h)) f.push('not increasing at ' + K[i].h);
   if (K[0].h !== 0 || K[K.length - 1].h !== 24) f.push('first / last h ' + K[0].h + ' / ' + K[K.length - 1].h);
   const { h: h0, ...a } = K[0], { h: h1, ...b } = K[K.length - 1]; if (JSON.stringify(a) !== JSON.stringify(b)) f.push('h 24 differs from h 0');

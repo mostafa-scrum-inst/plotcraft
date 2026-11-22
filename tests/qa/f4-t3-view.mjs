@@ -45,6 +45,10 @@ if (!noShots) mkdirSync(shots, { recursive: true });
 const session = sessions({ R, shots, noShots });
 const VP = { phone: { tag: '360x640', w: 360, h: 640, touch: true }, desk: { tag: '1280x800', w: 1280, h: 800, touch: false } };
 const t0 = Date.now(), TIMES = [];
+// F6-T1 (impl-notes §6, plan §3): the full tier's shadow map is 2048 on fine pointers (it was <= 1024).
+// F6-T1 run-time moves (TL Q-T8, docs/03-tasks/F6-T1/qa-full-moves.md): A's 0 / 6 / 18 / 24 h edge looks and E (640x360,
+// 768x1024) run with QA_FULL=1 only (the 16 preset looks stay in the default run).
+const FULL = !!process.env.QA_FULL, F6 = !!(PC.texgen || (PC.C.VIEW3D && PC.C.VIEW3D.tiers)), MAPMAX = F6 ? 2048 : 1024, NEW6 = F6 ? 3 : 0 /* paving, northNeedle, sky (impl-notes §1 meshes; flat-roof sample) */, EDGE_H = FULL ? [0, 6, 18, 24] : [];
 const cut = (a, n = 8) => a.slice(0, n).concat(a.length > n ? [`... ${a.length} in all`] : []);
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const RAF = () => { const raf = window.requestAnimationFrame.bind(window); window.__raf = 0; window.requestAnimationFrame = (cb) => { window.__raf++; return raf(cb); }; };
@@ -174,16 +178,16 @@ if (HAS.look) await guard('A 1280x800', async () => {
   const L = [], sh = [], times = [];
   const veg = PC.data.vegetation || V.VEG_TABLE;
   const b0 = await snap(S);
-  for (const season of V.SEASONS) for (const hour of [8, 12, 17.5, 22, 0, 6, 18, 24]) {
+  for (const season of V.SEASONS) for (const hour of [8, 12, 17.5, 22, ...EDGE_H]) {
     const dt = await S.page.evaluate(([h, s]) => { const t = performance.now(); PC.view3d.setLook({ hour: h, season: s }); return performance.now() - t; }, [hour, season]); times.push(dt);
     const gg = await snap(S); L.push(...lookProblems(gg, hour, season, `${season} ${hour} h`), ...sameScene(b0, gg, `${season} ${hour} h`));
-    const sun = gg.lights.filter((l) => l.cast); if (sun.length !== 1 || sun[0].type !== 'DirectionalLight' || Math.max(...sun[0].map) > 1024) L.push(`${season} ${hour} h: shadow lights ${JSON.stringify(sun.map((l) => [l.type, l.map]))}`);
+    const sun = gg.lights.filter((l) => l.cast); if (sun.length !== 1 || sun[0].type !== 'DirectionalLight' || Math.max(...sun[0].map) > MAPMAX) L.push(`${season} ${hour} h: shadow lights ${JSON.stringify(sun.map((l) => [l.type, l.map]))}`);
     const s = await S.page.evaluate(SHADOW, veg); if (s.out || s.over) sh.push(`${season} ${hour} h: ${s.out} of ${s.n} content points outside the shadow box ${s.cam.map((x) => x.toFixed(2))} (e.g. light view ${s.ex}), over the cap ${s.over}`);
   }
   await S.page.evaluate(() => PC.view3d.setLook({ hour: 8, season: 'summer' })); const m8 = (await snap(S)).lights.find((l) => l.cast).cam;
   await S.page.evaluate(() => PC.view3d.setLook({ hour: 17.5, season: 'summer' })); const m17 = (await snap(S)).lights.find((l) => l.cast).cam;
   if (eq(m8, m17)) sh.push(`shadow box not refitted between 8 and 17.5 h: ${m8}`);
-  R.check(`${T}: 4 seasons x 8 hours (presets, 0 / 6 / 18 / 24) through setLook: the scene = my oracle, the same meshes / materials / geometries, camera kept, one shadow light (map <= 1024)`, cut(L));
+  R.check(`${T}: 4 seasons x ${4 + EDGE_H.length} hours (presets${EDGE_H.length ? ', 0 / 6 / 18 / 24' : ''}) through setLook: the scene = my oracle, the same meshes / materials / geometries, camera kept, one shadow light (map <= ${MAPMAX})`, cut(L));
   R.check(`${T}: shadow box (r128's light view after a render) holds the content at every look (footprint to the roof base, canopies, shrubs, pool + rim, parking, seating) or is capped at shadowR x radius; refitted between 8 and 17.5 h`, cut(sh));
   times.sort((a, b) => a - b); R.check(`${T}: setLook (applyLook + invalidate) under 16 ms on every look (median ${times[times.length >> 1].toFixed(2)} ms, max ${times[times.length - 1].toFixed(2)} ms)`, times[times.length - 1] < 16 ? [] : [`max ${times[times.length - 1].toFixed(2)} ms`]);
   // luminance
@@ -236,8 +240,8 @@ if (HAS.scatter) await guard('B vegetation', async () => {
   await to5(S); let r = await S.page.evaluate(INST, veg); const f = instProblems(r, 'sample'), m25 = r.meshes;
   if (!r.model.trees || !r.model.shrubs) f.push(`sample: ${r.model.trees} trees, ${r.model.shrubs} shrubs`);
   await S.shot('B-sample-trees');
-  await to5(S, 's.ans.vegPct = 0;'); r = await S.page.evaluate(INST, veg); f.push(...instProblems(r, '0 %')); if (r.names.length || r.meshes !== 12) f.push(`0 %: ${r.meshes} meshes, instanced ${r.names} (12, none)`);
-  if (m25 !== 12 + 3) f.push(`sample at 25 %: ${m25} meshes (12 + 3)`);
+  await to5(S, 's.ans.vegPct = 0;'); r = await S.page.evaluate(INST, veg); f.push(...instProblems(r, '0 %')); if (r.names.length || r.meshes !== 12 + NEW6) f.push(`0 %: ${r.meshes} meshes, instanced ${r.names} (${12 + NEW6}, none)`);
+  if (m25 !== 12 + NEW6 + 3) f.push(`sample at 25 %: ${m25} meshes (12 + ${NEW6 ? NEW6 + ' F6 + ' : ''}3)`);
   await to5(S, "s.plot.pts = [[0, 0], [100, 0], [100, 100], [0, 100]]; s.ans.streetEdge = 0; s.ans.footprintPct = 15; s.ans.vegPct = 80; s.ans.floors = 3; s.ans.basement = true; s.ans.lift = true; s.ans.usableRoof = true; s.ans.roofType = 'terrace'; s.ans.pool = { on: true, size: 'L' }; s.ans.parking = { cars: 4, covered: true }; s.ans.extras = { wall: true, gate: 'right', seating: true }; s.ans.pairs = []; s.ans.rooms = []; let n = 1; for (const l of ['B', 'G', '1', '2']) for (const ty of ['bedroom', 'bathroom', 'kitchen', 'living', 'dining', 'majlis', 'office', 'maid', 'storage', 'laundry']) s.ans.rooms.push({ id: 'r' + n++, type: ty, level: l, size: 'S', area: null, master: false }); s.ans.nextRoomId = n;");
   r = await S.page.evaluate(INST, veg); f.push(...instProblems(r, '100 x 100 m at 80 %, 40 rooms'));
   if (r.model.trees !== 120 || r.model.shrubs !== 200 || r.meshes > 40) f.push(`maximum: ${r.model.trees} trees, ${r.model.shrubs} shrubs, ${r.meshes} meshes (120 / 200 / <= 40)`);
@@ -281,7 +285,7 @@ await guard('C 360x640', async () => {
 });
 
 // ================= E. exploratory: Light pane at 640x360 and 768x1024 (F1-T1 layout rules, 44 px, one line each) =================
-if (HAS.look) for (const vp of [{ tag: '640x360', w: 640, h: 360, touch: true }, { tag: '768x1024', w: 768, h: 1024, touch: true }]) await guard(`E ${vp.tag}`, async () => {
+if (HAS.look && FULL) for (const vp of [{ tag: '640x360', w: 640, h: 360, touch: true }, { tag: '768x1024', w: 768, h: 1024, touch: true }]) await guard(`E ${vp.tag}`, async () => {
   const S = await session(browser, vp, { three: 'real' }), T = `E ${vp.tag} real`; await to5(S); await lightTab(S);
   await S.act('v3-preset-evening'); await settleLook(S); const f = ctlProblems(await ctl(S), 17.5, 'summer', 'Evening');
   const lay = await S.page.evaluate(() => { const q = (h) => document.querySelector(`[data-pc="${h}"]`); return ['v3-time', 'v3-season', 'v3-preset-morning', 'v3-preset-noon', 'v3-preset-evening', 'v3-preset-night'].map((h) => { const r = q(h).getBoundingClientRect(); return [h, r.width, r.height, r.right <= innerWidth + 0.5 && r.left >= -0.5]; }).filter(([, w, hh, inV]) => w < 43.5 || hh < 43.5 || !inV); });
@@ -296,7 +300,8 @@ if (HAS.look) for (const vp of [{ tag: '640x360', w: 640, h: 360, touch: true },
 let PXN = 0;
 const shotPx = async (S) => { const buf = await S.page.locator('[data-pc="v3-canvas"]').screenshot(), name = 'p' + PXN++; await S.page.evaluate(([b64, n]) => new Promise((res) => { const im = new Image(); im.onload = () => { const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const x = c.getContext('2d'); x.drawImage(im, 0, 0); (window.__px = window.__px || {})[n] = x.getImageData(0, 0, im.width, im.height).data; res(); }; im.src = 'data:image/png;base64,' + b64; }), [buf.toString('base64'), name]); return name; };
 const pxDiffIn = (S, an, bn, thr = 30) => S.page.evaluate(([an, bn, thr]) => { const a = window.__px[an], b = window.__px[bn]; let n = 0, d = 0; for (let k = 0; k < a.length; k += 4) { const e = Math.abs(a[k] - b[k]) + Math.abs(a[k + 1] - b[k + 1]) + Math.abs(a[k + 2] - b[k + 2]); if (e > thr) n++; d += (0.2126 * (a[k] - b[k]) + 0.7152 * (a[k + 1] - b[k + 1]) + 0.0722 * (a[k + 2] - b[k + 2])); } return { n, dLum: d / (a.length / 4) }; }, [an, bn, thr]);
-const setObj = (S, name, key, val) => S.page.evaluate(([n, k, v]) => { const i = PC.debug.scene(); i.world.getObjectByName(n)[k] = v; PC.view3d.invalidate(); }, [name, key, val]);
+// F6-T1a: shadows are drawn on demand (shadowMap.autoUpdate false), so a test that toggles castShadow itself asks for the redraw
+const setObj = (S, name, key, val) => S.page.evaluate(([n, k, v]) => { const i = PC.debug.scene(); i.world.getObjectByName(n)[k] = v; if (i.renderer && i.renderer.shadowMap) i.renderer.shadowMap.needsUpdate = true; PC.view3d.invalidate(); }, [name, key, val]);
 if (HAS.look && HAS.scatter) await guard('D extras', async () => {
   const S = await session(browser, VP.desk, { three: 'real' }), T = 'D 1280x800 real', veg = PC.data.vegetation || V.VEG_TABLE;
   await to5(S); const f = [];
@@ -312,7 +317,7 @@ if (HAS.look && HAS.scatter) await guard('D extras', async () => {
   // summer 17.5 h: the sun at the 0.15 Y clamp grazes the ground, so shadows are faint (~10 levels per channel; observation O-1): count changes > 6
   const c = await pxDiffIn(S, s0, s1, 6); if (!(c.n > 1000 && c.dLum < 0)) f.push(`17.5 h: tree shadows change ${c.n} px (> 6 levels), mean luma ${c.dLum.toFixed(3)} (shadows should darken)`);
   // F5-T3a O-1 (version-aware): with the O-1 keys the evening shadows must read: >= 15 000 px change by > 30 levels (204 before O-1)
-  const allCast = (on) => S.page.evaluate((on) => { const i = PC.debug.scene(); if (!on) { window.__cast = []; i.scene.traverse((o) => { if (o.castShadow && !o.isLight) { window.__cast.push(o); o.castShadow = false; } }); } else for (const o of window.__cast || []) o.castShadow = true; PC.view3d.invalidate(); }, on);
+  const allCast = (on) => S.page.evaluate((on) => { const i = PC.debug.scene(); if (!on) { window.__cast = []; i.scene.traverse((o) => { if (o.castShadow && !o.isLight) { window.__cast.push(o); o.castShadow = false; } }); } else for (const o of window.__cast || []) o.castShadow = true; if (i.renderer && i.renderer.shadowMap) i.renderer.shadowMap.needsUpdate = true; PC.view3d.invalidate(); }, on);
   await allCast(false); await ready(S); const s2 = await shotPx(S); await allCast(true); await ready(S);
   const O1 = !!(V.skyGold(SKY) || {}).o1, c30 = await pxDiffIn(S, s0, s2, 30);
   if (O1 && !(c30.n >= 15000)) f.push(`O-1: 17.5 h summer shadows (every caster off) change only ${c30.n} px by > 30 levels (>= 15 000 required)`);
@@ -340,5 +345,6 @@ if (HAS.look && HAS.scatter) await guard('D extras', async () => {
 });
 
 await browser.close();
+if (!FULL) R.note('A edge hours 0 / 6 / 18 / 24 and E 640x360 / 768x1024 run with QA_FULL=1 only (TL Q-T8 run-time moves)');
 R.note(`sections: ${TIMES.join(', ')}; run ${((Date.now() - t0) / 1000).toFixed(1)} s; sunDir clamp variant ${VARIANT}`);
 process.exit(R.done() ? 0 : 1);

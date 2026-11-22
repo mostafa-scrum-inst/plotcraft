@@ -290,3 +290,4 @@
 - [PM] F6-T1b Reset pitch 50° -> ~62°: agreed (goals-and-stories round 16) on conditions — whole plot framed (F4-S2 unchanged), house front clear, seating partly visible on the 360/640/1280 Reset shots; otherwise the largest angle that keeps the plot; no story text change; TL told
 - [TL] F6-T1b resetPhi approved by PM (round 16, conditions recorded); FS, Designer, QA told.
 - [TL] F6-T1b resetPhi 62 accepted (d4dda7a); fit test asserts dock-collapsed, dock-open 1 px cut is known occl.bottom limit.
+- [QA] F6-T1a rows in (version-aware): Roof on at open, 24-mesh / 64 budget, paving / northNeedle / roofTiles / sky, 2048 map, on-demand shadow redraw, sky + site fields, Designer retune oracle (hand table, 20c9238); Q-T8 QA_FULL rows + leak 960x600. All QA suites green on f6t1 d4dda7a (copy) and on main

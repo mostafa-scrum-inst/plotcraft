@@ -75,10 +75,13 @@ const SHELL0 = H.loadPC3().PC.scatter ? 's.ans.vegPct = 0;' : '';   // F4-T3 (TL
 const TIMES = [], ONLY = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7).split(',').filter(Boolean);   // --only=A,C: sections by letter (mutation runs)
 async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) return; const t = Date.now(); try { await fn(); } catch (e) { R.check(`${label}: ran to the end`, [String(e && e.stack || e).split('\n').slice(0, 3).join(' | ')]); } TIMES.push(`${label} ${((Date.now() - t) / 1000).toFixed(1)} s`); }
 
+// F6-T1 run-time moves (TL Q-T8, docs/03-tasks/F6-T1/qa-full-moves.md): A 360x640, C 640x360 and D loop 360x640 run
+// with QA_FULL=1 only (the 1280x800 passes, C 360x640 and the mock stay in the default run).
+const FULL = !!process.env.QA_FULL;
 const browser = await launch();
 
 // ================= A + B: acceptance and Q14 with real r128 =================
-for (const vp of [VP.desk, VP.phone]) await guard(`A ${vp.tag}`, async () => {
+for (const vp of [VP.desk, ...(FULL ? [VP.phone] : [])]) await guard(`A ${vp.tag}`, async () => {
   const S = await session(browser, vp, { three: 'real' }), T = `A ${vp.tag} real`;
   R.check(`${T}: 3D view ready (Building... gone, frame drawn)`, await to5(S, SHELL0) ? [] : ['not ready after 8 s']);
   let i = await info(S), { s, X } = await expect(S);
@@ -263,10 +266,10 @@ async function gestures(vp) {
   await S.layout(`${T} stage 5 after gestures`);
   await S.end(T);
 }
-for (const vp of [VP.phone, VP.land, VP.desk]) await guard(`C ${vp.tag}`, () => gestures(vp));
+for (const vp of [VP.phone, ...(FULL ? [VP.land] : []), VP.desk]) await guard(`C ${vp.tag}`, () => gestures(vp));
 
 // ================= D: render loop (real r128) =================
-for (const vp of [VP.desk, VP.phone]) await guard(`D loop ${vp.tag}`, async () => {   // 360x640 added in Round 1 (F4T1-1 re-test: the stage-4 strip case)
+for (const vp of [VP.desk, ...(FULL ? [VP.phone] : [])]) await guard(`D loop ${vp.tag}`, async () => {   // 360x640 added in Round 1 (F4T1-1 re-test: the stage-4 strip case)
   const S = await session(browser, vp, { three: 'real', init: [RAF] }), T = `D ${vp.tag} real`;
   await to5(S);
   const idle = async (ms = 600) => { await S.page.evaluate(() => { window.__raf = 0; }); const r0 = (await info(S)).renders; await S.page.waitForTimeout(ms); const i = await info(S); return { raf: i.raf, renders: i.renders - r0 }; };   // the idle span is the thing under test
@@ -434,5 +437,6 @@ await guard('G controls', async () => {
 });
 
 await browser.close();
+if (!FULL) R.note('A 360x640, C 640x360 and D loop 360x640 run with QA_FULL=1 only (TL Q-T8 run-time moves)');
 R.note(`browser run ${((Date.now() - t0) / 1000).toFixed(1)} s (${TIMES.join(', ')})`);
 process.exit(R.done() ? 0 : 1);

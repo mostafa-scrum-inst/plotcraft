@@ -34,6 +34,9 @@ if (!HAS) { R.note('skipped: PC.three.tour / PC.tourplan absent (F5-T2 not merge
 if (!noShots) mkdirSync(shots, { recursive: true });
 const session = sessions({ R, shots, noShots });
 const VP = { phone: { tag: '360x640', w: 360, h: 640, touch: true }, desk: { tag: '1280x800', w: 1280, h: 800, touch: false } };
+// F6-T1: the mesh budget is 64 (plan §8 / C-4; was 22 here). Run-time move (TL Q-T8, docs/03-tasks/F6-T1/qa-full-moves.md):
+// B (the maximum house stops) runs with QA_FULL=1 only.
+const FULL = !!process.env.QA_FULL, MESH_MAX = (PC.texgen || (PC.C.VIEW3D && PC.C.VIEW3D.tiers)) ? 64 : 22;
 const t0 = Date.now(), TIMES = [], OBS = [], LAP = []; let lapT = Date.now(); const lap = (n) => { const t = Date.now(); LAP.push(`${n} ${((t - lapT) / 1000).toFixed(1)}`); lapT = t; };
 const cut = (a, n = 8) => a.slice(0, n).concat(a.length > n ? [`... ${a.length} in all`] : []);
 const EYE_FLOOR = T.eyeFloorOf(PC.data.vegetation);
@@ -195,13 +198,14 @@ await guard('A 1280x800', async () => {
   R.check(`${T0}: a canvas drag, a gesture while paused, Stop, a level radio (applied), Reset view (applied), Roof on (applied), a finder pick (its flight runs) and leaving stage 5 each end the tour: Start back, caption / highlight cleared, select "Go to room…", pose / level / Roof kept where nothing else applies; no restart on return; Fast kept; the tour never calls setLook`, cut(e));
   lap('leave');
   // ---- B: the maximum house in the same page (one page load per viewport, TL ruling 3) ----
-  { const T0 = 'B 1280x800 maximum house', f = [];
+  if (!FULL) R.note('B 1280x800 maximum house (3 tour stops) runs with QA_FULL=1 only (TL Q-T8 run-time moves)');
+  if (FULL) { const T0 = 'B 1280x800 maximum house', f = [];
   await to5(S, "s.plot.pts = [[0, 0], [60, 0], [60, 50], [0, 50]]; s.ans.streetEdge = 0; s.ans.footprintPct = 40; s.ans.floors = 3; s.ans.basement = true; s.ans.lift = true; s.ans.usableRoof = true; s.ans.roofType = 'terrace'; s.ans.pool = { on: true, size: 'L' }; s.ans.parking = { cars: 4, covered: true }; s.ans.extras = { wall: true, gate: 'right', seating: true }; s.ans.pairs = []; s.ans.rooms = []; let n = 1; for (const l of ['B', 'G', '1', '2']) for (const ty of ['bedroom', 'bathroom', 'kitchen', 'living', 'dining', 'majlis', 'office', 'maid', 'storage', 'laundry']) s.ans.rooms.push({ id: 'r' + n++, type: ty, level: l, size: 'S', area: null, master: false }); s.ans.nextRoomId = n;");
   const h = await S.page.evaluate(HOUSE), C = await S.page.evaluate(CTX), stops = (await S.page.evaluate((a) => PC.tourplan.build(PC.debug.scene().house, a), C.aspect)).stops;
   lap('maxload'); await startTour(S); let g0 = null;
   for (const k of [1, 5, 35]) { const s = stops[k]; if (!s) continue; await seek(S, s.t - 0.05, { hold: true }); const st = await S.page.evaluate(STATE);
     if (!running(st)) { f.push(`stop ${k}: the tour ended`); break; }
-    if (st.meshes > 22) f.push(`stop ${k} (${s.level}): ${st.meshes} meshes (<= 22)`);
+    if (st.meshes > MESH_MAX) f.push(`stop ${k} (${s.level}): ${st.meshes} meshes (<= ${MESH_MAX})`);
     if (s.level === 'B') { if (g0 === null) g0 = st.geoms; else if (st.geoms !== g0) f.push(`stop ${k}: renderer geometries ${g0} -> ${st.geoms} between two basement stops (one highlight alive; same levels shown)`); }
     if (s.level === 'B') {
       if (st.cap !== false) f.push(`stop ${k} (B): groundCap visible`);
@@ -211,7 +215,7 @@ await guard('A 1280x800', async () => {
         const path = (o) => { const n = []; for (let q = o; q && q !== i.world; q = q.parent) n.unshift(q.name || q.type); return n.join('/'); };
         return { hit: hit ? path(hit.object) : 'nothing' }; }, s.id);
       if (r.err || !/^(level-B|highlight)/.test(r.hit)) f.push(`stop ${k} (B, ${s.id}): first visible hit towards the room ${r.err || r.hit}`);
-      if (k === 1) { const leak = await S.page.evaluate(() => { const i = PC.debug.scene(), T3 = THREE, h = i.house, cam = i.camera, outer = i.world.getObjectByName('groundOuter'), old = outer.material; outer.material = new T3.MeshBasicMaterial({ color: 0xff00ff }); i.renderNow();
+      if (k === 1) { const leak = await S.page.evaluate(() => { const i = PC.debug.scene(), T3 = THREE, h = i.house, cam = i.camera, outer = i.world.getObjectByName('groundOuter'), old = outer.material; outer.material = new T3.MeshBasicMaterial({ color: 0xff00ff, fog: false, toneMapped: false }); i.renderNow();
           const gl = i.renderer.getContext(), w = gl.drawingBufferWidth, hh = gl.drawingBufferHeight, px = new Uint8Array(w * hh * 4); gl.readPixels(0, 0, w, hh, gl.RGBA, gl.UNSIGNED_BYTE, px); outer.material.dispose(); outer.material = old; i.renderNow();
           const fp = h.footprint, X = (u) => u - h.center[0], Z = (v) => -(v - h.center[1]); cam.updateMatrixWorld();
           const poly = [[fp.u, fp.v], [fp.u + fp.w, fp.v], [fp.u + fp.w, fp.v + fp.d], [fp.u, fp.v + fp.d]].map(([u, v]) => { const q = new T3.Vector3(X(u), 0, Z(v)).project(cam); return [(q.x + 1) / 2 * w, (q.y + 1) / 2 * hh]; });
@@ -225,7 +229,7 @@ await guard('A 1280x800', async () => {
       if (k === 1) await S.shot('B-basement-stop'); }
     await resume(S); }
   await S.act('v3-tour-stop');
-  R.check(`${T0}: at 3 stops (2 on B, 1 on the second floor) the tour keeps <= 22 meshes and one highlight geometry; a basement stop on real r128: groundCap hidden, no groundOuter inside the footprint (B-1 class), the room is the first visible hit from the eye (both basement stops) and the highlight is drawn (the first)`, cut(f));
+  R.check(`${T0}: at 3 stops (2 on B, 1 on the second floor) the tour keeps <= ${MESH_MAX} meshes and one highlight geometry; a basement stop on real r128: groundCap hidden, no groundOuter inside the footprint (B-1 class), the room is the first visible hit from the eye (both basement stops) and the highlight is drawn (the first)`, cut(f));
   }
   await S.end('A 1280x800 real');
 });

@@ -29,6 +29,9 @@ const T3 = loadTables();
 const VP = { phone: { tag: '360x640', w: 360, h: 640, touch: true }, desk: { tag: '1280x800', w: 1280, h: 800, touch: false } };
 const ONLY = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7).split(',').filter(Boolean);
 const t0 = Date.now(), TIMES = [];
+// F6-T1 run-time moves (TL Q-T8, docs/03-tasks/F6-T1/qa-full-moves.md): A roof and B interior at 360x640 run with QA_FULL=1
+// only (their 1280x800 passes stay in the default run).
+const FULL = !!process.env.QA_FULL;
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const SEAT_TEXT = 'Garden seating does not fit in the yard: it is left out of the 3D scene. Try a lower footprint %, fewer cars or a smaller pool.';
 const RAF = () => { const raf = window.requestAnimationFrame.bind(window); window.__raf = 0; window.requestAnimationFrame = (cb) => { window.__raf++; return raf(cb); }; };
@@ -61,7 +64,7 @@ function nodeRoofItems(state) { const s = Q.plain(state), h = PC.house.build(s);
 const browser = await launch();
 try {
 // ================= A. Roof switch per roof type =================
-for (const vp of [VP.phone, VP.desk]) await guard(`A roof ${vp.tag}`, async () => {
+for (const vp of [...(FULL ? [VP.phone] : []), VP.desk]) await guard(`A roof ${vp.tag}`, async () => {
   const S = await session(browser, vp, { three: 'real' }), T = `A ${vp.tag}`, f = [], imgs = {}; let first = true;
   for (const [name, mut] of [['flat', "s.ans.roofType = 'flat';"], ['pitched', "s.ans.roofType = 'pitched';"], ['terrace', "s.ans.roofType = 'terrace';"], ['usable flat + lift', "s.ans.roofType = 'flat'; s.ans.usableRoof = true; s.ans.lift = true;"]]) {
     await to5(S, mut); await viewTab(S); await S.act(pick('all')); await ready(S);
@@ -91,7 +94,7 @@ for (const vp of [VP.phone, VP.desk]) await guard(`A roof ${vp.tag}`, async () =
 });
 
 // ================= B. Q18 / Q19 through stage 4 =================
-for (const vp of [VP.phone, VP.desk]) await guard(`B interior ${vp.tag}`, async () => {
+for (const vp of [...(FULL ? [VP.phone] : []), VP.desk]) await guard(`B interior ${vp.tag}`, async () => {
   const S = await session(browser, vp, { three: 'real' }), T = `B ${vp.tag}`, f = [];
   await to5(S); const w0 = await W(S), b0 = (await info(S)).builds;
   await S.act('btn-back'); await S.settle(); await S.act('css:[data-pc="q-interior-style"] label:has(input[value="classic"])'); await S.act('btn-next'); await ready(S);
@@ -161,7 +164,8 @@ await guard('E budget', async () => {
   const ok = await to5(S, "s.plot.pts = [[0, 0], [60, 0], [60, 50], [0, 50]]; s.ans.streetEdge = 0; s.ans.footprintPct = 40; s.ans.floors = 3; s.ans.basement = true; s.ans.lift = true; s.ans.usableRoof = true; s.ans.roofType = 'terrace'; s.ans.pool = { on: true, size: 'L' }; s.ans.parking = { cars: 4, covered: true }; s.ans.extras = { wall: true, gate: 'right', seating: true }; s.ans.interior = { style: 'classic', density: 'full' }; s.ans.pairs = []; s.ans.rooms = []; let n = 1; for (const l of ['B', 'G', '1', '2']) for (const ty of ['bedroom', 'bathroom', 'kitchen', 'living', 'dining', 'majlis', 'office', 'maid', 'storage', 'laundry']) s.ans.rooms.push({ id: 'r' + n++, type: ty, level: l, size: 'S', area: null, master: false }); s.ans.nextRoomId = n;");
   let w = await W(S); const st = await S.state();
   if (!ok || st.ans.rooms.length !== 40) f.push(`setup: ready ${ok}, ${st.ans.rooms.length} rooms`);
-  const vx = ['trunks', 'canopies', 'shrubs'].filter((k) => w.names[k]).length; if (w.meshes > 18 + vx) f.push(`${w.meshes} meshes > 18${vx ? ` + ${vx} vegetation (F4-T3)` : ''}`);
+  const vx = ['trunks', 'canopies', 'shrubs'].filter((k) => w.names[k]).length; const F6 = await S.page.evaluate(() => !!(PC.texgen || (PC.C.VIEW3D && PC.C.VIEW3D.tiers)));   // F6-T1: mesh budget 64 (plan §8 / C-4)
+  if (F6 ? w.meshes > 64 : w.meshes > 18 + vx) f.push(`${w.meshes} meshes > ${F6 ? 64 : 18}${vx && !F6 ? ` + ${vx} vegetation (F4-T3)` : ''}`);
   await roofTo(S, !(await S.page.evaluate(() => PC.debug.scene().roof))); await ready(S);   // one Roof change (F6-T1: whatever the open state)
   const idle = async (ms = 600) => { await S.page.evaluate(() => { window.__raf = 0; }); const r0 = (await info(S)).renders; await S.page.waitForTimeout(ms); const i = await info(S); return { raf: i.raf, renders: i.renders - r0 }; };   // the idle span is under test
   let z = await idle(); if (z.raf || z.renders) f.push(`idle after the build: ${JSON.stringify(z)}`);
@@ -176,7 +180,7 @@ await guard('E budget', async () => {
   if (i1.builds !== i0.builds + 1) f.push(`restore: builds ${i0.builds} -> ${i1.builds} (the scene rebuilds its batches on restore)`);
   if (Buffer.compare(img0, img1) !== 0) f.push('restore: the frame after the restore differs from the one before');
   z = await idle(); if (z.raf || z.renders) f.push(`idle after the restore: ${JSON.stringify(z)}`);
-  R.check(`${T} (40 rooms, terrace usable, pool L, 4 covered cars, wall, gate, seating; real r128): ${w.meshes} meshes <= 18 (+ vegetation from F4-T3), loop idle after the build, a context loss + restore rebuilds once, the same batches (${Object.keys(names0).length} names), the same frame, idle again`, f);
+  R.check(`${T} (40 rooms, terrace usable, pool L, 4 covered cars, wall, gate, seating; real r128): ${w.meshes} meshes <= ${F6 ? '64 (F6-T1)' : '18 (+ vegetation from F4-T3)'}, loop idle after the build, a context loss + restore rebuilds once, the same batches (${Object.keys(names0).length} names), the same frame, idle again`, f);
   await S.shot('E-max-roof'); await S.end(T);
 });
 
@@ -203,6 +207,7 @@ for (const vp of [VP.phone, VP.desk]) await guard(`F undo ${vp.tag}`, async () =
   await S.end(T);
 });
 } finally { await browser.close(); }
+if (!FULL) R.note('A roof and B interior at 360x640 run with QA_FULL=1 only (TL Q-T8 run-time moves)');
 R.note('sections: ' + TIMES.join(', '));
 R.note(`runtime ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 process.exit(R.done() ? 0 : 1);
