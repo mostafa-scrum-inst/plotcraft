@@ -155,6 +155,7 @@
     ui.$('q-roof-note').hidden = !(roofNote && s.ans.usableRoof);
     // PM round 14: "S 3 × 6 · M 4 × 8 · L 5 × 10 m" / "S 9.8 × 19.7 · M 13.1 × 26.2 · L 16.4 × 32.8 ft" (the unit once)
     ui.$('q-pool-size-note').textContent = PC.C.SIZES.map(function (k) { var p = PC.C.POOL[k]; return k + ' ' + poolDim(p.w, unit) + ' \u00D7 ' + poolDim(p.d, unit); }).join(' · ') + ' ' + U.lenUnit(unit);
+    ui.$('q-pool-size-note').setAttribute('data-unit', unit);   // the ft text may take 12 px at 360 (PM round 14; CSS)
   }
 
   // metres whole when whole (3, not 3.0), feet to one decimal (PM round 14)

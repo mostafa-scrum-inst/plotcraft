@@ -808,6 +808,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   .pc-taphint { left: 0; right: 0; bottom: 0; height: 24px; display: flex; align-items: center; border-width: 0; background: var(--canvas); white-space: nowrap; overflow: hidden; }
 }
 
+/* F5-T3a B-3: on narrow phones the pool-size note uses the UI font, not 12 px mono: the ft line fits at 14 px (PM round 14: 12 px only if it still wraps) */
+@media (max-width: 399px) { .pc-note[data-pc="q-pool-size-note"] { font-family: var(--font-ui); font-variant-numeric: tabular-nums; } }
+
 @media (min-width: 600px) {
   .pc-qs__scroll { padding: 0 var(--s4); }
   .pc-preview > .pc-canvas-wrap { height: 240px; }
@@ -5952,7 +5955,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
         ls.setItem(k, '1'); ls.removeItem(k);
         S.canWrite = true;
       } catch (e) { S.canWrite = false; }
-      S.available = S.canWrite;
+      // saving works only when a draft can also be read back (F1 rule; QA F5-T3a B-1): write-only = not saving
+      S.available = S.canRead && S.canWrite;
+      if (!S.canRead) S.canWrite = false;   // never write what can never be read back
       return S.available;
     },
     get: function (key) {
@@ -7275,7 +7280,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     var D = ui.draw2d, P = PC.data.palette2d, o = { avoid: avoid, font: P.font.area, color: P.label.area };
     var cs = [[fp.u, fp.v], [fp.u + fp.w, fp.v], [fp.u + fp.w, fp.v + fp.d], [fp.u, fp.v + fp.d]].map(function (p) { return v.toScreen(p); });
     var xs = cs.map(function (p) { return p[0]; }), w = Math.max.apply(null, xs) - Math.min.apply(null, xs);
-    var c = v.toScreen([fp.u + fp.w / 2, fp.v + fp.d / 2]), sp = text.lastIndexOf(' '), lines = [text.slice(0, sp), text.slice(sp + 1)];
+    var c = v.toScreen([fp.u + fp.w / 2, fp.v + fp.d / 2]), sp = text.indexOf(' '), lines = [text.slice(0, sp), text.slice(sp + 1)];   // number / unit ("460" / "sq ft", QA B-2)
     if (D.labelRect(v, text, c[0], c[1], o).w <= w - 8) { area = D.label(v, text, c[0], c[1], labels, o) ? { mode: 'one', lines: [text] } : null; return; }
     var wide = Math.max(D.labelRect(v, lines[0], 0, 0, o).w, D.labelRect(v, lines[1], 0, 0, o).w);
     if (wide <= w - 8) {
@@ -7939,6 +7944,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     ui.$('q-roof-note').hidden = !(roofNote && s.ans.usableRoof);
     // PM round 14: "S 3 × 6 · M 4 × 8 · L 5 × 10 m" / "S 9.8 × 19.7 · M 13.1 × 26.2 · L 16.4 × 32.8 ft" (the unit once)
     ui.$('q-pool-size-note').textContent = PC.C.SIZES.map(function (k) { var p = PC.C.POOL[k]; return k + ' ' + poolDim(p.w, unit) + ' \u00D7 ' + poolDim(p.d, unit); }).join(' · ') + ' ' + U.lenUnit(unit);
+    ui.$('q-pool-size-note').setAttribute('data-unit', unit);   // the ft text may take 12 px at 360 (PM round 14; CSS)
   }
 
   // metres whole when whole (3, not 3.0), feet to one decimal (PM round 14)

@@ -172,6 +172,9 @@
   .pc-taphint { left: 0; right: 0; bottom: 0; height: 24px; display: flex; align-items: center; border-width: 0; background: var(--canvas); white-space: nowrap; overflow: hidden; }
 }
 
+/* F5-T3a B-3: on narrow phones the pool-size note uses the UI font, not 12 px mono: the ft line fits at 14 px (PM round 14: 12 px only if it still wraps) */
+@media (max-width: 399px) { .pc-note[data-pc="q-pool-size-note"] { font-family: var(--font-ui); font-variant-numeric: tabular-nums; } }
+
 @media (min-width: 600px) {
   .pc-qs__scroll { padding: 0 var(--s4); }
   .pc-preview > .pc-canvas-wrap { height: 240px; }

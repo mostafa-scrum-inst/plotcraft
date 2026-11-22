@@ -19,7 +19,9 @@
         ls.setItem(k, '1'); ls.removeItem(k);
         S.canWrite = true;
       } catch (e) { S.canWrite = false; }
-      S.available = S.canWrite;
+      // saving works only when a draft can also be read back (F1 rule; QA F5-T3a B-1): write-only = not saving
+      S.available = S.canRead && S.canWrite;
+      if (!S.canRead) S.canWrite = false;   // never write what can never be read back
       return S.available;
     },
     get: function (key) {

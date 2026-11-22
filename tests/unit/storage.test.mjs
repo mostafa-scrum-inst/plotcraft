@@ -86,7 +86,9 @@ test('the four probe combinations: canRead / canWrite / available', () => {
   for (const [read, write] of [[true, true], [true, false], [false, true], [false, false]]) {
     const { ls, S } = mk(read, write);
     S.probe();
-    assert.deepEqual([S.canRead, S.canWrite, S.available], [read, write, write], `read ${read} write ${write}`);
+    // QA F5-T3a B-1: saving works only when both do; write-only never writes (a draft it could not read back)
+    assert.deepEqual([S.canRead, S.canWrite, S.available], [read, read && write, read && write], `read ${read} write ${write}`);
+    if (!read && write) { let w = 0; ls.setItem = () => { w++; }; assert.equal(S.set('k', 'v'), false); assert.equal(S.writeDraft('{}'), false); assert.equal(w, 0, 'write-only: nothing written'); }
     if (read && !write) {
       // read-only: the stored text is readable, nothing is ever written or removed
       assert.equal(S.get('plotcraft.draft.v2'), 'x');

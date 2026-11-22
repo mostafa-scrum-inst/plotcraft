@@ -332,6 +332,18 @@ async function staircase(k) {
   await page.evaluate(() => PC.store.commit((s) => { s.plot = { pts: [[0, 0], [9, 0], [9, 40], [0, 40]], closed: true }; s.ans.streetEdge = 0; s.ans.edgeOv = {}; })); await settled(page);
   const a = await page.evaluate(() => { const r = PC.debug.siteArea(), f = PC.debug.site().footprint; return { r, fp: f && [f.u, f.v, f.w, f.d], fpw: f ? Math.abs(PC.debug.toScreen('site', f.u + f.w, 0)[0] - PC.debug.toScreen('site', f.u, 0)[0]) : 0 }; });
   T.ok(a.r && (a.r.mode === 'two' || a.r.mode === 'outside') && (a.r.mode !== 'two' || /^\d+$/.test(a.r.lines[0]) && a.r.lines[1] === 'm²'), `${tag} narrow footprint (${a.fpw.toFixed(0)} px wide): area label ${JSON.stringify(a.r)}`);
+  // QA F5-T3a B-2: in ft the split is number / unit ("460" / "sq ft")
+  // widen the plot until the ft label takes two lines, then check the split
+  const aft = await page.evaluate(async () => {
+    for (let w = 9; w <= 60; w += 0.5) {
+      PC.store.commit((s) => { s.ans.unit = 'ft'; s.plot = { pts: [[0, 0], [w, 0], [w, 40], [0, 40]], closed: true }; s.ans.streetEdge = 0; });
+      await new Promise((r) => setTimeout(r, 0));
+      const a = PC.debug.siteArea(); if (a && a.mode === 'two') return { w, a };
+    }
+    return null;
+  });
+  T.ok(aft && /^\d+$/.test(aft.a.lines[0]) && aft.a.lines[1] === 'sq ft', `${tag} two-line area label in ft: ${JSON.stringify(aft)}`);
+  await page.evaluate(() => PC.store.commit((s) => { s.ans.unit = 'm'; })); await settled(page);
   T.ok(await page.evaluate(() => PC.data.palette2d.font.area.startsWith('500 12px ') && PC.data.palette2d.label.area === '#46535F'), `${tag} area label style keys (500 12px, #46535F)`);
   // legend entries follow the drawing
   const leg = () => page.evaluate(() => ['site-legend-parking', 'site-legend-pool'].map((h) => document.querySelector(`[data-pc="${h}"]`).hidden));
@@ -344,6 +356,15 @@ async function staircase(k) {
   const note = () => page.evaluate(() => document.querySelector('[data-pc="q-pool-size-note"]').textContent);
   const m = await note(); await page.evaluate(() => PC.store.commit((s) => { s.ans.unit = 'ft'; })); await settled(page); const ft = await note();
   await page.evaluate(() => PC.store.commit((s) => { s.ans.unit = 'm'; })); await settled(page);
+  // QA F5-T3a B-3: one line at 360 in m and in ft (14 px: the UI font on narrow phones; 12 px is not needed)
+  const lines = (u) => page.evaluate(async (u) => { PC.store.commit((s) => { s.ans.unit = u; }); await new Promise((r) => setTimeout(r, 0));
+    const e = document.querySelector('[data-pc="q-pool-size-note"]');
+    const r = document.createRange(); r.selectNodeContents(e); const tops = new Set([...r.getClientRects()].map((x) => Math.round(x.top))); return [tops.size, getComputedStyle(e).fontSize]; }, u);
+  await k.act('q-tab-outdoor'); await settled(page);
+  const lm = await lines('m'), lf = await lines('ft');
+  await k.act('q-tab-site'); await settled(page);
+  await page.evaluate(() => PC.store.commit((s) => { s.ans.unit = 'm'; })); await settled(page);
+  T.eq([lm, lf], [[1, '14px'], [1, '14px']], `${tag} pool-size note on one line in m and ft at 14 px (UI font on narrow phones, Designer B-3 rule)`);
   T.eq([m, ft], ['S 3 \u00D7 6 · M 4 \u00D7 8 · L 5 \u00D7 10 m', 'S 9.8 \u00D7 19.7 · M 13.1 \u00D7 26.2 · L 16.4 \u00D7 32.8 ft'], `${tag} pool-size note in the PM format`);
 }
 

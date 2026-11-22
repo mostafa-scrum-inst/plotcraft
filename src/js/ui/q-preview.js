@@ -106,7 +106,7 @@
     var D = ui.draw2d, P = PC.data.palette2d, o = { avoid: avoid, font: P.font.area, color: P.label.area };
     var cs = [[fp.u, fp.v], [fp.u + fp.w, fp.v], [fp.u + fp.w, fp.v + fp.d], [fp.u, fp.v + fp.d]].map(function (p) { return v.toScreen(p); });
     var xs = cs.map(function (p) { return p[0]; }), w = Math.max.apply(null, xs) - Math.min.apply(null, xs);
-    var c = v.toScreen([fp.u + fp.w / 2, fp.v + fp.d / 2]), sp = text.lastIndexOf(' '), lines = [text.slice(0, sp), text.slice(sp + 1)];
+    var c = v.toScreen([fp.u + fp.w / 2, fp.v + fp.d / 2]), sp = text.indexOf(' '), lines = [text.slice(0, sp), text.slice(sp + 1)];   // number / unit ("460" / "sq ft", QA B-2)
     if (D.labelRect(v, text, c[0], c[1], o).w <= w - 8) { area = D.label(v, text, c[0], c[1], labels, o) ? { mode: 'one', lines: [text] } : null; return; }
     var wide = Math.max(D.labelRect(v, lines[0], 0, 0, o).w, D.labelRect(v, lines[1], 0, 0, o).w);
     if (wide <= w - 8) {
