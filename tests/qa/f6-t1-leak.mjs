@@ -10,7 +10,7 @@
 //     + one shadow map per shadow light (a removed but undisposed object shows as an excess at once);
 //   - per house key, the scene's own geometry / texture count is the same on every visit (no growth across rebuilds);
 //   - no page error, console error or THREE warning (S.end).
-// Default: 50 operations on the sample house (TL Q-T8 / plan §9.5). QA_RELEASE=1 or --max-only: only the 200-op maximum-house stream (release step, <= 240 s; TL ruling F6-T1a gate).
+// Default: 50 operations on the sample house (TL Q-T8 / plan §9.5). QA_RELEASE=1 or --max-only: only the 200-op maximum-house stream (release step, <= 300 s; TL ruling F6-T1a gate).
 // Run: node tests/qa/f6-t1-leak.mjs [--no-shots] [--seed=N] [--ops=N] [--force]
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -26,8 +26,8 @@ import * as H from './f4-t1-ref.mjs';
 const arg = (k, d) => { const a = process.argv.find((x) => x.startsWith(`--${k}=`)); return a ? Number(a.slice(k.length + 3)) : d; };
 const SEED = arg('seed', 20261122), OPS = arg('ops', 50);
 // TL ruling (F6-T1a gate, QA_FULL 545.6 s): the 200-op maximum-house stream (175 s) leaves QA_FULL=1 and is its own release
-// step, in its own process: QA_RELEASE=1 or --max-only runs only that stream (limit 240 s); every other run only the sample.
-const MAXONLY = !!process.env.QA_RELEASE || process.argv.includes('--max-only') || process.argv.includes('--leak-max'), MAX_S = 240;
+// step, in its own process: QA_RELEASE=1 or --max-only runs only that stream (limit 300 s, NOTE above 260 s); every other run only the sample.
+const MAXONLY = !!process.env.QA_RELEASE || process.argv.includes('--max-only') || process.argv.includes('--leak-max'), MAX_S = 300, NOTE_S = 260;   // TL (3db2b02 accepted): the release step <= 300 s, a NOTE above 260 s (two in a row go to the TL)
 const session = sessions({ R, shots: join(ROOT, 'tests/qa/shots/F6-T1'), noShots: true });
 const t0 = Date.now(), TIMES = [];
 const cut = (a, n = 8) => a.slice(0, n).concat(a.length > n ? [`... ${a.length} in all`] : []);
@@ -111,12 +111,13 @@ try {
   else R.note('the 200-operation maximum-house stream is its own release step: QA_RELEASE=1 or --max-only, run-all --only leak-max (TL ruling, F6-T1a gate)');
 } finally { await browser.close(); }
 // The release step also carries the rows the TL moved out of QA_FULL=1 after the 488 s gate (F6-T1a): each in its own
-// process with QA_RELEASE=1, after the stream. The whole step stays <= 240 s.
+// process with QA_RELEASE=1, after the stream. The whole step stays <= 300 s (NOTE above 260 s). It runs in every implementation-review gate (with QA_FULL) and at release.
 const RELEASE_ROWS = [['f4-t1-view.mjs', '--no-shots', '--release-only'], ['f5-t3-view.mjs', '--no-shots', '--release-only'], ['f4-t2-s0-ui.mjs', '--no-shots', '--only=640x360']];
 if (MAXONLY) {
   for (const [f, ...a] of RELEASE_ROWS) { const t = Date.now(), r = spawnSync('node', [join(ROOT, 'tests/qa', f), ...a], { stdio: 'inherit', cwd: ROOT, env: { ...process.env, QA_RELEASE: '1' } }); const s = (Date.now() - t) / 1000;
     TIMES.push(`${f} ${s.toFixed(1)} s`); R.check(`[release] ${f} ${a.join(' ')} (QA_RELEASE=1): its checks pass (${s.toFixed(1)} s)`, r.status === 0 ? [] : [`exit ${r.status}`]); }
   const all = (Date.now() - t0) / 1000;
+  if (all > NOTE_S) R.note(`NOTE [leak-max] the release step took ${all.toFixed(1)} s > ${NOTE_S} s (TL: two NOTE runs in a row go to the TL)`);
   R.check(`[leak-max] the release step (200-op maximum-house stream + ${RELEASE_ROWS.length} release rows) runs in ${all.toFixed(1)} s <= ${MAX_S} s (TL limit)`, all <= MAX_S ? [] : [`${all.toFixed(1)} s`]);
 }
 R.note(`timings: ${TIMES.join(', ')}; run ${((Date.now() - t0) / 1000).toFixed(1)} s`);
