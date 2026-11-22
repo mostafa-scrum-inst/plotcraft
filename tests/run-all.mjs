@@ -8,6 +8,13 @@
 //   node tests/run-all.mjs --qa --only f1-t3       one QA suite
 //   --jobs N                                       browser files run N at a time (default 3: two green full runs at 3
 //                                                  on this 4-core machine, TL F4-T1 outcome review; target <= 420 s)
+//   QA_FULL=1 node tests/run-all.mjs               release gate: the QA_FULL-only checks too, and first, alone, the C-4.8
+//                                                  build-time step (tests/solo/build-time.mjs); its number is reprinted
+//                                                  at the end; --write-durations under QA_FULL=1 writes
+//                                                  tests/durations-full.json, which orders QA_FULL runs
+//   QA_RELEASE=1 or --only leak-max                 also the release step: QA's 200-op maximum-house leak stream
+//                                                  (tests/qa/f6-t1-leak.mjs --max-only), own process, after the pool,
+//                                                  limit 300 s (NOTE above 260 s), its time reprinted at the end
 //   --write-durations                              after a green full run, rewrite tests/durations.json (commit it
 //                                                  with the run)
 //
@@ -15,6 +22,7 @@
 // screenshots). No step flag = all steps. Build and lint always run. Browser files are separate processes with
 // their own browser, pages opened from file:// and no shared files, so they can run side by side; their output is
 // printed whole, file by file, when each one ends. They start longest first (F5-T3c), by tests/durations.json
+// (tests/durations-full.json under QA_FULL=1)
 // (label -> seconds from the last green full run); files not in the table start first, ties by label.
 import { spawn, spawnSync } from 'node:child_process';
 import { readdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -37,7 +45,8 @@ const run = (label, argv) => {
   if (r.status !== 0) { console.log(`\nrun-all: FAILED at "${label}"`); done(false); }
   console.log(`(${label}: ${secs(Date.now() - t)})`);
 };
-const table = join(here, 'durations.json'), took = {};
+// Two duration tables (TL ruling, F6-T1a): the default run and QA_FULL=1 order files by their own last green run.
+const table = join(here, process.env.QA_FULL ? 'durations-full.json' : 'durations.json'), took = {};
 const known = (() => { try { return JSON.parse(readFileSync(table, 'utf8')); } catch { return {}; } })();
 const longestFirst = (tasks) => tasks.slice().sort((a, b) => {
   const da = known[a.label], db = known[b.label];
@@ -52,7 +61,9 @@ function pool(tasks) {
     const start = () => {
       if (next >= tasks.length) { if (!running) resolve(failed); return; }
       const task = tasks[next++], t = Date.now(), out = []; running++;
-      const child = spawn(process.execPath, task.argv, { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
+      // QA_RELEASE belongs to the release step alone: pool files never see it (run-f6-t1 would switch streams)
+      const env = Object.assign({}, process.env); delete env.QA_RELEASE;
+      const child = spawn(process.execPath, task.argv, { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] });
       child.stdout.on('data', (d) => out.push(d)); child.stderr.on('data', (d) => out.push(d));
       child.on('close', (code) => {
         console.log(`\n=== ${task.label} ===`); process.stdout.write(Buffer.concat(out));
@@ -73,8 +84,34 @@ if (want('--three')) { const f = list('three', '.test.mjs'); if (f.length) run(`
 const browser = [];
 if (want('--e2e')) for (const f of picked(list('e2e', '.spec.mjs'))) browser.push({ label: 'e2e ' + f.slice(here.length + 1), argv: [f] });
 if (want('--qa')) for (const f of picked(list('qa', '.mjs').filter((f) => /[\\/]run-[^\\/]+\.mjs$/.test(f)))) browser.push({ label: 'qa ' + f.slice(here.length + 1), argv: [f, '--no-shots'] });
+// C-4.8 solo step (CTO / TL, F6-T1a): under QA_FULL=1 the build-time budget runs alone, to its end, before the
+// browser pool starts, so nothing else runs beside it; its number is printed again at the end of the report.
+const soloFailed = [], soloLines = [];
+if (process.env.QA_FULL && want('--e2e') && (!words.length || words.some((w) => 'solo/build-time'.includes(w)))) {
+  const f = join(here, 'solo', 'build-time.mjs'), label = 'solo solo/build-time.mjs', t = Date.now();
+  console.log(`\n=== ${label} (alone, before the pool) ===`);
+  const r = spawnSync(process.execPath, [f], { cwd: root, encoding: 'utf8' });
+  process.stdout.write((r.stdout || '') + (r.stderr || ''));
+  soloLines.push(...(r.stdout || '').split('\n').filter((l) => l.includes('[C-4.8]')));
+  console.log(`(${label}: ${r.status === 0 ? 'ok' : 'FAILED, exit ' + r.status}, ${secs(Date.now() - t)})`);
+  if (r.status !== 0) soloFailed.push(label);
+}
 if (browser.length) console.log(`\n${browser.length} browser file(s), ${jobs} at a time`);
-const failed = await pool(longestFirst(browser));
+const failed = soloFailed.concat(await pool(longestFirst(browser)));
+// Release step (TL ruling, F6-T1a): the 200-operation leak stream on the maximum house runs in its own process, after
+// the pool, with QA_RELEASE=1 or --only leak-max (at release, and when src/js/three/** or the leak suite changes).
+// Its own limit is 300 s (NOTE above 260 s, TL); its time is printed again at the end like the C-4.8 line.
+if (process.env.QA_RELEASE || words.includes('leak-max')) {
+  const label = 'release qa/f6-t1-leak.mjs --max-only', t = Date.now();
+  console.log(`\n=== ${label} (own process, after the pool) ===`);
+  const r = spawnSync(process.execPath, [join(here, 'qa', 'f6-t1-leak.mjs'), '--max-only', '--no-shots'], { cwd: root, encoding: 'utf8', env: Object.assign({}, process.env, { QA_RELEASE: '1' }) });
+  process.stdout.write((r.stdout || '') + (r.stderr || ''));
+  const sec = (Date.now() - t) / 1000, over = sec > 300;
+  soloLines.push(`  [leak-max] release step: ${sec.toFixed(1)} s, limit 300 s, ${r.status === 0 ? 'checks passed' : 'checks FAILED'}${over ? ' — OVER the limit' : sec > 260 ? ' — NOTE above 260 s: TL review' : ''}`);
+  console.log(`(${label}: ${r.status === 0 && !over ? 'ok' : 'FAILED' + (over ? ', over 300 s' : ', exit ' + r.status)}, ${secs(Date.now() - t)})`);
+  if (r.status !== 0 || over) failed.push(label);
+}
+if (soloLines.length) console.log('\n' + soloLines.join('\n'));
 if (failed.length) console.log('\nfailed: ' + failed.join(', '));
 if (args.includes('--write-durations')) {
   if (failed.length || only.length || words.length) console.log('\nrun-all: durations not written (needs a green full run)');

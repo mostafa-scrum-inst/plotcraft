@@ -88,7 +88,7 @@
    background (data-tables.test checks them against the table), framed by a 1 px --border line. The disabled rules
    (30-components) keep precedence by specificity. */
 .pc-range--sky::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; box-shadow: 0 0 0 1px var(--border);
-  background: linear-gradient(to right, #0B1626 0%, #0B1626 18.75%, #E8B08A 25%, #A9CBE6 31.25%, #8EC3EA 50%, #9CC5E4 66.6667%, #D8B994 70.8333%, #E59A6E 75%, #2C3556 81.25%, #0B1626 87.5%, #0B1626 100%); }
+  background: linear-gradient(to right, #0B1626 0%, #0B1626 18.75%, #E8B08A 25%, #A9CBE6 31.25%, #B9D6EE 50%, #BED6EA 66.6667%, #D8B994 70.8333%, #E59A6E 75%, #2C3556 81.25%, #0B1626 87.5%, #0B1626 100%); }
 .pc-range--sky::-moz-range-track { height: 6px; border-radius: 3px; box-shadow: 0 0 0 1px var(--border);
-  background: linear-gradient(to right, #0B1626 0%, #0B1626 18.75%, #E8B08A 25%, #A9CBE6 31.25%, #8EC3EA 50%, #9CC5E4 66.6667%, #D8B994 70.8333%, #E59A6E 75%, #2C3556 81.25%, #0B1626 87.5%, #0B1626 100%); }
+  background: linear-gradient(to right, #0B1626 0%, #0B1626 18.75%, #E8B08A 25%, #A9CBE6 31.25%, #B9D6EE 50%, #BED6EA 66.6667%, #D8B994 70.8333%, #E59A6E 75%, #2C3556 81.25%, #0B1626 87.5%, #0B1626 100%); }
 .pc-range--sky::-webkit-slider-thumb { margin-top: -11px; }

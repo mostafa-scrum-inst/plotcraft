@@ -10,14 +10,14 @@ const of = (E, items, key, src) => items.filter((i) => sameRgb(i.side, rgbOf(E.P
 
 test('siteBatch + poolWater: the flush water plane at Y 0.03 over exactly the pool, rotated -PI/2; rim 0.3 x 0.1 m outside it', () => {
   const E = opened(), g = E.world.getObjectByName('site'), q = E.house.site.pool;
-  assert.deepEqual([...g.children].map((c) => c.name), ['trunks', 'canopies', 'shrubs', 'siteBatch', 'poolWater'], 'F4-T3: the instanced vegetation first');
+  assert.deepEqual([...g.children].map((c) => c.name), ['trunks', 'canopies', 'shrubs', 'blobs', 'siteBatch', 'paving', 'northNeedle', 'poolWater'], 'F4-T3: the instanced vegetation first; F6-T1a: paving, northNeedle; F6-T1b: blobs after the vegetation');
   const w = E.mesh('poolWater');
   assert.equal(w.rotation.x, -Math.PI / 2); assert.equal(w.position.y, 0.03);
   assert.ok(close(w.position.x, E.X(q.u + q.w / 2)) && close(w.position.z, E.Z(q.v + q.d / 2)));
   assert.deepEqual(Array.from(E.mock.raw(w.geometry).params), [q.w, q.d]);
   const c = E.mock.raw(E.mock.raw(w.material).color);
   assert.ok(c.lin && sameRgb([c.r, c.g, c.b], rgbOf(E.PC, E.PC.data.siteColors.poolWater)));
-  const rim = of(E, E.items('siteBatch'), 'poolRim').filter((i) => i.kind === 'box');
+  const rim = of(E, E.items('paving'), 'poolRim').filter((i) => i.kind === 'box');   // F6-T1a: the rim is paving
   assert.equal(rim.length, 4);
   assert.ok(rim.every((r) => close(r.y0, 0) && close(r.y1, 0.1)));
   const x0 = Math.min(...rim.map((r) => r.x0)), x1 = Math.max(...rim.map((r) => r.x1));
@@ -27,11 +27,11 @@ test('siteBatch + poolWater: the flush water plane at Y 0.03 over exactly the po
   const omitted = opened(st((d) => { d.ans.footprintPct = 50; d.ans.vegPct = 0; }));
   assert.ok(omitted.PC.site.analyse(omitted.state).omitted.includes('pool') && omitted.house.site.pool === null, 'the pool is omitted here');
   assert.equal(omitted.mesh('poolWater'), null, 'omitted: no water');
-  assert.equal(of(omitted, omitted.items('siteBatch'), 'poolRim').filter((i) => i.kind === 'box').length, 0, 'omitted: no rim');
+  assert.equal(of(omitted, omitted.items('paving'), 'poolRim').filter((i) => i.kind === 'box').length, 0, 'omitted: no rim');
 });
 
 test('parking: one 0.02 m pad per car; covered adds 5 boxes (canopy at 2.4 m + 4 posts, carCanopy)', () => {
-  const E = opened(), it = E.items('siteBatch'), p = E.house.site.parking, pads = of(E, it, 'paving').filter((i) => close(i.y1, 0.02));
+  const E = opened(), it = E.items('siteBatch'), p = E.house.site.parking, pads = of(E, E.items('paving'), 'paving').filter((i) => i.kind === 'box' && close(i.y1, 0.02));
   assert.equal(pads.length, p.cars);
   const can = of(E, it, 'carCanopy');
   assert.equal(can.length, p.covered ? 5 : 0);
@@ -72,7 +72,7 @@ test('boundary wall: one 1.2 x 0.2 m segment per edge centred 0.1 m inside it; t
 test('seating: pad 3 x 3 x 0.05 (paving), table 0.9 x 0.75 and two benches 0.9 m either side (seating); absent when off', () => {
   const E = opened(st((d) => { d.ans.extras.seating = true; })), it = E.items('siteBatch'), s = E.house.site.seating;
   assert.ok(s);
-  const pad = of(E, it, 'paving').find((i) => close(i.y1, 0.05));
+  const pad = of(E, E.items('paving'), 'paving').find((i) => close(i.y1, 0.05));
   assert.ok(pad && close(pad.x1 - pad.x0, 3) && close(pad.z1 - pad.z0, 3));
   const seat = of(E, it, 'seating');
   assert.equal(seat.length, 3);
@@ -98,12 +98,31 @@ test('north needle: two flat triangles 0.04 m high, N half northMarker / S half 
   for (const E of [a, b]) {
     const N = E.house.northDeg * Math.PI / 180, t = tip(E), L = E.house.site.northMarker.L;
     assert.ok(Math.abs(t[0] - Math.sin(N) * L / 2) < 1e-9 && Math.abs(t[1] + Math.cos(N) * L / 2) < 1e-9, 'tip = (sin N, -cos N) L / 2');
-    const flats = E.items('siteBatch').filter((i) => i.kind === 'flat');
-    assert.equal(flats.length, 2);
-    assert.ok(flats.every((f) => close(f.y0, 0) && close(f.y1, 0.04)));
-    assert.ok(sameRgb(flats[0].side, rgbOf(E.PC, E.PC.data.siteColors.northMarker)) && sameRgb(flats[1].side, rgbOf(E.PC, E.PC.data.siteColors.poolRim)));
-    flats.forEach((f) => assert.deepEqual(windingProblems(E.mock, E.mesh('siteBatch'), f), []));
+    // F6-T1a (TL Q-T2): the N half is the northNeedle mesh on the unlit mats.ui; the S half stays in siteBatch
+    const nf = E.items('northNeedle'), flats = E.items('siteBatch').filter((i) => i.kind === 'flat');
+    assert.deepEqual([nf.length, nf[0].kind, flats.length], [1, 'flat', 1]);
+    assert.ok([nf[0], flats[0]].every((f) => close(f.y0, 0) && close(f.y1, 0.04)));
+    assert.ok(sameRgb(nf[0].side, rgbOf(E.PC, E.PC.data.siteColors.northMarker)) && sameRgb(flats[0].side, rgbOf(E.PC, E.PC.data.siteColors.poolRim)));
+    assert.deepEqual(windingProblems(E.mock, E.mesh('northNeedle'), nf[0]), []); assert.deepEqual(windingProblems(E.mock, E.mesh('siteBatch'), flats[0]), []);
+    const nm = E.mock.raw(E.mesh('northNeedle').material);
+    assert.deepEqual([nm.__kind, nm.toneMapped, nm.fog, E.mesh('northNeedle').castShadow], ['MeshBasicMaterial', false, false, false]);
   }
   const ang = (t) => Math.atan2(t[0], -t[1]) * 180 / Math.PI, dN = b.house.northDeg - a.house.northDeg;
   assert.ok(Math.abs(((ang(tip(b)) - ang(tip(a)) - dN) % 360 + 540) % 360 - 180) < 1e-9, `turned by dN = ${dN}`);
+});
+
+test('F6-T1a street (plan 4.4): footpath 1.5 m (paving, Y 0.02), kerb 0.15 m (siteBatch), road 8 m (asphalt, Y -0.03) outside the street edge, across the groundOuter square; paving has world UVs in metres and casts no shadow', () => {
+  const E = opened(), h = E.house, hs = E.PC.C.HOUSE.outerK * h.radius / 2, z0 = E.Z(0), S = E.PC.data.siteColors;
+  const path = E.items('paving').find((i) => i.kind === 'quad');
+  assert.ok(path && close(path.y0, 0.02) && close(path.x0, -hs) && close(path.x1, hs) && close(path.z0, z0) && close(path.z1, z0 + 1.5) && sameRgb(path.side, rgbOf(E.PC, S.paving)));
+  const it = E.items('siteBatch'), road = it.find((i) => i.kind === 'quad' && sameRgb(i.side, rgbOf(E.PC, S.asphalt)));
+  assert.ok(road && close(road.y0, -0.03) && close(road.z0, z0 + 1.65) && close(road.z1, Math.min(hs, z0 + 9.65)));
+  const kerb = it.find((i) => i.kind === 'box' && close(i.z0, z0 + 1.5) && close(i.z1, z0 + 1.65));
+  assert.ok(kerb && close(kerb.y1, 0.12) && close(kerb.y0, -0.05));
+  const pm = E.mesh('paving'), g = E.mock.raw(E.mock.raw(pm).geometry), uv = g.attrs.uv.array, pos = g.attrs.position.array;
+  for (let i = path.first; i < path.first + path.n; i++) assert.ok(close(uv[2 * i], pos[3 * i], 1e-3) && close(uv[2 * i + 1], -pos[3 * i + 2], 1e-3), 'top face uv = (X, -Z) metres');
+  assert.deepEqual([pm.castShadow, pm.receiveShadow, E.mock.raw(E.mock.raw(pm.material).map).image.width], [false, true, 512]);
+  // a plot without a street edge at v = 0 from the origin gets no street
+  const none = E.PC.three.street(Object.assign({}, h, { plot: { pts: h.plot.pts.map((p) => [p[0], p[1] + 1]) } }));
+  assert.equal(none, null);
 });

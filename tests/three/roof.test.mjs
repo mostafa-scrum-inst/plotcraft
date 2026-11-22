@@ -9,9 +9,10 @@ const R = { slab: 0.2, parapet: 0.3, high: 1.0 };
 const withRoof = (f) => (PC) => sampleApproved(PC, f);
 const top = (items) => Math.max(...items.map((i) => i.y1));
 
-test('the roof group is hidden by default and shown only with the Roof switch on and "All"', () => {
+test('F6-T1a: the roof group opens shown (PC.C.VIEW3D.roofOnOpen) and is shown only with the Roof switch on and "All"', () => {
   const E = opened(), g = E.world.getObjectByName('roof');
-  assert.equal(g.visible, false);
+  assert.deepEqual([E.PC.C.VIEW3D.roofOnOpen, E.info().roof, g.visible], [true, true, true]);
+  E.PC.view3d.setRoof(false); assert.equal(g.visible, false);
   E.PC.view3d.setRoof(true); assert.equal(g.visible, true);
   E.PC.view3d.setLevel('G'); assert.equal(g.visible, false, 'a single level selected: hidden');
   E.PC.view3d.setLevel('all'); assert.equal(g.visible, true);
@@ -53,7 +54,7 @@ test('flat: 0.2 m slab and a 0.3 m parapet; usable flat 1.0 m; terrace 1.0 m wit
   assert.equal(posts.length, 4);
 });
 
-test('pitched: one gable prism, 30 degrees, ridge along the longer side (both orientations), slopes roof / gables wall, outward winding', () => {
+test('pitched: one gable prism, 30 degrees, ridge along the longer side (both orientations), slopes roof (in roofTiles since F6-T1a) / gables wall, outward winding', () => {
   for (const swap of [false, true]) {
     const E = opened(withRoof((d) => { d.ans.roofType = 'pitched'; }), swap ? (h) => { const f = h.footprint; h.footprint = { u: f.u, v: f.v, w: f.d, d: f.w }; } : null);
     const h = E.house, fp = h.footprint, it = E.items('roofBatch'), pr = it.filter((i) => i.kind === 'prism');
@@ -74,8 +75,21 @@ test('pitched: one gable prism, 30 degrees, ridge along the longer side (both or
       if (Math.abs(ny) < 1e-6) { assert.ok(sameRgb(c, rgbOf(E.PC, ex.wall)), 'gable triangle: wall'); kinds.add('gable'); }
       else { assert.ok(sameRgb(c, rgbOf(E.PC, ex.roof)), 'slope / base: roof'); if (ny > 0) kinds.add('slope'); }
     }
-    assert.deepEqual([...kinds].sort(), ['gable', 'slope']);
+    assert.deepEqual([...kinds].sort(), ['gable']);
+    // F6-T1a: the two slopes are the roofTiles mesh (tile map, world UVs in metres, rows along the eaves)
+    const tm = E.mesh('roofTiles'), ti = E.items('roofTiles'), tg = E.mock.raw(E.mock.raw(tm).geometry);
+    assert.deepEqual([ti.length, ti[0].kind, tm.material, tm.castShadow], [1, 'slopes', E.info().meshes.find((m) => m.name === 'roofTiles').material, true]);
+    assert.equal(E.mock.raw(E.mock.raw(tm.material).map).image.width, 512);
+    assert.deepEqual(windingProblems(E.mock, tm, ti[0]), []);
+    const tn = tg.attrs.normal.array, tc = tg.attrs.color.array, uv = tg.attrs.uv.array, tp = tg.attrs.position.array;
+    for (let i = 0; i < tn.length / 3; i++) {
+      assert.ok(tn[3 * i + 1] > 0.8 && sameRgb([tc[3 * i], tc[3 * i + 1], tc[3 * i + 2]], rgbOf(E.PC, ex.roof)), 'slope: up-facing, roof colour');
+      const along = fp.w >= fp.d ? Math.abs(tp[3 * i]) : Math.abs(tp[3 * i + 2]);
+      assert.ok(close(Math.abs(uv[2 * i]), along, 1e-3), 'u = metres along the ridge (rows along the eaves)');
+    }
+    assert.equal(tn.length / 3, 8, 'two quads');
     assert.ok(!it.some((i) => i.kind === 'box' && i.y0 >= h.roof.baseY - 1e-6), 'no slab or parapet under a gable');
+    assert.equal(E.info().textures.length, 5, 'grass, meadow, paving, blob (F6-T1b) + tiles');
   }
 });
 

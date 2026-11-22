@@ -2,7 +2,7 @@
    to PC.view3d (three layer) and owns the stage-5 DOM: Building... / unavailable overlays, the level selector
    ("All" + the house's own levels, lowest first; PM round 9 labels), Reset view, the collapsible panel and its tabs.
    Session state only (A-4): level selection and roof toggle survive leaving and returning; the view opens on All
-   with the roof off. Controls of later tasks (room finder, tour) are disabled here (TL F4-T1 ruling 3); the Roof
+   with the Roof at PC.C.VIEW3D.roofOnOpen (F6-T1a: on, client card pending). Controls of later tasks (room finder, tour) are disabled here (TL F4-T1 ruling 3); the Roof
    switch is enabled since F4-T2. Light tab (F4-T3, A-13; Designer F4-T3 plan 3): the time slider (0-24 h, 0.25), four
    presets (8 / 12 / 17.5 / 22; aria-pressed only while the hour equals the preset) and the season select set the
    session look through PC.view3d.setLook (no rebuild, camera untouched); the readout shows HH:MM. The look lives in
@@ -174,6 +174,7 @@
   ui.stages.view3d = {
     init: function () {
       LATER.forEach(function (h) { ui.$(h).disabled = true; });
+      ui.$('v3-roof').checked = PC.view3d.info().roof;      // F6-T1a: PC.C.VIEW3D.roofOnOpen, once per page session
       ui.on(ui.$('v3-level'), 'change', function (e) {
         if (!e.target || e.target.name !== 'v3-level' || !e.target.checked) return;
         level = e.target.value;

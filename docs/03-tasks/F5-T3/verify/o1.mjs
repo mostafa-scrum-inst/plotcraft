@@ -12,9 +12,10 @@ const shot = async () => page.locator('[data-pc="v3-canvas"]').screenshot();
 for (const [hour, season] of looks) {
   await page.evaluate(([h, s]) => { PC.view3d.setLook({ hour: h, season: s }); PC.debug.scene().renderNow(); }, [hour, season]);
   const a = await shot();
-  await page.evaluate(() => { const i = PC.debug.scene(); window.__cast = []; i.scene.traverse((o) => { if (o.castShadow && !o.isLight) { window.__cast.push(o); o.castShadow = false; } }); i.renderNow(); });
+  // F6-T1a: the shadow map is drawn on demand, so re-apply the look (marks it dirty) after toggling the casters
+  await page.evaluate(([h, s]) => { const i = PC.debug.scene(); window.__cast = []; i.scene.traverse((o) => { if (o.castShadow && !o.isLight) { window.__cast.push(o); o.castShadow = false; } }); PC.view3d.setLook({ hour: h, season: s }); i.renderNow(); }, [hour, season]);
   const c = await shot();
-  await page.evaluate(() => { for (const o of window.__cast) o.castShadow = true; PC.debug.scene().renderNow(); });
+  await page.evaluate(([h, s]) => { for (const o of window.__cast) o.castShadow = true; PC.view3d.setLook({ hour: h, season: s }); PC.debug.scene().renderNow(); }, [hour, season]);
   const n = await page.evaluate(async ([x, y]) => {
     const load = (s) => new Promise((r) => { const im = new Image(); im.onload = () => { const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const g = c.getContext('2d'); g.drawImage(im, 0, 0); r(g.getImageData(0, 0, im.width, im.height).data); }; im.src = 'data:image/png;base64,' + s; });
     const p = await load(x), q = await load(y); let n30 = 0, mean = 0;

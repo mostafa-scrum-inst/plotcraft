@@ -16,28 +16,39 @@
     'children', 'traverse', 'getObjectByName', 'castShadow', 'receiveShadow', 'frustumCulled', 'renderOrder', 'lookAt',
     'updateMatrix', 'matrix'];
   var GEO = ['setAttribute', 'setIndex', 'computeVertexNormals', 'dispose'];
-  var MAT = ['color', 'vertexColors', 'transparent', 'opacity', 'side', 'dispose'];
+  var MAT = ['color', 'vertexColors', 'transparent', 'opacity', 'side', 'dispose', 'map', 'toneMapped', 'fog', 'depthWrite'];   // F6-T1a: map .. depthWrite
+  var TEX = ['wrapS', 'wrapT', 'repeat', 'encoding', 'magFilter', 'minFilter', 'generateMipmaps', 'anisotropy', 'needsUpdate', 'dispose'];
   var WHITELIST = {
     THREE: ['REVISION', 'WebGLRenderer', 'Scene', 'Group', 'Object3D', 'Mesh', 'InstancedMesh', 'PerspectiveCamera',
       'DirectionalLight', 'HemisphereLight', 'BufferGeometry', 'Float32BufferAttribute', 'BoxGeometry', 'PlaneGeometry',
       'CylinderGeometry', 'ConeGeometry', 'Shape', 'Path', 'ShapeGeometry', 'MeshLambertMaterial', 'MeshBasicMaterial',
       'Vector2', 'Vector3', 'Color', 'Matrix4', 'Quaternion', 'CatmullRomCurve3', 'sRGBEncoding', 'PCFSoftShadowMap',
-      'DoubleSide'],
-    WebGLRenderer: ['setPixelRatio', 'setSize', 'render', 'dispose', 'shadowMap', 'outputEncoding', 'domElement'],
-    'WebGLRenderer.shadowMap': ['enabled', 'type'],
+      'DoubleSide',
+      // F6-T1a (TL plan review: every row approved; conformance-checked on real r128 in view3d-real)
+      'ACESFilmicToneMapping', 'LinearEncoding', 'RGBAFormat', 'RepeatWrapping', 'LinearFilter', 'LinearMipmapLinearFilter',
+      'DataTexture', 'Fog',
+      // F6-T1b (plan 6.2 / 6.3): the blob texture clamps
+      'ClampToEdgeWrapping'],
+    WebGLRenderer: ['setPixelRatio', 'setSize', 'render', 'dispose', 'shadowMap', 'outputEncoding', 'domElement',
+      'toneMapping', 'toneMappingExposure', 'capabilities'],
+    'WebGLRenderer.shadowMap': ['enabled', 'type', 'autoUpdate', 'needsUpdate'],   // F6-T1a: on-demand shadow map
+    'WebGLRenderer.capabilities': ['maxTextureSize', 'getMaxAnisotropy'],
+    DataTexture: TEX,
+    Fog: ['color', 'near', 'far'],
     Object3D: O3D,
-    Scene: O3D.concat(['background']),
+    Scene: O3D.concat(['background', 'fog']),
     Group: O3D,
     Mesh: O3D.concat(['geometry', 'material']),
-    InstancedMesh: O3D.concat(['geometry', 'material', 'setMatrixAt', 'instanceMatrix', 'count']),
+    InstancedMesh: O3D.concat(['geometry', 'material', 'setMatrixAt', 'instanceMatrix', 'count', 'setColorAt', 'instanceColor']),
     'InstancedMesh.instanceMatrix': ['needsUpdate'],
+    'InstancedMesh.instanceColor': ['needsUpdate'],   // F6-T1b: per-instance colour variation (setColorAt(i, Color))
     PerspectiveCamera: O3D.concat(['fov', 'aspect', 'near', 'far', 'updateProjectionMatrix', 'setViewOffset', 'clearViewOffset']),
     DirectionalLight: O3D.concat(['color', 'intensity', 'target', 'shadow']),
     'DirectionalLight.shadow': ['mapSize', 'camera', 'bias', 'normalBias'],
     'DirectionalLight.shadow.camera': ['left', 'right', 'top', 'bottom', 'near', 'far', 'updateProjectionMatrix'],
     HemisphereLight: O3D.concat(['color', 'groundColor', 'intensity']),
     BufferGeometry: GEO, BoxGeometry: GEO, PlaneGeometry: GEO, CylinderGeometry: GEO, ConeGeometry: GEO, ShapeGeometry: GEO,
-    Float32BufferAttribute: [],
+    Float32BufferAttribute: ['array', 'needsUpdate'],
     Shape: ['moveTo', 'lineTo', 'closePath', 'holes'],
     Path: ['moveTo', 'lineTo', 'closePath'],
     MeshLambertMaterial: MAT, MeshBasicMaterial: MAT,
@@ -52,7 +63,8 @@
   var SETS = {};
   Object.keys(WHITELIST).forEach(function (k) { SETS[k] = new Set(WHITELIST[k]); });
   var READONLY = new Set(['position', 'rotation', 'quaternion', 'scale']);   // r128 defines these non-writable
-  var BOOL = new Set(['visible', 'castShadow', 'receiveShadow', 'frustumCulled', 'transparent', 'enabled', 'needsUpdate']);
+  var BOOL = new Set(['visible', 'castShadow', 'receiveShadow', 'frustumCulled', 'transparent', 'enabled', 'needsUpdate',
+    'toneMapped', 'depthWrite', 'generateMipmaps', 'autoUpdate']);   // Material.fog is checked by the material (Scene.fog is a Fog)
 
   var RAW = new WeakMap(), PROX = new WeakMap();
   function fail(msg) { throw new TypeError('THREE mock: ' + msg); }
@@ -103,8 +115,13 @@
 
   var M = {
     WHITELIST: WHITELIST, raw: raw, failRenderer: false,
-    created: { geometries: [], materials: [], renderers: [] },
-    reset: function () { M.created.geometries.length = 0; M.created.materials.length = 0; M.created.renderers.length = 0; M.failRenderer = false; }
+    created: { geometries: [], materials: [], renderers: [], textures: [] },
+    // F6-T1a: the capabilities a new renderer reports (SwiftShader values by default; tests may change them)
+    caps: { maxTextureSize: 8192, maxAnisotropy: 16 },
+    reset: function () {
+      M.created.geometries.length = 0; M.created.materials.length = 0; M.created.renderers.length = 0; M.created.textures.length = 0;
+      M.failRenderer = false; M.caps = { maxTextureSize: 8192, maxAnisotropy: 16 };
+    }
   };
 
   /* ---------------- maths ---------------- */
@@ -243,6 +260,7 @@
 
   var T = {
     REVISION: '128', sRGBEncoding: 3001, PCFSoftShadowMap: 2, DoubleSide: 2,
+    ACESFilmicToneMapping: 4, LinearEncoding: 3000, RGBAFormat: 1023, RepeatWrapping: 1000, ClampToEdgeWrapping: 1001, LinearFilter: 1006, LinearMipmapLinearFilter: 1008,
     Vector2: Ctor('Vector2', function (x, y) { return V2(x, y); }),
     Vector3: Ctor('Vector3', function (x, y, z) {
       if (arguments.length && (!num(x) || !num(y) || !num(z))) fail('new Vector3(x, y, z) takes three numbers');
@@ -254,8 +272,11 @@
     Object3D: Ctor('Object3D', function () { return wrap(obj3d({}, 'Object3D'), 'Object3D'); }),
     Group: Ctor('Group', function () { return wrap(obj3d({}, 'Group'), 'Group'); }),
     Scene: Ctor('Scene', function () {
-      var o = obj3d({}, 'Scene'); o.background = null;
-      hide(o, '__setter', function (k, v) { if (k === 'background' && v !== null && kind(v) !== 'Color') fail('Scene.background must be a Color or null'); });
+      var o = obj3d({}, 'Scene'); o.background = null; o.fog = null;
+      hide(o, '__setter', function (k, v) {
+        if (k === 'background' && v !== null && kind(v) !== 'Color') fail('Scene.background must be a Color or null');
+        if (k === 'fog' && v !== null && kind(v) !== 'Fog') fail('Scene.fog must be a Fog or null');
+      });
       return wrap(o, 'Scene');
     }),
     Mesh: Ctor('Mesh', function (g, m) {
@@ -273,6 +294,16 @@
         if (!Number.isInteger(i) || i < 0 || i >= this.maxCount) fail('setMatrixAt index out of range');
         var r = raw(mat); if (!r || r.__kind !== 'Matrix4') fail('setMatrixAt(i, Matrix4)');
         this.matrices[i] = r.elements.slice();
+      };
+      // F6-T1b: r128 creates instanceColor on the first setColorAt; the caller sets instanceColor.needsUpdate
+      hide(o, 'colors', []);
+      o.instanceColor = null;
+      o.setColorAt = function (i, c) {
+        if (!Number.isInteger(i) || i < 0 || i >= this.maxCount) fail('setColorAt index out of range');
+        var r = raw(c); if (!r || r.__kind !== 'Color') fail('setColorAt(i, Color)');
+        if (![r.r, r.g, r.b].every(num)) fail('setColorAt: colour channels must be numbers');
+        this.colors[i] = [r.r, r.g, r.b];
+        if (!this.instanceColor) this.instanceColor = wrap(base({ needsUpdate: false }, 'InstanceColor'), 'InstancedMesh.instanceColor');
       };
       hide(o, '__setter', function (k, v) { if (k === 'count' && (!Number.isInteger(v) || v < 0 || v > o.maxCount)) fail('InstancedMesh.count out of range'); });
       return wrap(o, 'InstancedMesh');
@@ -320,7 +351,7 @@
     var o = base({}, k, [k, 'BufferGeometry']);
     hide(o, 'params', params); hide(o, 'attrs', {}); hide(o, 'index', null); hide(o, 'disposed', 0); hide(o, 'vertexCount', vertexCount || 0);
     o.setAttribute = function (name, attr) {
-      if (['position', 'normal', 'color'].indexOf(name) < 0) fail('setAttribute: attribute "' + name + '" is not used by PlotCraft');
+      if (['position', 'normal', 'color', 'uv'].indexOf(name) < 0) fail('setAttribute: attribute "' + name + '" is not used by PlotCraft');
       var a = raw(attr); if (!a || a.__kind !== 'Float32BufferAttribute') fail('setAttribute needs a Float32BufferAttribute');
       var self = this;
       Object.keys(this.attrs).forEach(function (n) { if (self.attrs[n].count !== a.count) fail('setAttribute: "' + name + '" count ' + a.count + ' differs from "' + n + '" count ' + self.attrs[n].count); });
@@ -353,7 +384,8 @@
     if (!isF32 && !Array.isArray(array)) fail('Float32BufferAttribute needs a Float32Array or an array');
     if (!Number.isInteger(itemSize) || itemSize < 1 || itemSize > 4 || array.length % itemSize) fail('Float32BufferAttribute itemSize must be 1..4 and divide the array length');
     var o = base({}, 'Float32BufferAttribute');
-    hide(o, 'array', Float32Array.from(array)); hide(o, 'itemSize', itemSize); hide(o, 'count', array.length / itemSize);
+    hide(o, 'array', Float32Array.from(array)); hide(o, 'itemSize', itemSize); hide(o, 'count', array.length / itemSize); hide(o, 'needsUpdate', false);
+    hide(o, '__setter', function (k) { if (k === 'array') fail('Float32BufferAttribute.array is replaced in place, never reassigned'); });
     return wrap(o, 'Float32BufferAttribute');
   });
   function pathLike(k, wl) {
@@ -378,7 +410,7 @@
 
   /* ---------------- materials ---------------- */
   function material(k, o0) {
-    var op = opts(o0, ['color', 'vertexColors', 'transparent', 'opacity', 'side'], k);
+    var op = opts(o0, ['color', 'vertexColors', 'transparent', 'opacity', 'side', 'map', 'toneMapped', 'fog', 'depthWrite'], k);
     var o = base({}, k, [k, 'Material']);
     if ('vertexColors' in op && op.vertexColors !== true && op.vertexColors !== false) fail(k + ': vertexColors must be a boolean (r128: no THREE.VertexColors)');
     if ('color' in op && kind(op.color) !== 'Color') fail(k + ': color must be a THREE.Color (through PC.three.col)');
@@ -386,6 +418,9 @@
     if ('color' in op) raw(o.color).copy(op.color);
     o.vertexColors = !!op.vertexColors; o.transparent = !!op.transparent; o.opacity = 'opacity' in op ? op.opacity : 1; o.side = 'side' in op ? op.side : 0;
     if (!num(o.opacity)) fail(k + ': opacity must be a number');
+    if ('map' in op && op.map !== null && kind(op.map) !== 'DataTexture') fail(k + ': map must be a texture or null');
+    o.map = op.map || null; o.toneMapped = 'toneMapped' in op ? op.toneMapped : true; o.fog = 'fog' in op ? op.fog : true; o.depthWrite = 'depthWrite' in op ? op.depthWrite : true;
+    ['toneMapped', 'fog', 'depthWrite'].forEach(function (b) { if (typeof o[b] !== 'boolean') fail(k + ': ' + b + ' must be a boolean'); });
     if ([0, 1, 2].indexOf(o.side) < 0) fail(k + ': side must be a side constant');
     hide(o, 'disposed', 0);
     o.dispose = function () { this.disposed++; };
@@ -393,6 +428,8 @@
       if (key === 'color' && kind(v) !== 'Color') fail(k + '.color must be a Color');
       if (key === 'side' && [0, 1, 2].indexOf(v) < 0) fail(k + '.side must be a side constant');
       if (key === 'vertexColors' && typeof v !== 'boolean') fail(k + '.vertexColors must be a boolean');
+      if (key === 'map' && v !== null && kind(v) !== 'DataTexture') fail(k + '.map must be a texture or null');
+      if (key === 'fog' && typeof v !== 'boolean') fail(k + '.fog must be a boolean');
     });
     M.created.materials.push(o);
     return wrap(o, k);
@@ -400,10 +437,44 @@
   T.MeshLambertMaterial = Ctor('MeshLambertMaterial', function (o) { return material('MeshLambertMaterial', o); });
   T.MeshBasicMaterial = Ctor('MeshBasicMaterial', function (o) { return material('MeshBasicMaterial', o); });
 
+  /* ---------------- F6-T1a: textures and fog ---------------- */
+  var ENC = [3000, 3001], FILT = [1006, 1008];
+  T.DataTexture = Ctor('DataTexture', function (data, w, h, format) {
+    if (arguments.length !== 4) fail('new DataTexture(data, width, height, format) takes four arguments here');
+    if (Object.prototype.toString.call(data) !== '[object Uint8Array]') fail('DataTexture data must be a Uint8Array');
+    if (!Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1 || (w & (w - 1)) || (h & (h - 1))) fail('DataTexture sizes must be powers of two');
+    if (format !== 1023) fail('DataTexture format must be RGBAFormat');
+    if (data.length !== w * h * 4) fail('DataTexture data length must be width x height x 4');
+    var o = base({}, 'DataTexture', ['DataTexture', 'Texture']);
+    // r128 DataTexture defaults: Nearest filters, no mipmaps, ClampToEdge, LinearEncoding (CTO C-0)
+    o.wrapS = 1001; o.wrapT = 1001; o.repeat = V2(1, 1); o.encoding = 3000; o.magFilter = 1003; o.minFilter = 1003;
+    o.generateMipmaps = false; o.anisotropy = 1; o.needsUpdate = false;
+    hide(o, 'image', { data: data, width: w, height: h }); hide(o, 'disposed', 0); hide(o, 'uploads', 0);
+    o.dispose = function () { this.disposed++; };
+    hide(o, '__setter', function (k, v) {
+      if ((k === 'wrapS' || k === 'wrapT') && v !== 1000 && v !== 1001) fail('DataTexture.' + k + ' must be a wrapping constant');
+      if (k === 'encoding' && ENC.indexOf(v) < 0) fail('DataTexture.encoding must be an encoding constant');
+      if ((k === 'magFilter' || k === 'minFilter') && FILT.concat([1003]).indexOf(v) < 0) fail('DataTexture.' + k + ' must be a filter constant');
+      if (k === 'magFilter' && v === 1008) fail('magFilter cannot be a mipmap filter');
+      if (k === 'anisotropy' && !(num(v) && v >= 1)) fail('DataTexture.anisotropy must be a number >= 1');
+      if (k === 'needsUpdate' && v) o.uploads++;
+    });
+    M.created.textures.push(o);
+    return wrap(o, 'DataTexture');
+  });
+  T.Fog = Ctor('Fog', function (color, near, far) {
+    if (arguments.length !== 3 || !num(near) || !num(far)) fail('new Fog(color, near, far)');
+    var o = base({ color: colArg(color, 'Fog'), near: near, far: far }, 'Fog');
+    hide(o, '__setter', function (k, v) { if (k === 'color' && kind(v) !== 'Color') fail('Fog.color must be a Color'); if ((k === 'near' || k === 'far') && !num(v)) fail('Fog.' + k + ' must be a number'); });
+    return wrap(o, 'Fog');
+  });
+
   /* ---------------- renderer ---------------- */
   function audit(scene) {
-    var bg = raw(scene).background;
+    var bg = raw(scene).background, fog = raw(scene).fog;
     if (bg && raw(bg).lin) fail('scene.background must take the raw hex (A-10), not a linear colour');
+    // F6-T1a (A-10, plan review Q-T6): r128 mixes fog into the encoded output, so the fog colour is raw like the background
+    if (fog && raw(raw(fog).color).lin) fail('scene.fog.color must take the raw hex (A-10), not a linear colour');
     function ok(c, what) { var r = raw(c); if (!r.lin && !r.dflt) fail(what + ' colour is not linear: pass it through PC.three.col (A-10)'); }
     raw(scene).traverse(function (n) {
       var r = raw(n);
@@ -416,8 +487,13 @@
     if (M.failRenderer) throw new Error('Error creating WebGL context.');
     var o = base({}, 'WebGLRenderer');
     o.domElement = op.canvas || null;
-    o.shadowMap = wrap(base({ enabled: false, type: 1 }, 'ShadowMap'), 'WebGLRenderer.shadowMap');
-    o.outputEncoding = 3000;
+    // r128: autoUpdate true, needsUpdate false; render() clears needsUpdate after drawing the shadow map (counted)
+    o.shadowMap = wrap(base({ enabled: false, type: 1, autoUpdate: true, needsUpdate: false }, 'ShadowMap'), 'WebGLRenderer.shadowMap');
+    hide(o, 'shadowRenders', 0);
+    o.outputEncoding = 3000; o.toneMapping = 0; o.toneMappingExposure = 1;
+    var caps = base({ maxTextureSize: M.caps.maxTextureSize }, 'Capabilities'), maxA = M.caps.maxAnisotropy;
+    caps.getMaxAnisotropy = function () { return maxA; };
+    o.capabilities = wrap(caps, 'WebGLRenderer.capabilities');
     hide(o, 'options', op); hide(o, 'calls', []); hide(o, 'renders', 0); hide(o, 'pixelRatio', 1); hide(o, 'size', null); hide(o, 'disposed', 0);
     o.setPixelRatio = function (r) { if (arguments.length !== 1 || !num(r) || r <= 0) fail('setPixelRatio(ratio)'); this.pixelRatio = r; this.calls.push(['setPixelRatio', r]); };
     o.setSize = function (w, h, style) {
@@ -428,9 +504,16 @@
       if (kind(scene) !== 'Scene') fail('render(scene, camera) needs a Scene');
       if (kind(camera) !== 'PerspectiveCamera') fail('render(scene, camera) needs a PerspectiveCamera');
       audit(scene); this.renders++; this.calls.push(['render']);
+      var sm = raw(this.shadowMap);
+      if (sm.enabled && (sm.autoUpdate || sm.needsUpdate)) { this.shadowRenders++; sm.needsUpdate = false; }
     };
     o.dispose = function () { this.disposed++; };
-    hide(o, '__setter', function (k, v) { if (k === 'outputEncoding' && v !== 3000 && v !== 3001) fail('outputEncoding must be an encoding constant'); });
+    hide(o, '__setter', function (k, v) {
+      if (k === 'outputEncoding' && v !== 3000 && v !== 3001) fail('outputEncoding must be an encoding constant');
+      if (k === 'toneMapping' && [0, 4].indexOf(v) < 0) fail('toneMapping must be NoToneMapping or ACESFilmicToneMapping');
+      if (k === 'toneMappingExposure' && !(num(v) && v > 0)) fail('toneMappingExposure must be a positive number');
+      if (k === 'capabilities') fail('renderer.capabilities is read-only');
+    });
     M.created.renderers.push(o);
     return wrap(o, 'WebGLRenderer');
   });

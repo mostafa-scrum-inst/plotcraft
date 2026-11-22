@@ -8,13 +8,14 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
-import { launch, open, suite, VIEWPORTS } from '../helpers/browser.mjs';
+import { launch, open, suite, VIEWPORTS, LANDSCAPE } from '../helpers/browser.mjs';
 import { ROOT, loadCore } from '../helpers/load.mjs';
 import { maxHouse } from '../helpers/houses.mjs';
 import { projectPx } from '../helpers/project.mjs';
 import { FACTORIES, MATHS } from '../helpers/three-factories.mjs';
 
 const T = suite('e2e view3d-real'), browser = await launch(), SHOTS = process.argv.includes('--shots');
+const FULL = !!process.env.QA_FULL;   // F6-T1a (TL Q-T8): checks a QA section covers in the default run are QA_FULL=1 only
 const SHOT_DIR = join(ROOT, 'docs', '03-tasks', 'F4-T3', 'shots');
 const countRaf = () => { const o = window.requestAnimationFrame.bind(window); window.__raf = 0; window.requestAnimationFrame = (cb) => { window.__raf++; return o(cb); }; };
 const ready = (page) => page.waitForFunction(() => { const i = PC.debug.scene(); return i.renders > 0 && !i.frame && !i.building && !i.lost; }, null, { timeout: 15000 });
@@ -52,8 +53,9 @@ async function looks(page, tag) {
   T.ok(L.noon > L.evening && L.evening > L.night, `${tag} mean luma noon ${L.noon.toFixed(1)} > evening ${L.evening.toFixed(1)} > night ${L.night.toFixed(1)}`);
   // vegetation shadows at 17.5 h: casting trunks / canopies / shrubs darken the frame
   await set(17.5, 'summer');
-  const lit = await frame(page, "['trunks','canopies','shrubs'].forEach((n) => { const m = i.world.getObjectByName(n); if (m) m.castShadow = false; });");
-  const shaded = await frame(page, "['trunks','canopies','shrubs'].forEach((n) => { const m = i.world.getObjectByName(n); if (m) m.castShadow = true; });");
+  // (F6-T1a: the shadow map is drawn on demand, so this test-side caster change asks for one update itself)
+  const lit = await frame(page, "['trunks','canopies','shrubs'].forEach((n) => { const m = i.world.getObjectByName(n); if (m) m.castShadow = false; }); i.renderer.shadowMap.needsUpdate = true;");
+  const shaded = await frame(page, "['trunks','canopies','shrubs'].forEach((n) => { const m = i.world.getObjectByName(n); if (m) m.castShadow = true; }); i.renderer.shadowMap.needsUpdate = true;");
   T.ok(shaded.luma < lit.luma - 0.05, `${tag} 17.5 h: vegetation shadows darken the ground (${shaded.luma.toFixed(2)} < ${lit.luma.toFixed(2)})`);
   // winter: no canopy pixels (= the frame with the canopies removed); summer: canopies show
   await set(12, 'winter');
@@ -153,7 +155,8 @@ function notBlank(res, back, msg) {
 }
 
 // A-10 colour rule end to end: a MeshBasicMaterial quad with PC.three.col(hex), through the app's own renderer
-// factory (sRGB output), reads back as hex +-2 per channel.
+// factory (sRGB output), reads back as hex +-2 per channel. F6-T1a (CTO C-2, TL Q-T7): the factory tone-maps (ACES),
+// so the quad is toneMapped: false, as the UI marks are; a tone-mapped quad must read differently (ACES is on).
 async function colourPipeline(page, tag) {
   const hexes = ['#D9C7A3', '#23292F', '#8EC3EA', '#C4704F', '#FFFFFF'];
   const got = await page.evaluate((hexes) => {
@@ -162,21 +165,21 @@ async function colourPipeline(page, tag) {
     const r = PC.three.makeRenderer(cv); r.setSize(64, 64, false);
     const out = hexes.map((h) => {
       const sc = new THREE.Scene(), cam = new THREE.PerspectiveCamera(45, 1, 0.1, 10); cam.position.set(0, 0, 1);
-      const g = new THREE.PlaneGeometry(10, 10), m = new THREE.MeshBasicMaterial({ color: PC.three.col(h) });
+      const g = new THREE.PlaneGeometry(10, 10), m = new THREE.MeshBasicMaterial({ color: PC.three.col(h), toneMapped: false });
       sc.add(new THREE.Mesh(g, m));
-      r.render(sc, cam);
-      const gl = r.getContext(), px = new Uint8Array(4);
-      gl.readPixels(gl.drawingBufferWidth >> 1, gl.drawingBufferHeight >> 1, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      const gl = r.getContext(), px = new Uint8Array(4), read = () => { r.render(sc, cam); gl.readPixels(gl.drawingBufferWidth >> 1, gl.drawingBufferHeight >> 1, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); return [px[0], px[1], px[2]]; };
+      const flat = read(); m.toneMapped = true; m.needsUpdate = true; const aces = read();
       g.dispose(); m.dispose();
-      return [px[0], px[1], px[2]];
+      return [flat, aces];
     });
     r.dispose(); cv.remove();
     return out;
   }, hexes);
   hexes.forEach((h, i) => {
     const want = [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16));
-    T.ok(got[i].every((v, k) => Math.abs(v - want[k]) <= 2), `${tag} colour pipeline ${h} reads back as ${got[i].join(',')} (+-2)`);
+    T.ok(got[i][0].every((v, k) => Math.abs(v - want[k]) <= 2), `${tag} colour pipeline ${h} (toneMapped false) reads back as ${got[i][0].join(',')} (+-2)`);
   });
+  T.ok(got[0][1].some((v, k) => Math.abs(v - got[0][0][k]) > 4), `${tag} ACES on: a tone-mapped #D9C7A3 quad reads ${got[0][1].join(',')}, not the hex`);
 }
 
 async function scene(vp, dpr) {
@@ -190,9 +193,13 @@ async function scene(vp, dpr) {
   T.ok(s1.sky.every((v, k) => Math.abs(v - back[k]) <= 2), `${tag} sky ${s1.sky.join(',')} = the raw background hex (A-10: background not linearised)`);
   T.ok(s1.pr <= 2 && (dpr < 2 || s1.pr === 2), `${tag} renderer pixel ratio ${s1.pr} (<= 2)`);
   T.ok(Math.abs(s1.W - Math.round(s1.cw * Math.min(dpr, 2))) <= 1, `${tag} drawing buffer ${s1.W} = canvas ${s1.cw} x ${Math.min(dpr, 2)}`);
-  T.ok(s1.calls <= 80 && s1.meshes <= 40, `${tag} draw calls ${s1.calls} <= 80, meshes ${s1.meshes} <= 40 (G6)`);
+  T.ok(s1.calls <= 160 && s1.meshes <= 64, `${tag} draw calls ${s1.calls} <= 160, meshes ${s1.meshes} <= 64 (G6; F6-T1a: CTO C-4.1 / C-4.2)`);
   await colourPipeline(page, tag);
-  // context loss and restore
+  await realism(page, tag);
+  if (vp.w > 900) await detailReal(page, tag);
+  // context loss and restore (QA_FULL=1 only since F6-T1a, TL Q-T8: QA f4-t2-view "E budget", f4-t3-view A and the
+  // f6-t1 leak suite cover it in the default run; the texture re-creation is in tests/three/scene.test)
+  if (FULL) {
   await page.evaluate(() => { window.__lose = PC.debug.scene().renderer.getContext().getExtension('WEBGL_lose_context'); window.__lose.loseContext(); });
   await page.waitForFunction(() => PC.debug.scene().lost);
   const lostAt = await page.evaluate(() => { window.__raf = 0; return PC.debug.scene().renders; });
@@ -203,6 +210,7 @@ async function scene(vp, dpr) {
   await page.waitForFunction((n) => { const i = PC.debug.scene(); return i.restores === 1 && !i.lost && i.renders > n && !i.frame; }, lostAt);
   T.eq(await page.evaluate(() => PC.debug.scene().builds), 2, `${tag} restore rebuilt the scene`);
   notBlank(await sample(page), back, `${tag} renders again after restore`);
+  }
   // hidden: no frames
   await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); window.__raf = 0; });
   await page.locator('[data-pc="v3-canvas"]').focus(); await page.keyboard.press('ArrowRight');
@@ -238,8 +246,209 @@ async function scene(vp, dpr) {
       t.value = '12'; t.dispatchEvent(new Event('input', { bubbles: true })); se.value = 'summer'; se.dispatchEvent(new Event('change', { bubbles: true }));
     });
   }
-  if (vp.w > 900) await basement(page, tag);
+  if (vp.w > 900) { await basement(page, tag); await maxBudget(page, tag); }
   T.none(problems(), `${tag} no page errors, console errors or THREE. warnings`);
+  await o.ctx.close();
+}
+
+// F6-T1a real-r128 checks (plan 9.2; TL review; CTO C-4.2 .. C-4.4, C-4.8; on-demand shadow conditions).
+// Seam: pose at phiMax (5 deg above the horizon) and rMax, columns near both edges (clear of the house and trees); the pixels 2 px above and
+// below the horizon line differ by <= 3 per channel and equal the horizon hex +-3, at noon, evening and night. Sky: a
+// pixel near the top equals the dome gradient at its ray elevation (+-3). Shadows: with the sun at 14 h, top-down, ground
+// points in the upper storey's shadow (outside the footprint) brighten when the level selector hides the upper levels.
+async function realism(page, tag) {
+  await page.evaluate(() => { const V = PC.view3d, p = V.pose(); V.flyTo(Object.assign({}, p, { phi: V.limits().phiMax, radius: V.limits().rMax }), 1); });
+  await page.waitForFunction(() => !PC.view3d.flying() && !PC.debug.scene().frame, null, { timeout: 15000 });
+  for (const hour of [12, 17.5, 22]) {
+    const r = await page.evaluate((hour) => {
+      PC.view3d.setLook({ hour, season: 'summer' });
+      const i = PC.debug.scene(), gl = i.renderer.getContext(), cam = i.camera, L = PC.sky.compute(hour, 'summer', i.house.northDeg);
+      i.renderNow();
+      const W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, px = new Uint8Array(4), read = (x, y) => { gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); return [px[0], px[1], px[2]]; };
+      const e = cam.position, t = PC.view3d.pose().target, f = new THREE.Vector3(t[0] - e.x, 0, t[2] - e.z).normalize();
+      const hz = e.clone().add(f.multiplyScalar(cam.far * 0.5)).project(cam), yH = Math.round((hz.y + 1) / 2 * H);
+      const cols = [0.03, 0.08, 0.92, 0.97].map((k) => Math.floor(W * k)), out = cols.map((x) => [read(x, yH + 2), read(x, yH - 2)]);
+      // fully fogged ground (view depth beyond fog.far, inside the outer ground and the far plane): per column the row nearest the
+      // horizon whose ray meets the ground there; it must read the raw horizon hex (a linearised fog colour does not;
+      // the house and trees stand in front of some columns, so half of them is the bar)
+      const fog = i.scene.fog, edge = PC.C.HOUSE.outerK * i.house.radius / 2 * 0.98, fogged = [];
+      for (let x = Math.floor(W * 0.02); x < W * 0.98; x += Math.floor(W * 0.04)) {
+        for (let y = yH - 1; y > Math.max(0, yH - 200); y--) {
+          const dir = new THREE.Vector3(x / W * 2 - 1, y / H * 2 - 1, 0.5).unproject(cam).sub(e);
+          if (dir.y >= 0) continue;
+          const k = (-0.05 - e.y) / dir.y, P = e.clone().add(dir.multiplyScalar(k));
+          if (Math.abs(P.x) > edge || Math.abs(P.z) > edge) continue;
+          const z = -P.clone().applyMatrix4(cam.matrixWorldInverse).z;
+          if (z >= cam.far * 0.98) continue;   // clipped by the far plane: the dome shows there
+          if (z > fog.far + 0.5) fogged.push(read(x, y));
+          break;
+        }
+      }
+      // a sky pixel near the top: its ray elevation and the dome colour there (linear lerp, back to sRGB)
+      const yS = H - Math.max(3, Math.floor(H * 0.03)), ndc = new THREE.Vector3(0, yS / H * 2 - 1, 0.5).unproject(cam).sub(e).normalize();
+      const el = Math.asin(ndc.y) * 180 / Math.PI, lin = (h) => { const c = PC.three.col(h); return [c.r, c.g, c.b]; };
+      const g = PC.three.skyAt(el, lin(L.skyHorizon), lin(L.skyMid), lin(L.skyZenith)), c = new THREE.Color(g[0], g[1], g[2]).convertLinearToSRGB();
+      return { out, fogged, yH, H, horizon: [1, 3, 5].map((k) => parseInt(L.skyHorizon.slice(k, k + 2), 16)), sky: read(W >> 1, yS), skyWant: [c.r, c.g, c.b].map((v) => Math.round(v * 255)), el };
+    }, hour);
+    const d = (a, b) => Math.max(...a.map((v, k) => Math.abs(v - b[k])));
+    const seam = Math.max(...r.out.map(([a, b]) => d(a, b))), off = Math.max(...r.out.flat().map((p) => d(p, r.horizon)));
+    T.ok(r.yH > 4 && r.yH < r.H - 4 && seam <= 3 && off <= 3, `${tag} ${hour} h horizon seam ${seam} <= 3 per channel, both sides = horizon ${r.horizon} +-${off} (row ${r.yH} of ${r.H})`);
+    const fogOk = r.fogged.filter((p) => d(p, r.horizon) <= 3).length;
+    T.ok(r.fogged.length >= 8 && fogOk >= Math.max(6, 0.5 * r.fogged.length), `${tag} ${hour} h fully fogged ground = raw horizon hex +-3 in ${fogOk} of ${r.fogged.length} columns (A-10 / Q-T6 raw fog colour)`);
+    T.ok(d(r.sky, r.skyWant) <= 3, `${tag} ${hour} h sky pixel at ${r.el.toFixed(1)} deg ${r.sky} = dome ${r.skyWant} +-3 (TL Q-T7)`);
+  }
+  // shadows on demand: no stale shadow map after a look change, a camera flight or a Roof switch (a forced shadow
+  // update changes no pixel), and a level change re-draws it (the upper storey's shadow leaves the ground)
+  const stale = (how) => page.evaluate((how) => {
+    const i = PC.debug.scene(), V = PC.view3d, gl = i.renderer.getContext();
+    if (how === 'look') V.setLook({ hour: 14, season: 'summer' });
+    if (how === 'roof') { V.setRoof(false); }
+    const W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, read = () => { i.renderNow(); const b = new Uint8Array(W * H * 4); gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, b); return b; };
+    const a = read(); i.renderer.shadowMap.needsUpdate = true; const b = read();
+    if (how === 'roof') V.setRoof(true);
+    let n = 0; for (let j = 0; j < a.length; j += 4) if (Math.abs(a[j] - b[j]) + Math.abs(a[j + 1] - b[j + 1]) + Math.abs(a[j + 2] - b[j + 2]) > 6) n++;
+    return n;
+  }, how);
+  const st = [await stale('look')];
+  await page.evaluate(() => { const V = PC.view3d; V.flyTo(Object.assign({}, V.pose(), { phi: V.limits().phiMin }), 1); });
+  await page.waitForFunction(() => !PC.view3d.flying() && !PC.debug.scene().frame, null, { timeout: 15000 });
+  st.push(await stale('flight'), await stale('roof'));
+  T.eq(st, [0, 0, 0], `${tag} on-demand shadows: a forced shadow update changes no pixel after setLook, a flight, a Roof switch`);
+  const lv = await page.evaluate(() => {
+    const i = PC.debug.scene(), h = i.house, gl = i.renderer.getContext(), PIT = h.levels[1] ? h.levels[1].baseY - h.levels[0].baseY : 3;
+    const s = PC.sky.compute(14, 'summer', h.northDeg).sunDir, fp = h.footprint, top = h.levels[h.levels.length - 1];
+    const cu = h.center[0], cv = h.center[1], W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, px = new Uint8Array(4), pts = [];
+    // ground points in the shadow of the upper storey: footprint corners / edge midpoints at heights inside that
+    // storey, thrown along the sun ray onto the ground; kept when on screen
+    for (const a of [0, 0.5, 1]) for (const b of [0, 0.5, 1]) for (const k of [0.3, 0.6, 0.9]) {
+      if (a === 0.5 && b === 0.5) continue;
+      const y = top.baseY + k * PIT, x = fp.u + a * fp.w - cu, z = -(fp.v + b * fp.d - cv);
+      const n = new THREE.Vector3(x - s[0] * y / s[1], 0.02, z - s[2] * y / s[1]).project(i.camera);
+      const X = Math.round((n.x + 1) / 2 * W), Y = Math.round((n.y + 1) / 2 * H);
+      if (X > 2 && Y > 2 && X < W - 2 && Y < H - 2) pts.push([X, Y]);
+    }
+    const luma = () => { i.renderNow(); return pts.map(([X, Y]) => { gl.readPixels(X, Y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); return 0.2126 * px[0] + 0.7152 * px[1] + 0.0722 * px[2]; }); };
+    const all = luma(), u0 = i.shadowUpdates;
+    PC.view3d.setLevel(h.levels[0].id === 'B' ? 'G' : h.levels[0].id);
+    const low = luma(), u1 = PC.debug.scene().shadowUpdates;
+    PC.view3d.setLevel('all');
+    return { all, low, updates: u1 - u0, top: top.id, n: pts.length };
+  });
+  const gain = Math.max(0, ...lv.low.map((v, k) => v - lv.all[k]));
+  T.ok(lv.updates >= 1 && gain >= 8, `${tag} on-demand shadows: hiding the levels above the ground floor re-draws the shadow map (${lv.updates} update), ground in the ${lv.top} storey's shadow brightens by ${gain.toFixed(1)} (>= 8, best of ${lv.n} points)`);
+  await page.evaluate(() => { PC.view3d.setLook({ hour: 12, season: 'summer' }); PC.view3d.resetView(); });
+  await ready(page);
+}
+
+// Maximum house (loaded by basement()): draw calls <= 160 and triangles <= 300 000 for one frame incl. the shadow pass,
+// Reset, Roof on and off (CTO C-4.2 / C-4.3); build <= 400 ms best of 3 at 1280x800 incl. texture creation (C-4.8).
+// F6-T1b on real r128 (plan 6.1 - 6.3): the blob plane draws (hiding it brightens pixels; winter keeps only the
+// shrubs' blobs, so fewer), instanceColor exists on canopies and shrubs, and glass decals (a quarter in from the jamb,
+// 35 % up) read darker than the wall
+// beside them where both are the first hit from the eye (at least half of the visible pairs).
+async function detailReal(page, tag) {
+  await page.evaluate(() => { PC.view3d.setLook({ hour: 12, season: 'summer' }); PC.view3d.resetView(); });
+  await ready(page);
+  const r = await page.evaluate(() => {
+    const i = PC.debug.scene(), gl = i.renderer.getContext(), W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, w = i.world;
+    const grab = () => { i.renderNow(); const b = new Uint8Array(W * H * 4); gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, b); return b; };
+    const blobs = w.getObjectByName('blobs'), darker = () => { const a = grab(); blobs.visible = false; const b = grab(); blobs.visible = true; let n = 0; for (let j = 0; j < a.length; j += 4) if (b[j] + b[j + 1] + b[j + 2] - a[j] - a[j + 1] - a[j + 2] > 6) n++; return n; };
+    const summer = darker(); PC.view3d.setLook({ hour: 12, season: 'winter' }); const winter = darker(), wc = blobs.count; PC.view3d.setLook({ hour: 12, season: 'summer' });
+    const tinted = ['canopies', 'shrubs'].map((n) => { const m = w.getObjectByName(n); const c = m && m.instanceColor; return !!(c && c.itemSize === 3 && c.array instanceof Float32Array && c.count >= m.count); });
+    // glass vs wall
+    const h = i.house, fp = h.footprint, cu = h.center[0], cv = h.center[1], cam = i.camera, rc = new THREE.Raycaster(), px = new Uint8Array(4), D = PC.C.OPEN.decal;
+    i.renderNow();
+    const at = (o, s, y) => {   // a point on the opening's wall at s along it (plan metres), height y, 0.012 m out
+      const P = { front: [s - cu, -(fp.v - cv) + 0.012], back: [s - cu, -(fp.v + fp.d - cv) - 0.012], left: [fp.u - cu - 0.012, -(s - cv)], right: [fp.u + fp.w - cu + 0.012, -(s - cv)] }[o.side];
+      return new THREE.Vector3(P[0], y, P[1]);
+    };
+    const look = (p, want) => {
+      const d = p.clone().sub(cam.position), L = d.length(); rc.set(cam.position, d.normalize());
+      const hit = rc.intersectObjects(w.children, true).find((x) => x.object.visible && !/^(sky|blobs)$/.test(x.object.name));
+      if (!hit || !want.test(hit.object.name) || Math.abs(hit.distance - L) > 0.05) return null;
+      const n = p.clone().project(cam), X = Math.round((n.x + 1) / 2 * W), Y = Math.round((n.y + 1) / 2 * H);
+      if (X < 1 || Y < 1 || X >= W - 1 || Y >= H - 1) return null;
+      gl.readPixels(X, Y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); return 0.2126 * px[0] + 0.7152 * px[1] + 0.0722 * px[2];
+    };
+    let pairs = 0, ok = 0;
+    for (const o of h.openings) {
+      if (o.kind !== 'glazed') continue;
+      const lv = h.levels.find((l) => l.id === o.level), y0 = lv.baseY + 0.2, y = y0 + o.sill + (o.head - o.sill) * 0.35;
+      const g = look(at(o, o.a + (o.b - o.a) * 0.25, y), /^roofBatch$/);   // a quarter in: clear of a centre mullion
+      const wl = [look(at(o, o.a - D.frame - 0.25, y), /^(walls|roofBatch)$/), look(at(o, o.b + D.frame + 0.25, y), /^(walls|roofBatch)$/)].filter((x) => x != null);
+      if (g == null || !wl.length) continue;
+      pairs++; if (g < Math.max(...wl) - 10) ok++;
+    }
+    return { summer, winter, wc, all: blobs.userData.all, shrubs: blobs.userData.shrubs, tinted, pairs, ok };
+  });
+  T.ok(r.summer > 50 && r.winter < r.summer && r.wc === r.shrubs, `${tag} F6-T1b blobs draw: ${r.summer} px darkened in summer, ${r.winter} in winter (count ${r.wc} = ${r.shrubs} shrubs of ${r.all})`);
+  T.eq(r.tinted, [true, true], `${tag} F6-T1b instanceColor on canopies and shrubs (real r128)`);
+  T.ok(r.pairs >= 2 && r.ok >= Math.ceil(r.pairs / 2), `${tag} F6-T1b glass decals darker than the wall beside them in ${r.ok} of ${r.pairs} visible pairs`);
+  console.log(`  [record] ${tag} F6-T1b: blobs ${r.summer} / ${r.winter} px, glass pairs ${r.ok} / ${r.pairs}`);
+}
+
+async function maxBudget(page, tag) {
+  const r = await page.evaluate(async () => {
+    const V = PC.view3d, i = PC.debug.scene(), out = {};
+    V.setLevel('all'); V.resetView();
+    for (const on of [true, false]) {
+      V.setRoof(on); i.renderer.shadowMap.needsUpdate = true; i.renderNow();
+      out[on ? 'on' : 'off'] = [i.renderer.info.render.calls, i.renderer.info.render.triangles];
+    }
+    V.setRoof(true);
+    const h = PC.debug.house(), c = document.querySelector('[data-pc="v3-canvas"]'), t = [];
+    for (let k = 0; k < 3; k++) {
+      const h2 = Object.assign({}, h, { key: h.key + '-b' + k });
+      const t0 = performance.now();
+      await new Promise((res) => V.open(h2, c, (st) => { if (st === 'ready') res(); }));
+      t.push(performance.now() - t0);
+    }
+    await new Promise((res) => V.open(h, c, (st) => { if (st === 'ready') res(); }));
+    out.build = t; out.meshes = PC.debug.scene().meshCount;
+    return out;
+  });
+  T.ok(r.on[0] <= 160 && r.off[0] <= 160 && r.on[1] <= 300000 && r.off[1] <= 300000, `${tag} maximum house: draw calls ${r.on[0]} / ${r.off[0]} <= 160, triangles ${r.on[1]} / ${r.off[1]} <= 300 000 (Roof on / off)`);
+  const best = Math.min(...r.build);
+  // Regression guard only (TL ruling): <= 800 ms in every run, other browser files running beside it. C-4.8 itself
+  // (<= 400 ms) is tests/solo/build-time.mjs, which run-all runs alone under QA_FULL=1.
+  T.ok(best <= 800, `${tag} maximum house build ${best.toFixed(0)} ms (best of ${r.build.map((x) => x.toFixed(0)).join(', ')}) <= 800 ms (regression guard; C-4.8 is the QA_FULL solo step)`);
+  console.log(`  [record] ${tag} max house: calls ${r.on[0]} / ${r.off[0]}, triangles ${r.on[1]} / ${r.off[1]}, build best ${best.toFixed(0)} ms (loaded), meshes ${r.meshes}`);
+}
+
+// Lite tier smoke (CTO C-4.7): a fresh page with the tier switched by data before stage 5 opens renders a frame.
+async function liteSmoke(vp) {
+  const tag = `${vp.tag}@2 lite`, o = await open(browser, vp, { three: 'real', dpr: 2 }), { page, act, problems } = o;
+  await page.evaluate(() => { PC.C.VIEW3D.tier = { coarse: 'lite', fine: 'lite' }; });
+  await act('btn-sample'); await act('btn-skip3d');
+  await ready(page);
+  const r = await page.evaluate(() => { const i = PC.debug.scene(), sun = i.scene.getObjectByName('sun'); return [i.tier.name, i.scene.fog, sun.shadow.mapSize.x, i.renderer.getPixelRatio(), i.textures.map((t) => t.image.width)]; });
+  T.eq(r, ['lite', null, 1024, 1.5, [256, 256, 256, 64]], `${tag}: tier lite, no fog, map 1024, pixel ratio 1.5, colour textures 256 (+ the 64 px blob, F6-T1b)`);
+  const s = await sample(page);
+  notBlank(s, s.sky, `${tag} not blank`);
+  T.none(problems(), `${tag} no page errors, console errors or THREE. warnings`);
+  await o.ctx.close();
+}
+
+// F6-T1b (resetPhi 62, TL conditions): the Reset pose frames the whole plot, sample, Roof on, real r128, with the view
+// panel collapsed, at 360x640, 640x360 and 1280x800: every plot corner projects inside the canvas, and the pose is
+// the A-12 reset (phi = PC.C.CAM.resetPhi). Not asserted: the phone with the dock open (its near edge is cut by about
+// 1 px, a known limit until occl.bottom counts, T3b; impl-notes).
+async function resetFrame(vp) {
+  const tag = `${vp.tag} reset fit`, o = await open(browser, vp, { three: 'real', dpr: 1 }), { page, act, problems } = o;
+  await act('btn-sample'); await act('btn-skip3d');
+  await ready(page);
+  await act('v3-panel-toggle');
+  await page.waitForFunction(() => document.querySelector('[data-pc="v3-panel"]').classList.contains('is-collapsed'), null, { timeout: 5000 });
+  // the Reset button sits in the collapsed body: its action (PC.view3d.resetView) with the panel collapsed
+  await page.evaluate(() => PC.view3d.resetView());
+  await page.waitForFunction(() => !PC.view3d.flying() && !PC.debug.scene().frame, null, { timeout: 15000 });
+  const r = await page.evaluate(() => {
+    const i = PC.debug.scene(), cam = i.camera, h = PC.debug.house(), cr = document.querySelector('[data-pc="v3-canvas"]').getBoundingClientRect();
+    const pts = h.plot.pts.map((q) => { const v = new THREE.Vector3(q[0] - h.center[0], 0, -(q[1] - h.center[1])).project(cam); return [(v.x + 1) / 2 * cr.width, (1 - v.y) / 2 * cr.height]; });
+    return { roof: i.roof, phi: PC.view3d.pose().phi, want: PC.C.CAM.resetPhi * Math.PI / 180, margin: Math.min(...pts.map((q) => Math.min(q[0], cr.width - q[0], q[1], cr.height - q[1]))), W: cr.width, H: cr.height };
+  });
+  T.ok(r.roof && Math.abs(r.phi - r.want) < 1e-9 && r.margin >= 0, `${tag}: Roof on, phi ${(r.phi * 180 / Math.PI).toFixed(1)} deg = resetPhi, every plot corner inside the ${r.W} x ${r.H} canvas (margin ${r.margin.toFixed(0)} px, panel collapsed)`);
+  T.none(problems(), `${tag}: no page errors, console errors or THREE. warnings`);
   await o.ctx.close();
 }
 
@@ -297,6 +506,7 @@ try {
     T.none(problems(), `${vp.tag} conformance: no errors / THREE warnings`);
     await ctx.close();
   }
-  await Promise.all([scene(VIEWPORTS[0], 3), scene(VIEWPORTS[2], 1)]);
+  await Promise.all([scene(VIEWPORTS[0], 3), scene(VIEWPORTS[2], 1), liteSmoke(VIEWPORTS[0])]);
+  for (const vp of [VIEWPORTS[0], LANDSCAPE, VIEWPORTS[2]]) await resetFrame(vp);
 } finally { await browser.close(); }
 process.exit(T.done() ? 1 : 0);

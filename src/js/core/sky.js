@@ -7,11 +7,13 @@
      Colours: the key-frame lerp with mix (rounded per channel), then the day-weighted season blend with mix again
      (rounded again; TL F4-T3 plan review item 2, the Designer's golden table): day = min(1, K.sunI / noon sunI);
      sunColor / hemiSky / background toward season.tint by tintAmount x day; hemiGround toward season.ground by
-     groundBounce x day. Intensities are the key values. Vegetation and ground colours are the season's as they are. */
+     groundBounce x day. Intensities are the key values. Vegetation and ground colours (F6-T1b: also meadowColor, the outer ground) are the season's as they are.
+     F6-T1a (additive): skyHorizon (= background), skyMid and skyZenith (the sky dome's 0 / 15 / 90 degree rows, each
+     key lerp then the same season blend as background) and exposure (the key lerp; renderer.toneMappingExposure). */
 (function (PC) {
   'use strict';
   var D = Math.PI / 180, MIN_Y = 0.15;
-  var COLS = ['background', 'sunColor', 'hemiSky', 'hemiGround'];
+  var COLS = ['background', 'sunColor', 'hemiSky', 'hemiGround', 'skyMid', 'skyZenith'];
 
   function hex2(n) { var s = n.toString(16).toUpperCase(); return s.length < 2 ? '0' + s : s; }
   function mix(a, b, k) {
@@ -31,6 +33,7 @@
     COLS.forEach(function (n) { k[n] = mix(a[n], b[n], t); });
     k.sunI = a.sunI + (b.sunI - a.sunI) * t;
     k.hemiI = a.hemiI + (b.hemiI - a.hemiI) * t;
+    k.exposure = a.exposure + (b.exposure - a.exposure) * t;
     return k;
   }
 
@@ -59,7 +62,8 @@
       sunColor: mix(K.sunColor, se.tint, w), sunIntensity: K.sunI,
       hemiSky: mix(K.hemiSky, se.tint, w), hemiGround: mix(K.hemiGround, se.ground, T.groundBounce * day), hemiIntensity: K.hemiI,
       background: mix(K.background, se.tint, w),
-      canopyColor: se.canopy, canopyVisible: se.canopyVisible, shrubColor: se.shrub, groundColor: se.ground
+      skyHorizon: mix(K.background, se.tint, w), skyMid: mix(K.skyMid, se.tint, w), skyZenith: mix(K.skyZenith, se.tint, w), exposure: K.exposure,
+      canopyColor: se.canopy, canopyVisible: se.canopyVisible, shrubColor: se.shrub, groundColor: se.ground, meadowColor: se.meadow
     };
   }
 

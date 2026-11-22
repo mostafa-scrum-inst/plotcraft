@@ -1,6 +1,8 @@
 // Loads core + data + three files (manifest order) into a bare vm context with the strict THREE mock
 // (tests/three-mock.js) and controllable browser stubs (A-16 step 4). ui files are not loaded.
-//   load3d({ three: true|false, dpr, size: [w, h], visible })
+//   load3d({ three: true|false, dpr, size: [w, h], visible, coarse, maxTex, tier })
+//   F6-T1a: coarse = what matchMedia('(pointer: coarse)') answers (default false), maxTex = the renderer's
+//   maxTextureSize (default 8192), tier = { coarse, fine } written to PC.C.VIEW3D.tier before anything opens.
 //   -> { PC, THREE, mock, canvas, doc, raf, ro, win, ctx }; raf.tick(ms) runs one frame at a controllable clock (F5-T1)
 // three: false loads no THREE at all: proves every three file loads (and fails softly) without it.
 import vm from 'node:vm';
@@ -39,7 +41,7 @@ export function stubCanvas(w = 360, h = 400) {
 }
 
 export function load3d(o = {}) {
-  const { three = true, dpr = 1, size = [360, 400], visible = true } = o;
+  const { three = true, dpr = 1, size = [360, 400], visible = true, coarse = false, maxTex, tier } = o;
   // requestAnimationFrame under test control
   let seq = 0; const queue = new Map();
   const raf = {
@@ -79,13 +81,16 @@ export function load3d(o = {}) {
     requestAnimationFrame: raf.request, cancelAnimationFrame: raf.cancel,
     setTimeout: (fn) => timer.set(fn), clearTimeout: timer.clear,
     addEventListener: win.addEventListener, removeEventListener: win.removeEventListener,
+    matchMedia: (q) => ({ matches: q === '(pointer: coarse)' ? !!coarse : false }),
     console
   };
   const ctx = vm.createContext(g);
   vm.runInContext('globalThis.window = globalThis;', ctx);
   if (three) vm.runInContext(MOCK, ctx, { filename: 'three-mock.js' });
+  if (three && maxTex) ctx.__threeMock.caps.maxTextureSize = maxTex;
   const files = manifest().js.filter((j) => j.layer === 'core' || j.layer === 'data' || j.layer === 'three').map((j) => j.file);
   for (const f of files) vm.runInContext(readFileSync(join(SRC, f), 'utf8'), ctx, { filename: f });
+  if (tier) ctx.PC.C.VIEW3D.tier = tier;
   return { PC: ctx.PC, THREE: ctx.THREE, mock: ctx.__threeMock, canvas, doc, raf, timer, ro, win, ctx, setDpr: (d) => { ctx.devicePixelRatio = d; } };
 }
 

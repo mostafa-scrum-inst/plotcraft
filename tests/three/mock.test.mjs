@@ -28,7 +28,7 @@ test('unknown members throw on read and write: namespace, instances, nested obje
   throwsMock(() => { r.outputColorSpace = 'srgb'; });
   throwsMock(() => r.getPixelRatio);
   throwsMock(() => r.info);
-  throwsMock(() => r.shadowMap.autoUpdate);
+  throwsMock(() => r.shadowMap.autoClear);   // autoUpdate / needsUpdate are whitelisted since F6-T1a
   const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
   throwsMock(() => m.geometry.attributes);
   throwsMock(() => m.geometry.computeBoundingSphere);
@@ -70,7 +70,9 @@ test('constructor option keys: unknown keys and THREE.VertexColors-style values 
   throwsMock(() => new THREE.WebGLRenderer({ canvas: {}, alpha: true }), /alpha/);
   throwsMock(() => new THREE.WebGLRenderer({ powerPreference: 'low-power' }));
   throwsMock(() => new THREE.MeshLambertMaterial({ vertexColors: 2 }), /boolean/);
-  throwsMock(() => new THREE.MeshLambertMaterial({ map: null }), /map/);
+  throwsMock(() => new THREE.MeshLambertMaterial({ map: {} }), /texture/);         // F6-T1a: map is allowed, only as a texture
+  throwsMock(() => new THREE.MeshLambertMaterial({ envMap: null }), /envMap/);
+  throwsMock(() => new THREE.MeshBasicMaterial({ toneMapped: 0 }), /boolean/);
   throwsMock(() => new THREE.MeshBasicMaterial({ color: '#FFFFFF' }), /Color/);
   throwsMock(() => new THREE.MeshBasicMaterial({ side: 7 }), /side/);
   assert.doesNotThrow(() => new THREE.MeshLambertMaterial({ vertexColors: true }));
@@ -111,7 +113,7 @@ test('Mesh arity, geometry attributes and index range', () => {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
   throwsMock(() => g.setAttribute('normal', new THREE.Float32BufferAttribute([0, 1, 0], 3)), /count/);
-  throwsMock(() => g.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1], 2)), /uv/);
+  throwsMock(() => g.setAttribute('uv2', new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1], 2)), /uv2/);   // 'uv' is used since F6-T1a
   throwsMock(() => g.setIndex([0, 1, 3]), /range/);
   throwsMock(() => g.setIndex(new Uint16Array([0, 1, 2])), /plain array/);
   assert.doesNotThrow(() => g.setIndex([0, 1, 2]));
@@ -214,4 +216,32 @@ test('maths probe used by the real-r128 conformance check runs on the mock', () 
   const { THREE, mock } = fresh();
   const out = MATHS(THREE, mock.raw);
   assert.ok(out.length > 100 && out.every((x) => Number.isFinite(x)));
+});
+
+test('F6-T1a: DataTexture (r128 defaults, power-of-two RGBA, explicit filters), Fog with a raw colour, tone mapping, capabilities', () => {
+  const { THREE, mock } = fresh();
+  const t = new THREE.DataTexture(new Uint8Array(16), 2, 2, THREE.RGBAFormat), r = mock.raw(t);
+  assert.deepEqual([r.magFilter, r.minFilter, r.generateMipmaps, r.encoding, r.wrapS], [1003, 1003, false, THREE.LinearEncoding, 1001], 'r128 defaults: Nearest, no mipmaps, linear, clamp');
+  throwsMock(() => new THREE.DataTexture(new Uint8Array(12), 3, 1, THREE.RGBAFormat), /power/);
+  throwsMock(() => new THREE.DataTexture(new Uint8Array(8), 2, 2, THREE.RGBAFormat), /length/);
+  throwsMock(() => { t.magFilter = THREE.LinearMipmapLinearFilter; }, /mipmap/);
+  throwsMock(() => { t.anisotropy = 0; }, /anisotropy/);
+  throwsMock(() => t.offset, /whitelist/);
+  t.needsUpdate = true; assert.equal(r.uploads, 1);
+  t.dispose(); assert.equal(r.disposed, 1);
+  assert.equal(mock.created.textures.length, 1);
+  const ren = new THREE.WebGLRenderer({ canvas: {} });
+  assert.deepEqual([ren.capabilities.maxTextureSize, ren.capabilities.getMaxAnisotropy()], [8192, 16]);
+  ren.toneMapping = THREE.ACESFilmicToneMapping; ren.toneMappingExposure = 1.2;
+  throwsMock(() => { ren.toneMapping = 2; }, /toneMapping/);
+  throwsMock(() => { ren.toneMappingExposure = 0; }, /positive/);
+  const sc = new THREE.Scene(), cam = new THREE.PerspectiveCamera(45, 1, 0.5, 100);
+  throwsMock(() => { sc.fog = {}; }, /Fog/);
+  sc.fog = new THREE.Fog(new THREE.Color('#9EC9F0'), 1, 2);
+  assert.doesNotThrow(() => ren.render(sc, cam));
+  sc.fog.color = new THREE.Color('#9EC9F0').convertSRGBToLinear();
+  throwsMock(() => ren.render(sc, cam), /fog\.color must take the raw hex/);
+  const a = new THREE.Float32BufferAttribute([0, 0, 0], 3);
+  a.array[0] = 1; a.needsUpdate = true;
+  throwsMock(() => { a.array = new Float32Array(3); }, /in place/);
 });
