@@ -280,3 +280,4 @@
 - [TL] F6-T1 Q-T8 QA_FULL moves agreed (plan-review.md addendum): QA 8 rows (~86 s work) + leak 960x600 + FS duplicate checks QA_FULL-only + FS shadow update-on-change (autoUpdate false); forced lite rejected; gate 2 runs ≤ 420 s, QA_FULL ≤ 480 s.
 - [TL] F6-T1 shadow update-on-change: CTO conditions (level/roof/restore/season/tier triggers, info() count, tests + mutation) recorded in plan-review addendum and sent to FS.
 - 2026-11-22 19:17 UTC — Orchestrator: client chose CD-9 (roof on at open); PM to apply round-15 story wording.
+- [PM] CD-9 applied: round-15 wording now in F4-S1 bullet 2 and 3.3 (Roof on at open; floor / finder / tour show interiors; Roof stays off after them); release notes line "the view opens on the outside of the house; switch Roof off to see inside"; FS and QA told roofOnOpen: true is final

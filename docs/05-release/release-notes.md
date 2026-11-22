@@ -26,6 +26,7 @@ PlotCraft takes an architect from an empty plot to a 3D block model of a villa i
 4. **Interior.** Choose the furniture style (Modern, Classic or Minimal) and how much furniture (Sparse or Full).
 5. **3D view.** A dollhouse-style model on your plot, with:
    - furniture, stairs, roof (Roof switch), parking, pool, wall, gate, seating, trees and shrubs, and a north marker;
+   - **the view opens on the outside of the house; switch Roof off to see inside** (or pick a floor or a room);
    - free camera: drag or one finger to turn, wheel or pinch to zoom, two fingers to pan, and "Reset view";
    - a floor selector (All / Basement / Ground / First / Second);
    - **Light:** time of day and season (spring, summer, autumn and winter, including bare trees and snow);
