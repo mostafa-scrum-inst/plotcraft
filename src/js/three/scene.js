@@ -245,9 +245,15 @@
       canopy: new THREE.MeshLambertMaterial({ color: three.col(PC.data.sky.seasons.summer.canopy) }),
       shrub: new THREE.MeshLambertMaterial({ color: three.col(PC.data.sky.seasons.summer.shrub) })
     };
+    // F6-T1b C4: the footprint ring, the ground's colour and map with a darkening vertex colour (applyLook keeps the colour)
+    S.mats.groundRing = new THREE.MeshLambertMaterial({ color: three.col(SC.ground), map: S.mats.ground.map, vertexColors: true });
+    // F6-T1b C5: the blob shadows (transparent mesh 1 of 2, TL Q-T5): black x the blob alpha map, no depth write, unlit
+    S.mats.blob = new THREE.MeshBasicMaterial({ color: three.col('#000000'), map: three.texture('blob', PC.data.vegetation.blob.size, S.renderer),
+      transparent: true, opacity: PC.data.vegetation.blob.opacity, depthWrite: false, toneMapped: false });
+    S.textures.push(S.mats.blob.map);
     if (house.roof.type === 'pitched') S.mats.tiles = new THREE.MeshLambertMaterial({ vertexColors: true, map: tex('tiles') });
     S.meshes = three.buildShell(house, S.world, S.mats, { tier: S.tier }).concat(three.buildInterior(house, S.world, S.mats),
-      three.buildRoof(house, S.world, S.mats), three.buildSite(house, S.world, S.mats));
+      three.buildRoof(house, S.world, S.mats), three.buildSite(house, S.world, S.mats, { tier: S.tier }));
     var keep = S.house && S.pose && S.house.radius === house.radius && S.house.center[0] === house.center[0] && S.house.center[1] === house.center[1];
     S.house = house; S.builtKey = house.key; S.builds++;
     S.limits = PC.cam.limits(house, aspect());

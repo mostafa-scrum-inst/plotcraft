@@ -10,7 +10,7 @@ const of = (E, items, key, src) => items.filter((i) => sameRgb(i.side, rgbOf(E.P
 
 test('siteBatch + poolWater: the flush water plane at Y 0.03 over exactly the pool, rotated -PI/2; rim 0.3 x 0.1 m outside it', () => {
   const E = opened(), g = E.world.getObjectByName('site'), q = E.house.site.pool;
-  assert.deepEqual([...g.children].map((c) => c.name), ['trunks', 'canopies', 'shrubs', 'siteBatch', 'paving', 'northNeedle', 'poolWater'], 'F4-T3: the instanced vegetation first; F6-T1a: paving, northNeedle');
+  assert.deepEqual([...g.children].map((c) => c.name), ['trunks', 'canopies', 'shrubs', 'blobs', 'siteBatch', 'paving', 'northNeedle', 'poolWater'], 'F4-T3: the instanced vegetation first; F6-T1a: paving, northNeedle; F6-T1b: blobs after the vegetation');
   const w = E.mesh('poolWater');
   assert.equal(w.rotation.x, -Math.PI / 2); assert.equal(w.position.y, 0.03);
   assert.ok(close(w.position.x, E.X(q.u + q.w / 2)) && close(w.position.z, E.Z(q.v + q.d / 2)));

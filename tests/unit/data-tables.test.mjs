@@ -178,10 +178,22 @@ test('F3-T3 data files are in the manifest data layer, after room-labels, in the
 
 test('F4-T3 vegetation table (Designer section 1): exact keys, sizes, counting areas within 10 %, canopy on its trunk, bare tree above the wall', () => {
   const V = plain(PC.data.vegetation);
-  assert.deepEqual(Object.keys(V), ['tree', 'shrub', 'scale']);
-  assert.deepEqual(Object.keys(V.tree), ['trunkR', 'trunkH', 'canopyR', 'canopyY0', 'canopyH', 'trunkSeg', 'canopySeg']);
-  assert.deepEqual(Object.keys(V.shrub), ['r', 'h', 'seg']);
-  for (const v of [...Object.values(V.tree), ...Object.values(V.shrub)]) assert.ok(typeof v === 'number' && v > 0);
+  assert.deepEqual(Object.keys(V), ['tree', 'shrub', 'scale', 'tint', 'blob']);
+  assert.deepEqual(Object.keys(V.tree), ['trunkR', 'trunkH', 'canopyR', 'canopyY0', 'canopyH', 'trunkSeg', 'canopySeg', 'taper', 'leanDeg', 'lumps']);
+  assert.deepEqual(Object.keys(V.shrub), ['r', 'h', 'seg', 'squashY', 'lumps']);
+  for (const v of [...Object.values(V.tree), ...Object.values(V.shrub)]) assert.ok(Array.isArray(v) || (typeof v === 'number' && v > 0));
+  // F6-T1b (Designer E1 / E2 / C5): lumps [x, y, z, r] inside canopyR (shrub r) radially, the canopy between
+  // canopyY0 and canopyY0 + canopyH, the shrub on the ground and below h after squashY; tints around 1; one blob opacity
+  assert.ok(V.tree.taper > 0 && V.tree.taper <= 1 && V.tree.leanDeg >= 0 && V.tree.leanDeg <= 10 && V.shrub.squashY > 0 && V.shrub.squashY <= 1);
+  for (const [x, y, z, r] of V.tree.lumps) {
+    assert.ok(Math.hypot(x, z) + r <= V.tree.canopyR + 1e-9 && y - r >= V.tree.canopyY0 - 1e-9 && y + r <= V.tree.canopyY0 + V.tree.canopyH + 1e-9, 'tree lump inside the canopy');
+  }
+  for (const [x, y, z, r] of V.shrub.lumps) {
+    assert.ok(Math.hypot(x, z) + r <= V.shrub.r + 1e-9 && y + r * V.shrub.squashY <= V.shrub.h + 1e-9 && y - r * V.shrub.squashY > -0.05, 'shrub lump inside the shrub');
+  }
+  for (const t of [V.tint.tree, V.tint.shrub]) assert.ok(t.value[0] > 0.7 && t.value[0] < t.value[1] && t.value[1] < 1.3 && t.tilt >= 0 && t.tilt <= 0.1);
+  assert.deepEqual(Object.keys(V.blob), ['opacity', 'treeK', 'shrubK', 'size']);
+  assert.ok(V.blob.opacity > 0 && V.blob.opacity < 1 && V.blob.treeK >= 1 && V.blob.shrubK >= 1 && [32, 64, 128].includes(V.blob.size));
   for (const n of [V.tree.trunkSeg, V.tree.canopySeg, V.shrub.seg]) assert.ok(Number.isInteger(n) && n >= 3);
   assert.ok(Math.abs(Math.PI * V.tree.canopyR ** 2 - 6) <= 0.6, 'tree counts 6 m2 (A-9)');
   assert.ok(Math.abs(Math.PI * V.shrub.r ** 2 - 1.5) <= 0.15, 'shrub counts 1.5 m2 (A-9)');

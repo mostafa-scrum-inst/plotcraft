@@ -1844,6 +1844,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     // F6-T1b openings (Designer plan A2, plan 6.1): pane 1.2 x 1.4 (sill 0.9, head 2.3), small 0.6 x 0.6 (sill 1.6),
     // stair slot 0.6 x 1.6 (sill 0.5), door 1.0 x 2.2; endClear from run ends / partitions, pitch per pane,
     // smallMin run for a small pane, doorClear from the door frame, heads <= storeyH - headGap.
+    // F6-T1b contact darkening (Designer C4, plan 6.2): wall-base skirts skirtH tall, x skirtK at the ground, skirtOut
+    // proud; floor rings ringW wide, x ringK at the walls, ringLift over the tint; the footprint ring footW (at most)
+    // wide, footGap clear of the plot outline, x footK at the footprint.
+    CONTACT: { skirtH: 0.6, skirtK: 0.82, skirtOut: 0.005, ringW: 0.3, ringK: 0.9, ringLift: 0.003, footW: 0.8, footGap: 0.05, footK: 0.8 },
     OPEN: { win: { w: 1.2, h: 1.4, sill: 0.9 }, small: { w: 0.6, h: 0.6, sill: 1.6 }, slot: { w: 0.6, h: 1.6, sill: 0.5 },
       door: { w: 1.0, h: 2.2 }, endClear: 0.6, pitch: 2.6, smallMin: 1.2, doorClear: 0.6, headGap: 0.3,
       // the decals (Q-D1): glass / reveal band offsets out of the wall plane, frame profile and proud depth, sill
@@ -1880,7 +1884,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
         full: { tex: 512, fog: true, fineShadow: true, maxDpr: 2, treeDetail: 1 },
         lite: { tex: 256, fog: false, fineShadow: false, maxDpr: 1.5, treeDetail: 0 }
       },
-      fogSpanK: 8, skyK: 0.9 },
+      fogSpanK: 8, skyK: 0.9, blobY: 0.02 },
     FOOTPRINT_ROUND: 0.5, FOOTPRINT_MAX_RATIO: 2, FOOTPRINT_STRETCH_RATIO: 3, FOOTPRINT_STRETCH_EXTRA: 0.5, BACK_ANGLE: 40
   };
 })(globalThis.PC = globalThis.PC || {});
@@ -4852,7 +4856,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
    - vegetation (F4-T3, Designer plan section 1): sizes in metres at instance scale 1 and segment counts. Tree = trunk
      cylinder (trunkR, Y 0 to trunkH) + canopy cone (canopyR, canopyH, base at canopyY0); shrub = cone (r, h, base at
      Y 0); per-instance uniform scale in [scale[0], scale[1]]. Colours are not here: trunk = siteColors.trunk, canopy and
-     shrub = sky.seasons[s]. The scatter's tree clearance is canopyR x scale[1] (TL F4-T3 plan review). */
+     shrub = sky.seasons[s]. The scatter's tree clearance is canopyR x scale[1] (TL F4-T3 plan review).
+     F6-T1b: taper, lean, lumps, tint and blob (Designer E1 / E2 / C5; Designer-owned values). */
 (function (PC) {
   'use strict';
   PC.data.exteriors = {
@@ -4878,9 +4883,18 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     glassTop: '#9FB6C6', glassBottom: '#34495A'
   };
   PC.data.vegetation = {
-    tree: { trunkR: 0.12, trunkH: 2.6, canopyR: 1.35, canopyY0: 1.4, canopyH: 2.8, trunkSeg: 6, canopySeg: 8 },
-    shrub: { r: 0.7, h: 0.8, seg: 7 },
-    scale: [0.85, 1.15]
+    tree: { trunkR: 0.12, trunkH: 2.6, canopyR: 1.35, canopyY0: 1.4, canopyH: 2.8, trunkSeg: 6, canopySeg: 8,
+      // F6-T1b (Designer E1, Q-D2): trunk top radius x taper, lean +-leanDeg; canopy lumps [x, y, z, r] at unit scale
+      // inside canopyR radially and between canopyY0 and canopyY0 + canopyH
+      taper: 0.6, leanDeg: 4, lumps: [[0, 2.95, 0, 1.2], [0.45, 2.35, 0.15, 0.85], [-0.40, 2.45, -0.25, 0.80]] },
+    shrub: { r: 0.7, h: 0.8, seg: 7,
+      // F6-T1b (E2): two lumps [x, y, z, r] squashed to squashY (inside r, below h)
+      squashY: 0.7, lumps: [[-0.15, 0.36, 0, 0.55], [0.2, 0.3, 0.1, 0.45]] },
+    scale: [0.85, 1.15],
+    // F6-T1b per-instance colour (E1 / E2): value factor range and a warm / cool tilt (+-tilt on R, -+ on B)
+    tint: { tree: { value: [0.88, 1.08], tilt: 0.04 }, shrub: { value: [0.94, 1.06], tilt: 0.03 } },
+    // F6-T1b blobs (C5): one opacity (one material), radius treeK x canopyR x s / shrubK x r x s, texture size px
+    blob: { opacity: 0.26, treeK: 1.1, shrubK: 1.2, size: 64 }
   };
 })(globalThis.PC = globalThis.PC || {});
 
@@ -5185,6 +5199,31 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     this.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
     this.quads++; this.items.push([kind || 'quadV', 4]);
   };
+  // F6-T1b (plan 6.2): a vertical quad over the XZ segment p0 -> p1 from y0 to y1 facing the horizontal direction
+  // `out` ([x, z]), top colour at y1, bottom at y0 (the boundary-wall skirts, any orientation); and a face-up
+  // quadrilateral over 4 XZ points at height y with one colour per corner (the floor rings, the footprint ring).
+  BoxBatch.prototype.addWallQuad = function (p0, p1, y0, y1, out, top, bot, kind) {
+    var t = this.rgbOf(top), b = this.rgbOf(bot), l = Math.hypot(out[0], out[1]) || 1, n = [out[0] / l, 0, out[1] / l];
+    var ps = [[p0[0], y0, p0[1]], [p1[0], y0, p1[1]], [p1[0], y1, p1[1]], [p0[0], y1, p0[1]]];
+    var g = cross(sub(ps[1], ps[0]), sub(ps[2], ps[0]));
+    if (dot(g, n) < 0) ps = [ps[1], ps[0], ps[3], ps[2]];
+    this.corners(ps, n, [b, b, t, t]);
+    this.quads++; this.items.push([kind || 'quadV', 4]);
+  };
+  BoxBatch.prototype.addUpQuad = function (pts, y, rgbs, kind) {
+    var ps = pts.map(function (p) { return [p[0], y, p[1]]; }), cs = rgbs.slice(), g = cross(sub(ps[1], ps[0]), sub(ps[2], ps[0]));
+    if (g[1] < 0) { ps.reverse(); cs.reverse(); }
+    this.corners(ps, [0, 1, 0], cs.map(this.rgbOf, this));
+    this.quads++; this.items.push([kind || 'quadUp', 4]);
+  };
+  BoxBatch.prototype.corners = function (ps, n, cs) {
+    var base = this.pos.length / 3, B = this.uv && basis(n), self = this;
+    ps.forEach(function (p, i) {
+      self.pos.push(p[0], p[1], p[2]); self.nor.push(n[0], n[1], n[2]); self.rgb.push(cs[i][0], cs[i][1], cs[i][2]);
+      if (B) self.uv.push(dot(p, B[0]), dot(p, B[1]));
+    });
+    this.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  };
   BoxBatch.prototype.count = function () { return this.items.length; };
   // One Mesh, or null when nothing was added.
   BoxBatch.prototype.build = function (material, name) {
@@ -5205,14 +5244,55 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   three.BoxBatch = BoxBatch;
 
   three.texture = function (kind, size, renderer) {
-    var px = PC.texgen.get(kind, size), t = new THREE.DataTexture(px.data, px.w, px.h, THREE.RGBAFormat), k = 1 / PC.data.textures[kind].tileM;
-    t.wrapS = THREE.RepeatWrapping; t.wrapT = THREE.RepeatWrapping;
+    var px = PC.texgen.get(kind, size), t = new THREE.DataTexture(px.data, px.w, px.h, THREE.RGBAFormat), tm = PC.data.textures[kind].tileM;
+    var k = tm ? 1 / tm : 1, wrap = tm ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;   // F6-T1b: the blob clamps, no repeat
+    t.wrapS = wrap; t.wrapT = wrap;
     t.repeat.set(k, k);
     t.encoding = kind === 'blob' ? THREE.LinearEncoding : THREE.sRGBEncoding;
     t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true;
     t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
     t.needsUpdate = true;
     return t;
+  };
+
+  // F6-T1b (plan 6.3, C-1.1: no BufferGeometryUtils): flat-shaded lumps merged into one non-indexed BufferGeometry.
+  // lumps = [[x, y, z, r], ...]; detail 0 = the icosahedron (20 faces), 1 = each face split in 4 and pushed to the
+  // sphere (80); squashY scales each lump's height about its own centre. Returns the geometry (position, normal).
+  var ICO = (function () {
+    var t = (1 + Math.sqrt(5)) / 2, v = [[-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0], [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t], [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]];
+    var f = [[0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11], [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
+      [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9], [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]];
+    var nv = v.map(function (p) { var l = Math.hypot(p[0], p[1], p[2]); return [p[0] / l, p[1] / l, p[2] / l]; });
+    return { v: nv, f: f };
+  })();
+  function unit(p) { var l = Math.hypot(p[0], p[1], p[2]); return [p[0] / l, p[1] / l, p[2] / l]; }
+  three.lumpTris = function (detail) {
+    var tris = ICO.f.map(function (f) { return [ICO.v[f[0]], ICO.v[f[1]], ICO.v[f[2]]]; });
+    for (var d = 0; d < detail; d++) {
+      var next = [];
+      tris.forEach(function (q) {
+        var a = unit([(q[0][0] + q[1][0]) / 2, (q[0][1] + q[1][1]) / 2, (q[0][2] + q[1][2]) / 2]);
+        var b = unit([(q[1][0] + q[2][0]) / 2, (q[1][1] + q[2][1]) / 2, (q[1][2] + q[2][2]) / 2]);
+        var c = unit([(q[2][0] + q[0][0]) / 2, (q[2][1] + q[0][1]) / 2, (q[2][2] + q[0][2]) / 2]);
+        next.push([q[0], a, c], [a, q[1], b], [c, b, q[2]], [a, b, c]);
+      });
+      tris = next;
+    }
+    return tris;
+  };
+  three.lumps = function (lumps, detail, squashY) {
+    var tris = three.lumpTris(detail), pos = [], nor = [], k = squashY || 1;
+    lumps.forEach(function (L) {
+      tris.forEach(function (q) {
+        var ps = q.map(function (p) { return [L[0] + p[0] * L[3], L[1] + p[1] * L[3] * k, L[2] + p[2] * L[3]]; });
+        var n = cross(sub(ps[1], ps[0]), sub(ps[2], ps[0])), l = Math.sqrt(dot(n, n)) || 1;
+        ps.forEach(function (p) { pos.push(p[0], p[1], p[2]); nor.push(n[0] / l, n[1] / l, n[2] / l); });
+      });
+    });
+    var g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(pos), 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(nor), 3));
+    return g;
   };
 
   var SKY_W = 24, SKY_H = 12;
@@ -5349,6 +5429,24 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     return m;
   }
 
+  // F6-T1b C4: the footprint ring width w = min(footW, the free distance from the footprint to the plot outline -
+  // footGap), 0 when that is not positive (setback 0).
+  three.footRingW = function (house) {
+    var C = PC.C.CONTACT, fp = house.footprint, pts = house.plot.pts, n = pts.length, best = Infinity;
+    var cs = [[fp.u, fp.v], [fp.u + fp.w, fp.v], [fp.u + fp.w, fp.v + fp.d], [fp.u, fp.v + fp.d]];
+    function seg(p, a, b) {
+      var dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy, t = l2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2)) : 0;
+      return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy);
+    }
+    for (var i = 0; i < n; i++) {
+      var a = pts[i], b = pts[(i + 1) % n];
+      cs.forEach(function (c) { best = Math.min(best, seg(c, a, b)); });
+      for (var j = 0; j < 4; j++) best = Math.min(best, seg(a, cs[j], cs[(j + 1) % 4]));
+    }
+    var w = Math.min(C.footW, best - C.footGap);
+    return w > 0.01 ? w : 0;
+  };
+
   three.buildShell = function (house, world, mats, opt) {
     var H = PC.C.HOUSE, fp = house.footprint, cu = house.center[0], cv = house.center[1];
     var E = PC.data.exteriors[house.exterior], I = PC.data.interiors[house.interior.style], RT = PC.data.roomTints, SC = PC.data.siteColors;
@@ -5359,12 +5457,33 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     // a box from L rectangle [u0, u1] x [v0, v1] and heights [y0, y1]
     function box(b, u0, u1, v0, v1, y0, y1, hex, topHex) { b.add((X(u0) + X(u1)) / 2, (y0 + y1) / 2, (Z(v0) + Z(v1)) / 2, u1 - u0, y1 - y0, v1 - v0, hex, topHex); }
 
+    // F6-T1b C4 wall-base skirts on the ground level's outer faces, appended after its walls: the slab edge (0 to the
+    // floor) and the wall (floor to skirtH), one linear gradient x skirtK at the ground -> x 1 at skirtH, skirtOut proud
+    function skirts(b, floorY) {
+      var C = PC.C.CONTACT, k = function (y) { return C.skirtK + (1 - C.skirtK) * Math.min(1, y / C.skirtH); }, d = C.skirtOut;
+      var u0 = fp.u, u1 = fp.u + fp.w, v0 = fp.v, v1 = fp.v + fp.d, e = house.site.entrance;
+      var ga = Math.max(u0, e.u - e.w / 2), gb = Math.min(u1, e.u + e.w / 2);
+      // [p0, p1 in T, outward [x, z], wall spans along the side as [p0, p1] pairs]
+      var sides = [
+        [[X(u0), Z(v0) + d], [X(u1), Z(v0) + d], [0, 1], [[[X(u0), Z(v0) + d], [X(ga), Z(v0) + d]], [[X(gb), Z(v0) + d], [X(u1), Z(v0) + d]]]],
+        [[X(u0), Z(v1) - d], [X(u1), Z(v1) - d], [0, -1]],
+        [[X(u0) - d, Z(v0)], [X(u0) - d, Z(v1)], [-1, 0]],
+        [[X(u1) + d, Z(v0)], [X(u1) + d, Z(v1)], [1, 0]]
+      ];
+      sides.forEach(function (sd) {
+        b.addWallQuad(sd[0], sd[1], 0, floorY, sd[2], b.shade(E.slab, k(floorY)), b.shade(E.slab, k(0)), 'skirt');
+        (sd[3] || [[sd[0], sd[1]]]).forEach(function (sp) {
+          if (Math.hypot(sp[1][0] - sp[0][0], sp[1][1] - sp[0][1]) > 0.05) b.addWallQuad(sp[0], sp[1], floorY, C.skirtH, sd[2], b.shade(E.wall, 1), b.shade(E.wall, k(floorY)), 'skirt');
+        });
+      });
+    }
+
     // ground
     var ground = group('ground', world), flat = -Math.PI / 2;
     // the footprint as a Path in shape coordinates (x = u - cu, y = v - cv; the -PI/2 turn maps y to -Z)
-    function footHole() {
-      var p = new THREE.Path();
-      p.moveTo(fp.u - cu, fp.v - cv); p.lineTo(fp.u + fp.w - cu, fp.v - cv); p.lineTo(fp.u + fp.w - cu, fp.v + fp.d - cv); p.lineTo(fp.u - cu, fp.v + fp.d - cv);
+    function footHole(g) {
+      var p = new THREE.Path(), k = g || 0;
+      p.moveTo(fp.u - k - cu, fp.v - k - cv); p.lineTo(fp.u + fp.w + k - cu, fp.v - k - cv); p.lineTo(fp.u + fp.w + k - cu, fp.v + fp.d + k - cv); p.lineTo(fp.u - k - cu, fp.v + fp.d + k - cv);
       p.closePath();
       return p;
     }
@@ -5379,12 +5498,23 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       outer.name = 'groundOuter'; ground.add(outer); made.push(outer);
     } else outer = mesh(new THREE.ShapeGeometry(sq), mats.groundOuter, 'groundOuter', ground);
     outer.rotation.x = flat; outer.position.y = -H.outerDrop;
-    var shape = new THREE.Shape();
+    var shape = new THREE.Shape(), C = PC.C.CONTACT, fw = three.footRingW(house);
     house.plot.pts.forEach(function (p, i) { if (i) shape.lineTo(p[0] - cu, p[1] - cv); else shape.moveTo(p[0] - cu, p[1] - cv); });
     shape.closePath();
-    shape.holes.push(footHole());
+    shape.holes.push(footHole(fw));
     var plot = mesh(new THREE.ShapeGeometry(shape), mats.ground, 'groundPlot', ground);
     plot.rotation.x = flat;
+    if (fw > 0) {   // F6-T1b C4: the footprint ring fills the band between the footprint and the grown hole
+      var rb = new three.BoxBatch({ uv: true }), k0 = [C.footK, C.footK, C.footK], k1 = [1, 1, 1];
+      var fx0 = X(fp.u), fx1 = X(fp.u + fp.w), fz0 = Z(fp.v + fp.d), fz1 = Z(fp.v);
+      var gx0 = fx0 - fw, gx1 = fx1 + fw, gz0 = fz0 - fw, gz1 = fz1 + fw;
+      [[[fx0, fz0], [fx1, fz0], [gx1, gz0], [gx0, gz0]], [[fx1, fz0], [fx1, fz1], [gx1, gz1], [gx1, gz0]],
+        [[fx1, fz1], [fx0, fz1], [gx0, gz1], [gx1, gz1]], [[fx0, fz1], [fx0, fz0], [gx0, gz0], [gx0, gz1]]].forEach(function (q) {
+        rb.addUpQuad(q, 0, [k0, k0, k1, k1], 'ring');
+      });
+      var ring = rb.build(mats.groundRing, 'groundRing');
+      ring.castShadow = false; ring.receiveShadow = true; ground.add(ring); made.push(ring);
+    }
     var cap = mesh(new THREE.PlaneGeometry(fp.w, fp.d), mats.ground, 'groundCap', ground);
     cap.rotation.x = flat; cap.position.set(X(fp.u + fp.w / 2), H.capLift, Z(fp.v + fp.d / 2));
     [outer, plot, cap].forEach(function (m) { m.receiveShadow = true; m.castShadow = false; });
@@ -5397,6 +5527,16 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       box(slab, fp.u, fp.u + fp.w, fp.v, fp.v + fp.d, lv.baseY, floorY, E.slab, hall);
       lv.rooms.forEach(function (r) {
         slab.addQuad(X(r.u + r.w / 2), floorY + H.tintLift, Z(r.v + r.d / 2), r.w, r.d, mix(RT[r.type], I.wood, I.floorMix));
+      });
+      // F6-T1b C4 floor rings, appended after the tints: 4 trapezoids per room, outer edge tint x ringK, inner x 1
+      lv.rooms.forEach(function (r) {
+        var hex = mix(RT[r.type], I.wood, I.floorMix), k = Math.min(C.ringW, Math.min(r.w, r.d) / 2 - 0.01), o = slab.shade(hex, C.ringK), i = slab.shade(hex, 1);
+        if (k <= 0) return;
+        var a0 = X(r.u), a1 = X(r.u + r.w), b0 = Z(r.v + r.d), b1 = Z(r.v), y = floorY + H.tintLift + C.ringLift;
+        [[[a0, b0], [a1, b0], [a1 - k, b0 + k], [a0 + k, b0 + k]], [[a1, b0], [a1, b1], [a1 - k, b1 - k], [a1 - k, b0 + k]],
+          [[a1, b1], [a0, b1], [a0 + k, b1 - k], [a1 - k, b1 - k]], [[a0, b1], [a0, b0], [a0 + k, b0 + k], [a0 + k, b1 - k]]].forEach(function (q) {
+          slab.addUpQuad(q, y, [o, o, i, i], 'ring');
+        });
       });
       var u0 = fp.u, u1 = fp.u + fp.w, v0 = fp.v, v1 = fp.v + fp.d;
       if (lv.index < 0) {                         // basement: pit walls from the basement floor to ground level
@@ -5416,6 +5556,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       parts.v.forEach(function (s) { box(walls, s[1], s[2], s[0] - t / 2, s[0] + t / 2, floorY, top, E.wallInner); });
       if (lv.stair) box(walls, lv.stair.u, lv.stair.u + lv.stair.w, lv.stair.v, lv.stair.v + lv.stair.d, floorY, top, RT.stair);
       if (lv.lift) box(walls, lv.lift.u, lv.lift.u + lv.lift.w, lv.lift.v, lv.lift.v + lv.lift.d, floorY, top, RT.lift);
+      if (lv.index === 0) skirts(walls, floorY);
       [slab.build(mats.batch, 'slab'), walls.build(mats.batch, 'walls')].forEach(function (m) { if (m) { g.add(m); made.push(m); } });
       var sm = g.getObjectByName('slab');
       if (sm) sm.castShadow = false;                       // CTO C-4.2: floors receive only
@@ -5613,29 +5754,64 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     return { x0: -hs, x1: hs, z0: z0, zPath: k(z0 + W.path), zKerb: k(z0 + W.path + W.kerb), zRoad: k(z0 + W.path + W.kerb + W.road) };
   };
 
-  three.buildVegetation = function (house, g, mats) {
-    var V = PC.data.vegetation, T = V.tree, S = V.shrub, cu = house.center[0], cv = house.center[1], out = [];
-    function inst(name, geo, mat, items, y0) {
-      if (!items.length) return;
-      var mesh = new THREE.InstancedMesh(geo(), mat, items.length), m = new THREE.Matrix4(), q = new THREE.Quaternion();
+  // F6-T1b: a deterministic number in [0, 1) per item and salt (FNV of the item position: survives rebuilds, C-3.3)
+  three.vegRand = function (it, salt) { return parseInt(PC.house.hash(it[0].toFixed(3) + ',' + it[1].toFixed(3) + ',' + salt), 16) / 4294967296; };
+
+  // F4-T3 instanced vegetation; F6-T1b (plan 6.3, Designer E1 / E2 / C5): tapered trunks leaning +-leanDeg about a
+  // seeded horizontal axis (about the base), canopies of 3 flat-shaded lumps (detail = the tier's treeDetail), shrubs
+  // of 2 squashed lumps, a per-instance colour (value factor and a warm / cool tilt; seasons still set
+  // material.color), and "blobs": one InstancedMesh of flat quads (the blob texture, one opacity), shrubs first so
+  // that applyLook can show only the shrubs' blobs in winter (blobs.count).
+  three.buildVegetation = function (house, g, mats, opt) {
+    var V = PC.data.vegetation, T = V.tree, S = V.shrub, cu = house.center[0], cv = house.center[1], out = [], rnd = three.vegRand;
+    var detail = opt && opt.tier ? opt.tier.treeDetail : 1;
+    function inst(name, geo, mat, items, place, tint) {
+      if (!items.length) return null;
+      var mesh = new THREE.InstancedMesh(geo(), mat, items.length), m = new THREE.Matrix4();
       items.forEach(function (it, i) {
-        var s = it[2];
-        m.compose(new THREE.Vector3(it[0] - cu, y0 * s, -(it[1] - cv)), q, new THREE.Vector3(s, s, s));
+        var p = place(it), s = it[2];
+        m.compose(new THREE.Vector3(it[0] - cu + p.dx, p.y, -(it[1] - cv) + p.dz), p.q, new THREE.Vector3(s, s, s));
         mesh.setMatrixAt(i, m);
+        if (tint) {
+          var v = tint.value[0] + (tint.value[1] - tint.value[0]) * rnd(it, name + 'v'), t = (rnd(it, name + 't') * 2 - 1) * tint.tilt;
+          var c = three.col('#FFFFFF'); c.r = v * (1 + t); c.g = v; c.b = v * (1 - t);   // a linear factor on material.color
+          mesh.setColorAt(i, c);
+        }
       });
       mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
       mesh.name = name; mesh.frustumCulled = false; mesh.castShadow = true; mesh.receiveShadow = false;
       g.add(mesh); out.push(mesh);
+      return mesh;
     }
-    var trees = house.site.trees, shrubs = house.site.shrubs;
-    // geometries are centred on their own origin: the base sits half a height below it
-    inst('trunks', function () { return new THREE.CylinderGeometry(T.trunkR, T.trunkR, T.trunkH, T.trunkSeg); }, mats.trunk, trees, T.trunkH / 2);
-    inst('canopies', function () { return new THREE.ConeGeometry(T.canopyR, T.canopyH, T.canopySeg); }, mats.canopy, trees, T.canopyY0 + T.canopyH / 2);
-    inst('shrubs', function () { return new THREE.ConeGeometry(S.r, S.h, S.seg); }, mats.shrub, shrubs, S.h / 2);
+    var trees = house.site.trees, shrubs = house.site.shrubs, still = new THREE.Quaternion();
+    // the trunk geometry is centred on its own origin; leaning about the base moves that centre by R(0, h/2, 0)
+    inst('trunks', function () { return new THREE.CylinderGeometry(T.trunkR * T.taper, T.trunkR, T.trunkH, T.trunkSeg); }, mats.trunk, trees, function (it) {
+      var a = rnd(it, 'axis') * 2 * Math.PI, th = (rnd(it, 'lean') * 2 - 1) * T.leanDeg * Math.PI / 180, ax = Math.cos(a), az = Math.sin(a), y = T.trunkH / 2 * it[2];
+      var q = new THREE.Quaternion(); q.setFromAxisAngle(new THREE.Vector3(ax, 0, az), th);
+      return { q: q, dx: -az * y * Math.sin(th), dz: ax * y * Math.sin(th), y: y * Math.cos(th) };
+    });
+    inst('canopies', function () { return three.lumps(T.lumps, detail, 1); }, mats.canopy, trees, function () { return { q: still, dx: 0, dz: 0, y: 0 }; }, V.tint.tree);
+    inst('shrubs', function () { return three.lumps(S.lumps, 0, S.squashY); }, mats.shrub, shrubs, function () { return { q: still, dx: 0, dz: 0, y: 0 }; }, V.tint.shrub);
+    // blobs: shrubs first, then trees; a unit plane turned face-up, scaled to the blob diameter
+    var B = V.blob, all = shrubs.map(function (it) { return [it, B.shrubK * S.r]; }).concat(trees.map(function (it) { return [it, B.treeK * T.canopyR]; }));
+    if (all.length && mats.blob) {
+      var bm = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), mats.blob, all.length), mm = new THREE.Matrix4(), up = new THREE.Quaternion();
+      up.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+      all.forEach(function (e, i) {
+        var d = 2 * e[1] * e[0][2];
+        mm.compose(new THREE.Vector3(e[0][0] - cu, PC.C.VIEW3D.blobY, -(e[0][1] - cv)), up, new THREE.Vector3(d, d, 1));
+        bm.setMatrixAt(i, mm);
+      });
+      bm.instanceMatrix.needsUpdate = true;
+      bm.name = 'blobs'; bm.frustumCulled = false; bm.castShadow = false; bm.receiveShadow = false; bm.renderOrder = 1;
+      bm.userData.shrubs = shrubs.length; bm.userData.all = all.length;
+      g.add(bm); out.push(bm);
+    }
     return out;
   };
 
-  three.buildSite = function (house, world, mats) {
+  three.buildSite = function (house, world, mats, opt) {
     var C = PC.C.SITE, SC = PC.data.siteColors, E = PC.data.exteriors[house.exterior], S = house.site;
     var cu = house.center[0], cv = house.center[1], b = new three.BoxBatch(), pv = new three.BoxBatch({ uv: true }), g = world.getObjectByName('site'), made = [];
     var X = function (u) { return u - cu; }, Z = function (v) { return -(v - cv); };
@@ -5659,6 +5835,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       box(q.u - rw, q.u + q.w + rw, q.v - rw, q.v, 0, rh, SC.poolRim, pv); box(q.u - rw, q.u + q.w + rw, q.v + q.d, q.v + q.d + rw, 0, rh, SC.poolRim, pv);
       box(q.u - rw, q.u, q.v, q.v + q.d, 0, rh, SC.poolRim, pv); box(q.u + q.w, q.u + q.w + rw, q.v, q.v + q.d, 0, rh, SC.poolRim, pv);
     }
+    var segs = [];
     if (S.wall) {
       var pts = house.plot.pts, n = pts.length, h = C.wallT / 2;
       for (var e = 0; e < n; e++) {
@@ -5675,6 +5852,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
           if (s[1] - s[0] < 1e-6) return;
           var p0 = [a[0] + du / l * s[0] + iu, a[1] + dv / l * s[0] + iv], p1 = [a[0] + du / l * s[1] + iu, a[1] + dv / l * s[1] + iv];
           b.addSeg(X(p0[0]), Z(p0[1]), X(p1[0]), Z(p1[1]), C.wallT, 0, C.wallH, SC.boundaryWall);
+          segs.push([X(p0[0]), Z(p0[1]), X(p1[0]), Z(p1[1])]);
         });
       }
     }
@@ -5701,7 +5879,17 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       b.add((sr.x0 + sr.x1) / 2, 0.035, (sr.zPath + sr.zKerb) / 2, sr.x1 - sr.x0, 0.17, sr.zKerb - sr.zPath, SC.paving);
       b.addQuad((sr.x0 + sr.x1) / 2, -0.03, (sr.zKerb + sr.zRoad) / 2, sr.x1 - sr.x0, sr.zRoad - sr.zKerb, SC.asphalt);
     }
-    three.buildVegetation(house, g, mats).forEach(function (x) { made.push(x); });
+    // F6-T1b C4: boundary-wall skirts on both faces, appended after every other siteBatch item
+    var K = PC.C.CONTACT, sh = Math.min(K.skirtH, C.wallH);
+    segs.forEach(function (sg) {
+      var dx = sg[2] - sg[0], dz = sg[3] - sg[1], l = Math.hypot(dx, dz) || 1, nx = -dz / l, nz = dx / l, o = C.wallT / 2 + K.skirtOut;
+      [1, -1].forEach(function (sd) {
+        var ox = nx * o * sd, oz = nz * o * sd;
+        b.addWallQuad([sg[0] + ox, sg[1] + oz], [sg[2] + ox, sg[3] + oz], 0, sh, [nx * sd, nz * sd],
+          b.shade(SC.boundaryWall, K.skirtK + (1 - K.skirtK) * sh / K.skirtH), b.shade(SC.boundaryWall, K.skirtK), 'skirt');
+      });
+    });
+    three.buildVegetation(house, g, mats, opt).forEach(function (x) { made.push(x); });
     var m = b.build(mats.batch, 'siteBatch');
     if (m) { g.add(m); made.push(m); }
     var pm = pv.build(mats.paving, 'paving');
@@ -5886,10 +6074,13 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     c.updateProjectionMatrix();
     ctx.scene.background = new THREE.Color(L.background);
     ctx.mats.ground.color.copy(col(L.groundColor));
+    if (ctx.mats.groundRing) ctx.mats.groundRing.color.copy(col(L.groundColor));
     ctx.mats.canopy.color.copy(col(L.canopyColor));
     ctx.mats.shrub.color.copy(col(L.shrubColor));
     var can = ctx.world.getObjectByName('canopies');
     if (can) can.visible = !!L.canopyVisible;
+    var bl = ctx.world.getObjectByName('blobs');   // F6-T1b (Q-T4): winter shows only the shrubs' blobs (a count, no GPU object)
+    if (bl) bl.count = L.canopyVisible ? bl.userData.all : bl.userData.shrubs;
     if (ctx.renderer) ctx.renderer.toneMappingExposure = L.exposure;
     var sky = ctx.world.getObjectByName('sky');
     if (sky) three.skyPaint(sky.userData.dome, L);
@@ -6325,9 +6516,15 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       canopy: new THREE.MeshLambertMaterial({ color: three.col(PC.data.sky.seasons.summer.canopy) }),
       shrub: new THREE.MeshLambertMaterial({ color: three.col(PC.data.sky.seasons.summer.shrub) })
     };
+    // F6-T1b C4: the footprint ring, the ground's colour and map with a darkening vertex colour (applyLook keeps the colour)
+    S.mats.groundRing = new THREE.MeshLambertMaterial({ color: three.col(SC.ground), map: S.mats.ground.map, vertexColors: true });
+    // F6-T1b C5: the blob shadows (transparent mesh 1 of 2, TL Q-T5): black x the blob alpha map, no depth write, unlit
+    S.mats.blob = new THREE.MeshBasicMaterial({ color: three.col('#000000'), map: three.texture('blob', PC.data.vegetation.blob.size, S.renderer),
+      transparent: true, opacity: PC.data.vegetation.blob.opacity, depthWrite: false, toneMapped: false });
+    S.textures.push(S.mats.blob.map);
     if (house.roof.type === 'pitched') S.mats.tiles = new THREE.MeshLambertMaterial({ vertexColors: true, map: tex('tiles') });
     S.meshes = three.buildShell(house, S.world, S.mats, { tier: S.tier }).concat(three.buildInterior(house, S.world, S.mats),
-      three.buildRoof(house, S.world, S.mats), three.buildSite(house, S.world, S.mats));
+      three.buildRoof(house, S.world, S.mats), three.buildSite(house, S.world, S.mats, { tier: S.tier }));
     var keep = S.house && S.pose && S.house.radius === house.radius && S.house.center[0] === house.center[0] && S.house.center[1] === house.center[1];
     S.house = house; S.builtKey = house.key; S.builds++;
     S.limits = PC.cam.limits(house, aspect());

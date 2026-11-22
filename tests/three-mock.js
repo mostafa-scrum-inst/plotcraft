@@ -26,7 +26,9 @@
       'DoubleSide',
       // F6-T1a (TL plan review: every row approved; conformance-checked on real r128 in view3d-real)
       'ACESFilmicToneMapping', 'LinearEncoding', 'RGBAFormat', 'RepeatWrapping', 'LinearFilter', 'LinearMipmapLinearFilter',
-      'DataTexture', 'Fog'],
+      'DataTexture', 'Fog',
+      // F6-T1b (plan 6.2 / 6.3): the blob texture clamps
+      'ClampToEdgeWrapping'],
     WebGLRenderer: ['setPixelRatio', 'setSize', 'render', 'dispose', 'shadowMap', 'outputEncoding', 'domElement',
       'toneMapping', 'toneMappingExposure', 'capabilities'],
     'WebGLRenderer.shadowMap': ['enabled', 'type', 'autoUpdate', 'needsUpdate'],   // F6-T1a: on-demand shadow map
@@ -37,8 +39,9 @@
     Scene: O3D.concat(['background', 'fog']),
     Group: O3D,
     Mesh: O3D.concat(['geometry', 'material']),
-    InstancedMesh: O3D.concat(['geometry', 'material', 'setMatrixAt', 'instanceMatrix', 'count']),
+    InstancedMesh: O3D.concat(['geometry', 'material', 'setMatrixAt', 'instanceMatrix', 'count', 'setColorAt', 'instanceColor']),
     'InstancedMesh.instanceMatrix': ['needsUpdate'],
+    'InstancedMesh.instanceColor': ['needsUpdate'],   // F6-T1b: per-instance colour variation (setColorAt(i, Color))
     PerspectiveCamera: O3D.concat(['fov', 'aspect', 'near', 'far', 'updateProjectionMatrix', 'setViewOffset', 'clearViewOffset']),
     DirectionalLight: O3D.concat(['color', 'intensity', 'target', 'shadow']),
     'DirectionalLight.shadow': ['mapSize', 'camera', 'bias', 'normalBias'],
@@ -257,7 +260,7 @@
 
   var T = {
     REVISION: '128', sRGBEncoding: 3001, PCFSoftShadowMap: 2, DoubleSide: 2,
-    ACESFilmicToneMapping: 4, LinearEncoding: 3000, RGBAFormat: 1023, RepeatWrapping: 1000, LinearFilter: 1006, LinearMipmapLinearFilter: 1008,
+    ACESFilmicToneMapping: 4, LinearEncoding: 3000, RGBAFormat: 1023, RepeatWrapping: 1000, ClampToEdgeWrapping: 1001, LinearFilter: 1006, LinearMipmapLinearFilter: 1008,
     Vector2: Ctor('Vector2', function (x, y) { return V2(x, y); }),
     Vector3: Ctor('Vector3', function (x, y, z) {
       if (arguments.length && (!num(x) || !num(y) || !num(z))) fail('new Vector3(x, y, z) takes three numbers');
@@ -291,6 +294,16 @@
         if (!Number.isInteger(i) || i < 0 || i >= this.maxCount) fail('setMatrixAt index out of range');
         var r = raw(mat); if (!r || r.__kind !== 'Matrix4') fail('setMatrixAt(i, Matrix4)');
         this.matrices[i] = r.elements.slice();
+      };
+      // F6-T1b: r128 creates instanceColor on the first setColorAt; the caller sets instanceColor.needsUpdate
+      hide(o, 'colors', []);
+      o.instanceColor = null;
+      o.setColorAt = function (i, c) {
+        if (!Number.isInteger(i) || i < 0 || i >= this.maxCount) fail('setColorAt index out of range');
+        var r = raw(c); if (!r || r.__kind !== 'Color') fail('setColorAt(i, Color)');
+        if (![r.r, r.g, r.b].every(num)) fail('setColorAt: colour channels must be numbers');
+        this.colors[i] = [r.r, r.g, r.b];
+        if (!this.instanceColor) this.instanceColor = wrap(base({ needsUpdate: false }, 'InstanceColor'), 'InstancedMesh.instanceColor');
       };
       hide(o, '__setter', function (k, v) { if (k === 'count' && (!Number.isInteger(v) || v < 0 || v > o.maxCount)) fail('InstancedMesh.count out of range'); });
       return wrap(o, 'InstancedMesh');

@@ -65,10 +65,10 @@ test('whole tour at 60 fps (sample, maximum house, one room, basement house): ey
   }
 });
 
-test('mesh budget: the maximum house stays at 25 meshes or fewer through the tour (F6-T1a: 24 + highlight); one highlight geometry per room stop, each disposed once', () => {
+test('mesh budget: the maximum house stays at 27 meshes or fewer through the tour (F6-T1b: 26 + highlight); one highlight geometry per room stop, each disposed once', () => {
   const E = opened(maxHouse), made = new Set();
   const { frames } = run(E, { each: () => { const h = E.info().highlight; if (h) made.add(h); } });
-  assert.ok(frames.every((f) => f.meshes <= 25));
+  assert.ok(frames.every((f) => f.meshes <= 27));
   assert.equal(made.size, 40);
   for (const m of made) assert.equal(E.mock.raw(E.mock.raw(m).geometry).disposed, 1);
 });

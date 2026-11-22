@@ -55,6 +55,10 @@
     // F6-T1b openings (Designer plan A2, plan 6.1): pane 1.2 x 1.4 (sill 0.9, head 2.3), small 0.6 x 0.6 (sill 1.6),
     // stair slot 0.6 x 1.6 (sill 0.5), door 1.0 x 2.2; endClear from run ends / partitions, pitch per pane,
     // smallMin run for a small pane, doorClear from the door frame, heads <= storeyH - headGap.
+    // F6-T1b contact darkening (Designer C4, plan 6.2): wall-base skirts skirtH tall, x skirtK at the ground, skirtOut
+    // proud; floor rings ringW wide, x ringK at the walls, ringLift over the tint; the footprint ring footW (at most)
+    // wide, footGap clear of the plot outline, x footK at the footprint.
+    CONTACT: { skirtH: 0.6, skirtK: 0.82, skirtOut: 0.005, ringW: 0.3, ringK: 0.9, ringLift: 0.003, footW: 0.8, footGap: 0.05, footK: 0.8 },
     OPEN: { win: { w: 1.2, h: 1.4, sill: 0.9 }, small: { w: 0.6, h: 0.6, sill: 1.6 }, slot: { w: 0.6, h: 1.6, sill: 0.5 },
       door: { w: 1.0, h: 2.2 }, endClear: 0.6, pitch: 2.6, smallMin: 1.2, doorClear: 0.6, headGap: 0.3,
       // the decals (Q-D1): glass / reveal band offsets out of the wall plane, frame profile and proud depth, sill
@@ -91,7 +95,7 @@
         full: { tex: 512, fog: true, fineShadow: true, maxDpr: 2, treeDetail: 1 },
         lite: { tex: 256, fog: false, fineShadow: false, maxDpr: 1.5, treeDetail: 0 }
       },
-      fogSpanK: 8, skyK: 0.9 },
+      fogSpanK: 8, skyK: 0.9, blobY: 0.02 },
     FOOTPRINT_ROUND: 0.5, FOOTPRINT_MAX_RATIO: 2, FOOTPRINT_STRETCH_RATIO: 3, FOOTPRINT_STRETCH_EXTRA: 0.5, BACK_ANGLE: 40
   };
 })(globalThis.PC = globalThis.PC || {});

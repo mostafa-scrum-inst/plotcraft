@@ -196,6 +196,7 @@ async function scene(vp, dpr) {
   T.ok(s1.calls <= 160 && s1.meshes <= 64, `${tag} draw calls ${s1.calls} <= 160, meshes ${s1.meshes} <= 64 (G6; F6-T1a: CTO C-4.1 / C-4.2)`);
   await colourPipeline(page, tag);
   await realism(page, tag);
+  if (vp.w > 900) await detailReal(page, tag);
   // context loss and restore (QA_FULL=1 only since F6-T1a, TL Q-T8: QA f4-t2-view "E budget", f4-t3-view A and the
   // f6-t1 leak suite cover it in the default run; the texture re-creation is in tests/three/scene.test)
   if (FULL) {
@@ -341,6 +342,51 @@ async function realism(page, tag) {
 
 // Maximum house (loaded by basement()): draw calls <= 160 and triangles <= 300 000 for one frame incl. the shadow pass,
 // Reset, Roof on and off (CTO C-4.2 / C-4.3); build <= 400 ms best of 3 at 1280x800 incl. texture creation (C-4.8).
+// F6-T1b on real r128 (plan 6.1 - 6.3): the blob plane draws (hiding it brightens pixels; winter keeps only the
+// shrubs' blobs, so fewer), instanceColor exists on canopies and shrubs, and glass decals (a quarter in from the jamb,
+// 35 % up) read darker than the wall
+// beside them where both are the first hit from the eye (at least half of the visible pairs).
+async function detailReal(page, tag) {
+  await page.evaluate(() => { PC.view3d.setLook({ hour: 12, season: 'summer' }); PC.view3d.resetView(); });
+  await ready(page);
+  const r = await page.evaluate(() => {
+    const i = PC.debug.scene(), gl = i.renderer.getContext(), W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, w = i.world;
+    const grab = () => { i.renderNow(); const b = new Uint8Array(W * H * 4); gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, b); return b; };
+    const blobs = w.getObjectByName('blobs'), darker = () => { const a = grab(); blobs.visible = false; const b = grab(); blobs.visible = true; let n = 0; for (let j = 0; j < a.length; j += 4) if (b[j] + b[j + 1] + b[j + 2] - a[j] - a[j + 1] - a[j + 2] > 6) n++; return n; };
+    const summer = darker(); PC.view3d.setLook({ hour: 12, season: 'winter' }); const winter = darker(), wc = blobs.count; PC.view3d.setLook({ hour: 12, season: 'summer' });
+    const tinted = ['canopies', 'shrubs'].map((n) => { const m = w.getObjectByName(n); const c = m && m.instanceColor; return !!(c && c.itemSize === 3 && c.array instanceof Float32Array && c.count >= m.count); });
+    // glass vs wall
+    const h = i.house, fp = h.footprint, cu = h.center[0], cv = h.center[1], cam = i.camera, rc = new THREE.Raycaster(), px = new Uint8Array(4), D = PC.C.OPEN.decal;
+    i.renderNow();
+    const at = (o, s, y) => {   // a point on the opening's wall at s along it (plan metres), height y, 0.012 m out
+      const P = { front: [s - cu, -(fp.v - cv) + 0.012], back: [s - cu, -(fp.v + fp.d - cv) - 0.012], left: [fp.u - cu - 0.012, -(s - cv)], right: [fp.u + fp.w - cu + 0.012, -(s - cv)] }[o.side];
+      return new THREE.Vector3(P[0], y, P[1]);
+    };
+    const look = (p, want) => {
+      const d = p.clone().sub(cam.position), L = d.length(); rc.set(cam.position, d.normalize());
+      const hit = rc.intersectObjects(w.children, true).find((x) => x.object.visible && !/^(sky|blobs)$/.test(x.object.name));
+      if (!hit || !want.test(hit.object.name) || Math.abs(hit.distance - L) > 0.05) return null;
+      const n = p.clone().project(cam), X = Math.round((n.x + 1) / 2 * W), Y = Math.round((n.y + 1) / 2 * H);
+      if (X < 1 || Y < 1 || X >= W - 1 || Y >= H - 1) return null;
+      gl.readPixels(X, Y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); return 0.2126 * px[0] + 0.7152 * px[1] + 0.0722 * px[2];
+    };
+    let pairs = 0, ok = 0;
+    for (const o of h.openings) {
+      if (o.kind !== 'glazed') continue;
+      const lv = h.levels.find((l) => l.id === o.level), y0 = lv.baseY + 0.2, y = y0 + o.sill + (o.head - o.sill) * 0.35;
+      const g = look(at(o, o.a + (o.b - o.a) * 0.25, y), /^roofBatch$/);   // a quarter in: clear of a centre mullion
+      const wl = [look(at(o, o.a - D.frame - 0.25, y), /^(walls|roofBatch)$/), look(at(o, o.b + D.frame + 0.25, y), /^(walls|roofBatch)$/)].filter((x) => x != null);
+      if (g == null || !wl.length) continue;
+      pairs++; if (g < Math.max(...wl) - 10) ok++;
+    }
+    return { summer, winter, wc, all: blobs.userData.all, shrubs: blobs.userData.shrubs, tinted, pairs, ok };
+  });
+  T.ok(r.summer > 50 && r.winter < r.summer && r.wc === r.shrubs, `${tag} F6-T1b blobs draw: ${r.summer} px darkened in summer, ${r.winter} in winter (count ${r.wc} = ${r.shrubs} shrubs of ${r.all})`);
+  T.eq(r.tinted, [true, true], `${tag} F6-T1b instanceColor on canopies and shrubs (real r128)`);
+  T.ok(r.pairs >= 2 && r.ok >= Math.ceil(r.pairs / 2), `${tag} F6-T1b glass decals darker than the wall beside them in ${r.ok} of ${r.pairs} visible pairs`);
+  console.log(`  [record] ${tag} F6-T1b: blobs ${r.summer} / ${r.winter} px, glass pairs ${r.ok} / ${r.pairs}`);
+}
+
 async function maxBudget(page, tag) {
   const r = await page.evaluate(async () => {
     const V = PC.view3d, i = PC.debug.scene(), out = {};
@@ -376,7 +422,7 @@ async function liteSmoke(vp) {
   await act('btn-sample'); await act('btn-skip3d');
   await ready(page);
   const r = await page.evaluate(() => { const i = PC.debug.scene(), sun = i.scene.getObjectByName('sun'); return [i.tier.name, i.scene.fog, sun.shadow.mapSize.x, i.renderer.getPixelRatio(), i.textures.map((t) => t.image.width)]; });
-  T.eq(r, ['lite', null, 1024, 1.5, [256, 256, 256]], `${tag}: tier lite, no fog, map 1024, pixel ratio 1.5, textures 256`);
+  T.eq(r, ['lite', null, 1024, 1.5, [256, 256, 256, 64]], `${tag}: tier lite, no fog, map 1024, pixel ratio 1.5, colour textures 256 (+ the 64 px blob, F6-T1b)`);
   const s = await sample(page);
   notBlank(s, s.sky, `${tag} not blank`);
   T.none(problems(), `${tag} no page errors, console errors or THREE. warnings`);

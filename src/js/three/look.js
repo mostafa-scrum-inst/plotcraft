@@ -67,10 +67,13 @@
     c.updateProjectionMatrix();
     ctx.scene.background = new THREE.Color(L.background);
     ctx.mats.ground.color.copy(col(L.groundColor));
+    if (ctx.mats.groundRing) ctx.mats.groundRing.color.copy(col(L.groundColor));
     ctx.mats.canopy.color.copy(col(L.canopyColor));
     ctx.mats.shrub.color.copy(col(L.shrubColor));
     var can = ctx.world.getObjectByName('canopies');
     if (can) can.visible = !!L.canopyVisible;
+    var bl = ctx.world.getObjectByName('blobs');   // F6-T1b (Q-T4): winter shows only the shrubs' blobs (a count, no GPU object)
+    if (bl) bl.count = L.canopyVisible ? bl.userData.all : bl.userData.shrubs;
     if (ctx.renderer) ctx.renderer.toneMappingExposure = L.exposure;
     var sky = ctx.world.getObjectByName('sky');
     if (sky) three.skyPaint(sky.userData.dome, L);

@@ -17,6 +17,8 @@ export const FACTORIES = {
   Mesh: (T) => new T.Mesh(new T.BoxGeometry(1, 1, 1), new T.MeshBasicMaterial()),
   InstancedMesh: (T) => new T.InstancedMesh(new T.BoxGeometry(1, 1, 1), new T.MeshBasicMaterial(), 2),
   'InstancedMesh.instanceMatrix': (T) => new T.InstancedMesh(new T.BoxGeometry(1, 1, 1), new T.MeshBasicMaterial(), 2).instanceMatrix,
+  // F6-T1b: r128 creates instanceColor on the first setColorAt
+  'InstancedMesh.instanceColor': (T) => { const m = new T.InstancedMesh(new T.BoxGeometry(1, 1, 1), new T.MeshBasicMaterial(), 2); m.setColorAt(0, new T.Color('#FFFFFF')); return m.instanceColor; },
   PerspectiveCamera: (T) => new T.PerspectiveCamera(45, 1, 0.5, 100),
   DirectionalLight: (T) => new T.DirectionalLight(0xffffff, 1),
   'DirectionalLight.shadow': (T) => new T.DirectionalLight(0xffffff, 1).shadow,

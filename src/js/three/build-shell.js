@@ -97,6 +97,24 @@
     return m;
   }
 
+  // F6-T1b C4: the footprint ring width w = min(footW, the free distance from the footprint to the plot outline -
+  // footGap), 0 when that is not positive (setback 0).
+  three.footRingW = function (house) {
+    var C = PC.C.CONTACT, fp = house.footprint, pts = house.plot.pts, n = pts.length, best = Infinity;
+    var cs = [[fp.u, fp.v], [fp.u + fp.w, fp.v], [fp.u + fp.w, fp.v + fp.d], [fp.u, fp.v + fp.d]];
+    function seg(p, a, b) {
+      var dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy, t = l2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2)) : 0;
+      return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy);
+    }
+    for (var i = 0; i < n; i++) {
+      var a = pts[i], b = pts[(i + 1) % n];
+      cs.forEach(function (c) { best = Math.min(best, seg(c, a, b)); });
+      for (var j = 0; j < 4; j++) best = Math.min(best, seg(a, cs[j], cs[(j + 1) % 4]));
+    }
+    var w = Math.min(C.footW, best - C.footGap);
+    return w > 0.01 ? w : 0;
+  };
+
   three.buildShell = function (house, world, mats, opt) {
     var H = PC.C.HOUSE, fp = house.footprint, cu = house.center[0], cv = house.center[1];
     var E = PC.data.exteriors[house.exterior], I = PC.data.interiors[house.interior.style], RT = PC.data.roomTints, SC = PC.data.siteColors;
@@ -107,12 +125,33 @@
     // a box from L rectangle [u0, u1] x [v0, v1] and heights [y0, y1]
     function box(b, u0, u1, v0, v1, y0, y1, hex, topHex) { b.add((X(u0) + X(u1)) / 2, (y0 + y1) / 2, (Z(v0) + Z(v1)) / 2, u1 - u0, y1 - y0, v1 - v0, hex, topHex); }
 
+    // F6-T1b C4 wall-base skirts on the ground level's outer faces, appended after its walls: the slab edge (0 to the
+    // floor) and the wall (floor to skirtH), one linear gradient x skirtK at the ground -> x 1 at skirtH, skirtOut proud
+    function skirts(b, floorY) {
+      var C = PC.C.CONTACT, k = function (y) { return C.skirtK + (1 - C.skirtK) * Math.min(1, y / C.skirtH); }, d = C.skirtOut;
+      var u0 = fp.u, u1 = fp.u + fp.w, v0 = fp.v, v1 = fp.v + fp.d, e = house.site.entrance;
+      var ga = Math.max(u0, e.u - e.w / 2), gb = Math.min(u1, e.u + e.w / 2);
+      // [p0, p1 in T, outward [x, z], wall spans along the side as [p0, p1] pairs]
+      var sides = [
+        [[X(u0), Z(v0) + d], [X(u1), Z(v0) + d], [0, 1], [[[X(u0), Z(v0) + d], [X(ga), Z(v0) + d]], [[X(gb), Z(v0) + d], [X(u1), Z(v0) + d]]]],
+        [[X(u0), Z(v1) - d], [X(u1), Z(v1) - d], [0, -1]],
+        [[X(u0) - d, Z(v0)], [X(u0) - d, Z(v1)], [-1, 0]],
+        [[X(u1) + d, Z(v0)], [X(u1) + d, Z(v1)], [1, 0]]
+      ];
+      sides.forEach(function (sd) {
+        b.addWallQuad(sd[0], sd[1], 0, floorY, sd[2], b.shade(E.slab, k(floorY)), b.shade(E.slab, k(0)), 'skirt');
+        (sd[3] || [[sd[0], sd[1]]]).forEach(function (sp) {
+          if (Math.hypot(sp[1][0] - sp[0][0], sp[1][1] - sp[0][1]) > 0.05) b.addWallQuad(sp[0], sp[1], floorY, C.skirtH, sd[2], b.shade(E.wall, 1), b.shade(E.wall, k(floorY)), 'skirt');
+        });
+      });
+    }
+
     // ground
     var ground = group('ground', world), flat = -Math.PI / 2;
     // the footprint as a Path in shape coordinates (x = u - cu, y = v - cv; the -PI/2 turn maps y to -Z)
-    function footHole() {
-      var p = new THREE.Path();
-      p.moveTo(fp.u - cu, fp.v - cv); p.lineTo(fp.u + fp.w - cu, fp.v - cv); p.lineTo(fp.u + fp.w - cu, fp.v + fp.d - cv); p.lineTo(fp.u - cu, fp.v + fp.d - cv);
+    function footHole(g) {
+      var p = new THREE.Path(), k = g || 0;
+      p.moveTo(fp.u - k - cu, fp.v - k - cv); p.lineTo(fp.u + fp.w + k - cu, fp.v - k - cv); p.lineTo(fp.u + fp.w + k - cu, fp.v + fp.d + k - cv); p.lineTo(fp.u - k - cu, fp.v + fp.d + k - cv);
       p.closePath();
       return p;
     }
@@ -127,12 +166,23 @@
       outer.name = 'groundOuter'; ground.add(outer); made.push(outer);
     } else outer = mesh(new THREE.ShapeGeometry(sq), mats.groundOuter, 'groundOuter', ground);
     outer.rotation.x = flat; outer.position.y = -H.outerDrop;
-    var shape = new THREE.Shape();
+    var shape = new THREE.Shape(), C = PC.C.CONTACT, fw = three.footRingW(house);
     house.plot.pts.forEach(function (p, i) { if (i) shape.lineTo(p[0] - cu, p[1] - cv); else shape.moveTo(p[0] - cu, p[1] - cv); });
     shape.closePath();
-    shape.holes.push(footHole());
+    shape.holes.push(footHole(fw));
     var plot = mesh(new THREE.ShapeGeometry(shape), mats.ground, 'groundPlot', ground);
     plot.rotation.x = flat;
+    if (fw > 0) {   // F6-T1b C4: the footprint ring fills the band between the footprint and the grown hole
+      var rb = new three.BoxBatch({ uv: true }), k0 = [C.footK, C.footK, C.footK], k1 = [1, 1, 1];
+      var fx0 = X(fp.u), fx1 = X(fp.u + fp.w), fz0 = Z(fp.v + fp.d), fz1 = Z(fp.v);
+      var gx0 = fx0 - fw, gx1 = fx1 + fw, gz0 = fz0 - fw, gz1 = fz1 + fw;
+      [[[fx0, fz0], [fx1, fz0], [gx1, gz0], [gx0, gz0]], [[fx1, fz0], [fx1, fz1], [gx1, gz1], [gx1, gz0]],
+        [[fx1, fz1], [fx0, fz1], [gx0, gz1], [gx1, gz1]], [[fx0, fz1], [fx0, fz0], [gx0, gz0], [gx0, gz1]]].forEach(function (q) {
+        rb.addUpQuad(q, 0, [k0, k0, k1, k1], 'ring');
+      });
+      var ring = rb.build(mats.groundRing, 'groundRing');
+      ring.castShadow = false; ring.receiveShadow = true; ground.add(ring); made.push(ring);
+    }
     var cap = mesh(new THREE.PlaneGeometry(fp.w, fp.d), mats.ground, 'groundCap', ground);
     cap.rotation.x = flat; cap.position.set(X(fp.u + fp.w / 2), H.capLift, Z(fp.v + fp.d / 2));
     [outer, plot, cap].forEach(function (m) { m.receiveShadow = true; m.castShadow = false; });
@@ -145,6 +195,16 @@
       box(slab, fp.u, fp.u + fp.w, fp.v, fp.v + fp.d, lv.baseY, floorY, E.slab, hall);
       lv.rooms.forEach(function (r) {
         slab.addQuad(X(r.u + r.w / 2), floorY + H.tintLift, Z(r.v + r.d / 2), r.w, r.d, mix(RT[r.type], I.wood, I.floorMix));
+      });
+      // F6-T1b C4 floor rings, appended after the tints: 4 trapezoids per room, outer edge tint x ringK, inner x 1
+      lv.rooms.forEach(function (r) {
+        var hex = mix(RT[r.type], I.wood, I.floorMix), k = Math.min(C.ringW, Math.min(r.w, r.d) / 2 - 0.01), o = slab.shade(hex, C.ringK), i = slab.shade(hex, 1);
+        if (k <= 0) return;
+        var a0 = X(r.u), a1 = X(r.u + r.w), b0 = Z(r.v + r.d), b1 = Z(r.v), y = floorY + H.tintLift + C.ringLift;
+        [[[a0, b0], [a1, b0], [a1 - k, b0 + k], [a0 + k, b0 + k]], [[a1, b0], [a1, b1], [a1 - k, b1 - k], [a1 - k, b0 + k]],
+          [[a1, b1], [a0, b1], [a0 + k, b1 - k], [a1 - k, b1 - k]], [[a0, b1], [a0, b0], [a0 + k, b0 + k], [a0 + k, b1 - k]]].forEach(function (q) {
+          slab.addUpQuad(q, y, [o, o, i, i], 'ring');
+        });
       });
       var u0 = fp.u, u1 = fp.u + fp.w, v0 = fp.v, v1 = fp.v + fp.d;
       if (lv.index < 0) {                         // basement: pit walls from the basement floor to ground level
@@ -164,6 +224,7 @@
       parts.v.forEach(function (s) { box(walls, s[1], s[2], s[0] - t / 2, s[0] + t / 2, floorY, top, E.wallInner); });
       if (lv.stair) box(walls, lv.stair.u, lv.stair.u + lv.stair.w, lv.stair.v, lv.stair.v + lv.stair.d, floorY, top, RT.stair);
       if (lv.lift) box(walls, lv.lift.u, lv.lift.u + lv.lift.w, lv.lift.v, lv.lift.v + lv.lift.d, floorY, top, RT.lift);
+      if (lv.index === 0) skirts(walls, floorY);
       [slab.build(mats.batch, 'slab'), walls.build(mats.batch, 'walls')].forEach(function (m) { if (m) { g.add(m); made.push(m); } });
       var sm = g.getObjectByName('slab');
       if (sm) sm.castShadow = false;                       // CTO C-4.2: floors receive only

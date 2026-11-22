@@ -29,8 +29,12 @@ test('ground: three planes rotated -PI/2 about X at the A-10 offsets; the plot s
   const sg = E.mock.raw(plot.geometry);
   assert.deepEqual(plain(sg.outline), plain(h.plot.pts.map((p) => [p[0] - h.center[0], p[1] - h.center[1]])));
   assert.equal(sg.holes.length, 1);
-  const hole = plain(sg.holes[0]), cu = h.center[0], cv = h.center[1];
-  assert.deepEqual(hole, [[fp.u - cu, fp.v - cv], [fp.u + fp.w - cu, fp.v - cv], [fp.u + fp.w - cu, fp.v + fp.d - cv], [fp.u - cu, fp.v + fp.d - cv]]);
+  const cu = h.center[0], cv = h.center[1], fw = E.PC.three.footRingW(h);
+  const rect = (k) => [[fp.u - k - cu, fp.v - k - cv], [fp.u + fp.w + k - cu, fp.v - k - cv], [fp.u + fp.w + k - cu, fp.v + fp.d + k - cv], [fp.u - k - cu, fp.v + fp.d + k - cv]];
+  const hole = rect(0);
+  // F6-T1b C4: the plot hole is the footprint grown by the footprint-ring width; the ring fills the band
+  assert.ok(fw > 0 && fw <= E.PC.C.CONTACT.footW, `ring width ${fw}`);
+  plain(sg.holes[0]).forEach((p, i) => assert.ok(near(p[0], rect(fw)[i][0], 1e-9) && near(p[1], rect(fw)[i][1], 1e-9), 'grown hole'));
   assert.deepEqual(plain(E.mock.raw(cap.geometry).params), [fp.w, fp.d]);
   // F5-T1 QA B-1: groundOuter is a square of outerK x R with the same footprint hole (the basement pit is open)
   const og = E.mock.raw(outer.geometry), hs = E.PC.C.HOUSE.outerK * h.radius / 2;
@@ -72,7 +76,7 @@ test('walls: exterior (Q10 wall), entrance gap on the Ground front wall only, st
     const E = built((PC) => sampleApproved(PC, (d) => { d.ans.exterior = ext; })), h = E.house, fp = h.footprint, cu = h.center[0], cv = h.center[1];
     const X = E.PC.data.exteriors[ext], RT = E.PC.data.roomTints;
     for (const lv of h.levels) {
-      const it = E.items(lv.id, 'walls'), floor = lv.baseY + H.slab;
+      const it = E.items(lv.id, 'walls').filter((b) => b.kind !== 'skirt'), floor = lv.baseY + H.slab;
       assert.ok(it.every((b) => near(b.y0, floor) && near(b.y1, floor + H.wallH)), 'wall height 1.2');
       const ext4 = it.filter((b) => sameRgb(b.side, rgbOf(E.PC, X.wall)));
       const frontZ = -(fp.v - cv), front = ext4.filter((b) => near(b.z1, frontZ));

@@ -89,7 +89,7 @@ test('pitched: one gable prism, 30 degrees, ridge along the longer side (both or
     }
     assert.equal(tn.length / 3, 8, 'two quads');
     assert.ok(!it.some((i) => i.kind === 'box' && i.y0 >= h.roof.baseY - 1e-6), 'no slab or parapet under a gable');
-    assert.equal(E.info().textures.length, 4, 'grass, meadow, paving + tiles');
+    assert.equal(E.info().textures.length, 5, 'grass, meadow, paving, blob (F6-T1b) + tiles');
   }
 });
 

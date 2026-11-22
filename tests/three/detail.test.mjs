@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { opened, close } from '../helpers/scene3d.mjs';
 import { maxHouse } from '../helpers/houses.mjs';
-import { rgbOf, sameRgb } from '../helpers/batch.mjs';
+import { rgbOf, sameRgb, itemsOf } from '../helpers/batch.mjs';
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -66,5 +66,128 @@ test('openings follow the exterior choice: frame and door keys per Q10 exterior;
     const E = opened((PC) => { const s = maxHouse(PC); s.ans.exterior = ex; return s; }), PC = E.PC, it = E.items('roofBatch');
     assert.ok(it.some((x) => x.kind === 'box' && sameRgb(x.side, rgbOf(PC, PC.data.exteriors[ex].door))), ex + ' door');
     assert.ok(it.some((x) => x.kind === 'box' && sameRgb(x.side, rgbOf(PC, PC.data.exteriors[ex].frame))), ex + ' frame');
+  }
+});
+
+// ---- 6.2 contact darkening ------------------------------------------------------------------------------------
+const itemsIn = (E, name, parent) => { const m = E.mesh(name, parent); return m ? itemsOf(E.mock, m) : []; };
+const vertIn = (E, mesh, i) => {
+  const g = E.mock.raw(E.mock.raw(mesh).geometry), a = g.attrs;
+  return { p: [a.position.array[3 * i], a.position.array[3 * i + 1], a.position.array[3 * i + 2]], n: [a.normal.array[3 * i], a.normal.array[3 * i + 1], a.normal.array[3 * i + 2]], c: [a.color.array[3 * i], a.color.array[3 * i + 1], a.color.array[3 * i + 2]] };
+};
+const scaled = (c, k) => c.map((x) => x * k);
+
+test('skirts: ground level only, the slab edge and the wall base on all 4 sides (front split at the door), x skirtK at the ground -> x 1 at skirtH, skirtOut proud, facing out', () => {
+  for (const ex of ['sand', 'grey']) {
+    const E = opened((PC) => { const s = maxHouse(PC); s.ans.exterior = ex; return s; }), h = E.house, PC = E.PC, C = PC.C.CONTACT, X = PC.data.exteriors[ex];
+    const g0 = h.levels.find((l) => l.index === 0), floorY = g0.baseY + PC.C.HOUSE.slab, k = (y) => C.skirtK + (1 - C.skirtK) * Math.min(1, y / C.skirtH);
+    const parent = E.world.getObjectByName('level-' + g0.id), sk = itemsIn(E, 'walls', parent).filter((x) => x.kind === 'skirt');
+    for (const lv of h.levels) if (lv.index !== 0) assert.equal(itemsIn(E, 'walls', E.world.getObjectByName('level-' + lv.id)).filter((x) => x.kind === 'skirt').length, 0, lv.id);
+    const slabS = sk.filter((x) => close(x.y0, 0) && close(x.y1, floorY)), wallS = sk.filter((x) => close(x.y0, floorY) && close(x.y1, C.skirtH));
+    assert.deepEqual([slabS.length, wallS.length, sk.length], [4, 5, 9], 'slab edge x 4, wall base x 5 (door gap)');
+    const fp = h.footprint, cx = E.X(fp.u + fp.w / 2), cz = E.Z(fp.v + fp.d / 2), m = E.mesh('walls', parent);
+    for (const it of sk) {
+      const isSlab = it.y1 <= floorY + 1e-5, hex = isSlab ? X.slab : X.wall;
+      for (let i = it.first; i < it.first + 4; i++) {
+        const v = vertIn(E, m, i), want = scaled(rgbOf(PC, hex), close(v.p[1], 0) ? k(0) : k(v.p[1]));
+        assert.ok(sameRgb(v.c, want), `${ex} skirt gradient at y ${v.p[1]}`);
+        assert.ok(v.n[0] * (v.p[0] - cx) + v.n[2] * (v.p[2] - cz) > 0, 'faces out');
+      }
+      const out = close(it.z0, it.z1) ? Math.min(Math.abs(it.z0 - E.Z(fp.v + fp.d)), Math.abs(it.z0 - E.Z(fp.v))) : Math.min(Math.abs(it.x0 - E.X(fp.u)), Math.abs(it.x0 - E.X(fp.u + fp.w)));
+      assert.ok(close(out, C.skirtOut, 1e-4), 'skirtOut proud of the wall face');
+    }
+  }
+});
+
+test('floor rings: 4 trapezoids per room just above its tint, outer edge = tint x ringK, inner = tint; footprint ring: groundRing x footK at the house -> x 1 at w, unshadowing, the ground map', () => {
+  const E = opened(), h = E.house, PC = E.PC, C = PC.C.CONTACT, H = PC.C.HOUSE, I = PC.data.interiors[h.interior.style], RT = PC.data.roomTints;
+  for (const lv of h.levels) {
+    const parent = E.world.getObjectByName('level-' + lv.id), m = E.mesh('slab', parent), it = itemsOf(E.mock, m);
+    const rings = it.filter((x) => x.kind === 'ring'), y = lv.baseY + H.slab + H.tintLift + C.ringLift;
+    assert.equal(rings.length, 4 * lv.rooms.length, lv.id);
+    lv.rooms.forEach((r, ri) => {
+      const tint = rgbOf(PC, PC.three.mixHex(RT[r.type], I.wood, I.floorMix)), x0 = E.X(r.u), x1 = E.X(r.u + r.w), z0 = E.Z(r.v + r.d), z1 = E.Z(r.v);
+      rings.slice(4 * ri, 4 * ri + 4).forEach((q) => {
+        assert.ok(close(q.y0, y) && close(q.y1, y), 'ring height');
+        for (let i = q.first; i < q.first + 4; i++) {
+          const v = vertIn(E, m, i), edge = close(v.p[0], x0) || close(v.p[0], x1) || close(v.p[2], z0) || close(v.p[2], z1);
+          assert.ok(sameRgb(v.c, edge ? scaled(tint, C.ringK) : tint), `${r.id} ring colour`);
+          assert.ok(v.n[1] > 0.999, 'face up');
+        }
+      });
+    });
+  }
+  const ring = E.mesh('groundRing'), ri = itemsOf(E.mock, ring), fp = h.footprint, w = PC.three.footRingW(h);
+  assert.deepEqual([ri.length, ri.every((x) => x.kind === 'ring'), ring.castShadow, ring.receiveShadow, ring.material === E.info().meshes.find((x) => x.name === 'groundRing').material], [4, true, false, true, true]);
+  assert.equal(E.mock.raw(ring.material).map, E.mock.raw(E.mesh('groundPlot').material).map, 'the ground map');
+  for (const q of ri) for (let i = q.first; i < q.first + 4; i++) {
+    const v = vertIn(E, ring, i), onFp = v.p[0] >= E.X(fp.u) - 1e-5 && v.p[0] <= E.X(fp.u + fp.w) + 1e-5 && v.p[2] >= E.Z(fp.v + fp.d) - 1e-5 && v.p[2] <= E.Z(fp.v) + 1e-5;
+    assert.ok(sameRgb(v.c, onFp ? [C.footK, C.footK, C.footK] : [1, 1, 1]), 'x footK at the house, x 1 at the outer edge');
+    if (!onFp) assert.ok(close(Math.max(E.X(fp.u) - v.p[0], v.p[0] - E.X(fp.u + fp.w), E.Z(fp.v + fp.d) - v.p[2], v.p[2] - E.Z(fp.v)), w, 1e-4), 'outer edge at w');
+  }
+  // setback 0: no ring, the plot hole is the footprint
+  const tight = opened(null, (hh) => { hh.footprint = { ...hh.footprint, u: hh.plot.pts[0][0], v: hh.plot.pts[0][1] }; });
+  assert.equal(tight.PC.three.footRingW(tight.house), 0); assert.equal(tight.mesh('groundRing'), null);
+});
+
+test('boundary wall skirts: both faces of every wall run at the end of siteBatch, x skirtK at the ground', () => {
+  const E = opened(), PC = E.PC, C = PC.C.CONTACT, it = E.items('siteBatch'), sk = it.filter((x) => x.kind === 'skirt');
+  assert.ok(E.house.site.wall && sk.length >= 2 && sk.length % 2 === 0, `${sk.length} wall skirts`);
+  assert.ok(it.slice(it.length - sk.length).every((x) => x.kind === 'skirt'), 'appended last');
+  const m = E.mesh('siteBatch'), base = rgbOf(PC, PC.data.siteColors.boundaryWall);
+  for (const q of sk) for (let i = q.first; i < q.first + 4; i++) { const v = vertIn(E, m, i); if (close(v.p[1], 0)) assert.ok(sameRgb(v.c, scaled(base, C.skirtK)), 'ground edge'); }
+});
+
+// ---- 6.3 blobs, trees, shrubs ----------------------------------------------------------------------------------
+test('blobs: one instanced plane per shrub then per tree at blobY, diameter 2 x K x r x s, black x the blob map, transparent without depth write, renderOrder 1; winter shows only the shrubs; at most 2 transparent meshes', () => {
+  const E = opened(), PC = E.PC, V = PC.data.vegetation, S = E.house.site, b = E.world.getObjectByName('blobs'), raw = E.mock.raw;
+  assert.ok(b && raw(b).__kind === 'InstancedMesh');
+  assert.deepEqual([b.count, b.renderOrder, b.castShadow, b.receiveShadow, b.frustumCulled], [S.shrubs.length + S.trees.length, 1, false, false, false]);
+  const mt = b.material;
+  assert.deepEqual([mt.transparent, mt.depthWrite, mt.toneMapped, mt.opacity, raw(mt.map).image.width], [true, false, false, V.blob.opacity, V.blob.size]);
+  const M = raw(b).matrices, list = S.shrubs.map((it) => [it, V.blob.shrubK * V.shrub.r]).concat(S.trees.map((it) => [it, V.blob.treeK * V.tree.canopyR]));
+  list.forEach(([it, r], i) => {
+    const e = M[i], d = 2 * r * it[2];
+    assert.ok(close(Math.hypot(e[0], e[1], e[2]), d, 1e-9) && close(Math.hypot(e[8], e[9], e[10]), 1, 1e-9) && close(Math.abs(e[9]), 1, 1e-9), `blob ${i}: face-up, diameter`);
+    assert.ok(close(e[12], E.X(it[0]), 1e-9) && close(e[13], PC.C.VIEW3D.blobY, 1e-9) && close(e[14], E.Z(it[1]), 1e-9), `blob ${i} position`);
+  });
+  PC.view3d.setLook({ hour: 12, season: 'winter' }); assert.equal(b.count, S.shrubs.length, 'winter: shrubs only');
+  PC.view3d.setLook({ hour: 12, season: 'summer' }); assert.equal(b.count, list.length, 'summer: all');
+  for (const sf of [null, (P) => maxHouse(P)]) {
+    const F = opened(sf); let n = 0;
+    for (const x of F.info().meshes) if (x.material.transparent) n++;
+    assert.ok(n <= 2, `${n} transparent meshes (TL Q-T5)`);
+  }
+});
+
+test('canopy and shrub lumps: flat-shaded, every triangle facing away from its lump centre, inside canopyR / shrub r, the canopy between canopyY0 and canopyY0 + canopyH (4.2 m at scale 1)', () => {
+  const E = opened(), V = E.PC.data.vegetation, det = E.info().tier.treeDetail;
+  for (const [name, L, per, R, ylo, yhi, k] of [['canopies', V.tree.lumps, 20 * 4 ** det, V.tree.canopyR, V.tree.canopyY0, V.tree.canopyY0 + V.tree.canopyH, 1],
+    ['shrubs', V.shrub.lumps, 20, V.shrub.r, 0, V.shrub.h, V.shrub.squashY]]) {
+    const g = E.mock.raw(E.world.getObjectByName(name).geometry), p = g.attrs.position.array, n = g.attrs.normal.array;
+    assert.equal(g.index == null || g.index.length === 0, true, name + ' non-indexed');
+    for (let t = 0; t < p.length / 9; t++) {
+      const c = L[Math.floor(t / per)], P = (j) => [p[9 * t + 3 * j], p[9 * t + 3 * j + 1], p[9 * t + 3 * j + 2]];
+      const m = [0, 1, 2].map((a) => (P(0)[a] + P(1)[a] + P(2)[a]) / 3), N = [n[9 * t], n[9 * t + 1], n[9 * t + 2]];
+      const gN = cross(sub(P(1), P(0)), sub(P(2), P(0)));
+      assert.ok(dot(gN, N) > 0 && dot(N, sub(m, [c[0], c[1], c[2]])) > 0, `${name} triangle ${t} faces out`);
+      for (let j = 0; j < 3; j++) { assert.ok(close(n[9 * t + 3 * j], N[0], 1e-6) && close(n[9 * t + 3 * j + 2], N[2], 1e-6), 'flat'); }
+      for (const q of [P(0), P(1), P(2)]) assert.ok(Math.hypot(q[0], q[2]) <= R + 1e-5 && q[1] >= ylo - 1e-5 && q[1] <= yhi + 1e-5, `${name} vertex inside`);
+    }
+    assert.ok(k > 0);
+  }
+});
+
+test('per-instance colour: canopies and shrubs tinted within the table value range and tilt, deterministic across rebuilds; trunks untinted', () => {
+  const A = opened(), B = opened(), V = A.PC.data.vegetation, raw = A.mock.raw;
+  assert.equal(raw(A.world.getObjectByName('trunks')).instanceColor, null, 'r128: null until the first setColorAt');
+  for (const [name, T] of [['canopies', V.tint.tree], ['shrubs', V.tint.shrub]]) {
+    const m = A.world.getObjectByName(name), c = raw(m).colors;
+    assert.equal(c.length, m.count); assert.equal(m.instanceColor.needsUpdate, true);
+    for (const [r, g, b] of c) {
+      assert.ok(g >= T.value[0] - 1e-9 && g <= T.value[1] + 1e-9 && Math.abs(r / g - 1) <= T.tilt + 1e-9 && close(r + b, 2 * g, 1e-9), `${name} tint ${r} ${g} ${b}`);
+    }
+    assert.ok(new Set(c.map((x) => x[1].toFixed(4))).size > 1 || c.length < 2, 'varies');
+    assert.deepEqual(JSON.stringify(c), JSON.stringify(B.mock.raw(B.world.getObjectByName(name)).colors), 'same on rebuild');
   }
 });

@@ -20,7 +20,8 @@
    - vegetation (F4-T3, Designer plan section 1): sizes in metres at instance scale 1 and segment counts. Tree = trunk
      cylinder (trunkR, Y 0 to trunkH) + canopy cone (canopyR, canopyH, base at canopyY0); shrub = cone (r, h, base at
      Y 0); per-instance uniform scale in [scale[0], scale[1]]. Colours are not here: trunk = siteColors.trunk, canopy and
-     shrub = sky.seasons[s]. The scatter's tree clearance is canopyR x scale[1] (TL F4-T3 plan review). */
+     shrub = sky.seasons[s]. The scatter's tree clearance is canopyR x scale[1] (TL F4-T3 plan review).
+     F6-T1b: taper, lean, lumps, tint and blob (Designer E1 / E2 / C5; Designer-owned values). */
 (function (PC) {
   'use strict';
   PC.data.exteriors = {
@@ -46,8 +47,17 @@
     glassTop: '#9FB6C6', glassBottom: '#34495A'
   };
   PC.data.vegetation = {
-    tree: { trunkR: 0.12, trunkH: 2.6, canopyR: 1.35, canopyY0: 1.4, canopyH: 2.8, trunkSeg: 6, canopySeg: 8 },
-    shrub: { r: 0.7, h: 0.8, seg: 7 },
-    scale: [0.85, 1.15]
+    tree: { trunkR: 0.12, trunkH: 2.6, canopyR: 1.35, canopyY0: 1.4, canopyH: 2.8, trunkSeg: 6, canopySeg: 8,
+      // F6-T1b (Designer E1, Q-D2): trunk top radius x taper, lean +-leanDeg; canopy lumps [x, y, z, r] at unit scale
+      // inside canopyR radially and between canopyY0 and canopyY0 + canopyH
+      taper: 0.6, leanDeg: 4, lumps: [[0, 2.95, 0, 1.2], [0.45, 2.35, 0.15, 0.85], [-0.40, 2.45, -0.25, 0.80]] },
+    shrub: { r: 0.7, h: 0.8, seg: 7,
+      // F6-T1b (E2): two lumps [x, y, z, r] squashed to squashY (inside r, below h)
+      squashY: 0.7, lumps: [[-0.15, 0.36, 0, 0.55], [0.2, 0.3, 0.1, 0.45]] },
+    scale: [0.85, 1.15],
+    // F6-T1b per-instance colour (E1 / E2): value factor range and a warm / cool tilt (+-tilt on R, -+ on B)
+    tint: { tree: { value: [0.88, 1.08], tilt: 0.04 }, shrub: { value: [0.94, 1.06], tilt: 0.03 } },
+    // F6-T1b blobs (C5): one opacity (one material), radius treeK x canopyR x s / shrubK x r x s, texture size px
+    blob: { opacity: 0.26, treeK: 1.1, shrubK: 1.2, size: 64 }
   };
 })(globalThis.PC = globalThis.PC || {});
