@@ -134,4 +134,19 @@ Date: 2026-11-22. Branch `f5t2` (worktree `/home/user/plotcraft-f5t2`), main mer
 
 ## 5. Full run
 
-FULL_RUN_PLACEHOLDER
+`node build.mjs && node tests/run-all.mjs --jobs 3` on 0d303e5, with main 8098afa merged (QA's F5-T2 suites):
+
+**458.2 s, FAILED.** That is over the 420 s target and under the 600 s hard limit. (A first run before trimming the
+real-r128 basement check to 2 stops took 458.8 s.)
+
+- **The only failure** is `qa run-f5-t2`, the 4 section-A view checks of §3. Everything else passed: build, lint,
+  unit (32 files), three (12 files), all e2e files, and every other QA suite, including the tour-gated F4-T1 / F4-T3 /
+  F5-T1 views.
+- **The time.**
+  - QA's new `run-f5-t2` takes 47.4 s, and it accounts for the overrun against the 413 s baseline.
+  - My browser additions come to about 3 s:
+    - `view3d.spec` 8.5 s, with no new page loads except the one reload for the G1 draft path;
+    - `view3d-real` 12.7 s alone (18.8 s under `--jobs 3`), against 11.2 s alone on main.
+- **Slowest files:** qa f1-t3 101.7 s, f2-t3 100.6 s, f1-t1 98.7 s, f2-t2 95.3 s, f4-t2-step0 83.4 s.
+- **Getting back under 420 s** needs a trim in QA's suites. Per A-16 that is QA's call; I did not change `tests/qa`.
+  The QA shot and metrics files that a run rewrites were restored, not committed.
