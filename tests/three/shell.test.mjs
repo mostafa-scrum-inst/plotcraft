@@ -21,7 +21,7 @@ function built(stateFn) {
 const near = (a, b, e = 2e-5) => Math.abs(a - b) < e;   // positions are Float32 in the batch
 const H = { slab: 0.2, wallH: 1.2, t: 0.15 };
 
-test('ground: three planes rotated -PI/2 about X at the A-10 offsets; the plot shape has the footprint as its one hole', () => {
+test('ground: three planes rotated -PI/2 about X at the A-10 offsets; the plot shape and groundOuter (QA B-1) have the footprint as their one hole', () => {
   const E = built(), g = E.world.getObjectByName('ground'), h = E.house, fp = h.footprint;
   const [outer, plot, cap] = ['groundOuter', 'groundPlot', 'groundCap'].map((n) => g.getObjectByName(n));
   for (const m of [outer, plot, cap]) { assert.equal(m.rotation.x, -Math.PI / 2); assert.equal(m.receiveShadow, true); assert.equal(m.castShadow, false); }
@@ -32,6 +32,12 @@ test('ground: three planes rotated -PI/2 about X at the A-10 offsets; the plot s
   const hole = plain(sg.holes[0]), cu = h.center[0], cv = h.center[1];
   assert.deepEqual(hole, [[fp.u - cu, fp.v - cv], [fp.u + fp.w - cu, fp.v - cv], [fp.u + fp.w - cu, fp.v + fp.d - cv], [fp.u - cu, fp.v + fp.d - cv]]);
   assert.deepEqual(plain(E.mock.raw(cap.geometry).params), [fp.w, fp.d]);
+  // F5-T1 QA B-1: groundOuter is a square of outerK x R with the same footprint hole (the basement pit is open)
+  const og = E.mock.raw(outer.geometry), hs = E.PC.C.HOUSE.outerK * h.radius / 2;
+  assert.equal(E.mock.raw(outer.geometry).__kind, 'ShapeGeometry');
+  assert.deepEqual(plain(og.outline), [[-hs, -hs], [hs, -hs], [hs, hs], [-hs, hs]]);
+  assert.equal(og.holes.length, 1);
+  assert.deepEqual(plain(og.holes[0]), hole);
   assert.ok(near(cap.position.x, fp.u + fp.w / 2 - cu) && near(cap.position.z, -(fp.v + fp.d / 2 - cv)));
   const col = (m) => E.mock.raw(m.material.color), want = (hex) => rgbOf(E.PC, hex);
   assert.ok(sameRgb([col(plot).r, col(plot).g, col(plot).b], want(E.PC.data.siteColors.ground)));

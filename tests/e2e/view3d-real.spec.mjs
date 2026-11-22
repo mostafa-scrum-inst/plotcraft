@@ -9,7 +9,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { launch, open, suite, VIEWPORTS } from '../helpers/browser.mjs';
-import { ROOT } from '../helpers/load.mjs';
+import { ROOT, loadCore } from '../helpers/load.mjs';
+import { maxHouse } from '../helpers/houses.mjs';
 import { FACTORIES, MATHS } from '../helpers/three-factories.mjs';
 
 const T = suite('e2e view3d-real'), browser = await launch(), SHOTS = process.argv.includes('--shots');
@@ -79,6 +80,39 @@ async function highlight(page, tag) {
   T.ok(n.orange >= 40 && n.orange >= 0.6 * n.k && n.caption === 'Living · Ground floor', `${tag} highlight drawn on the real r128: ${n.orange} orange of ${n.k} changed pixels; caption "${n.caption}"`);
   await page.evaluate(() => { const s = document.querySelector('[data-pc="v3-room"]'); s.value = ''; s.dispatchEvent(new Event('change', { bubbles: true })); PC.view3d.resetView(); });
   await page.waitForFunction(() => !PC.debug.scene().frame && !PC.view3d.selected());
+}
+// F5-T1 QA B-1 regression: with a basement, the pit is open from above on the real r128. (1) A finder pick on a
+// basement edge room: the first VISIBLE object on the ray from the eye to the highlight is the highlight or level B
+// (never the ground), and the highlight draws orange pixels. (2) Reset view with the Basement level: the ray from the
+// eye to the footprint centre at the basement floor meets level B first, not groundOuter / groundPlot / groundCap.
+async function basement(page, tag) {
+  const b0 = await page.evaluate(() => PC.debug.scene().builds);
+  await page.evaluate((st) => PC.store.replace(st), maxHouse(loadCore()));
+  await page.waitForFunction((b) => { const i = PC.debug.scene(); return i.builds > b && !i.building && !i.frame; }, b0, { timeout: 15000 });
+  const id = await page.evaluate(() => PC.cam.roomGroups(PC.debug.house())[0].rooms[7].id);
+  await page.evaluate((id) => { const s = document.querySelector('[data-pc="v3-room"]'); s.value = id; s.dispatchEvent(new Event('change', { bubbles: true })); }, id);
+  await page.waitForFunction(() => !PC.view3d.flying() && !PC.debug.scene().frame, null, { timeout: 15000 });
+  const firstHit = `(i, to) => {
+    const cam = i.camera, from = cam.position.clone(), dir = to.clone().sub(from).normalize(), rc = new THREE.Raycaster(from, dir, 0.01, from.distanceTo(to) + 0.5);
+    const shown = (o) => { for (let n = o; n; n = n.parent) if (!n.visible) return false; return true; };
+    const h = rc.intersectObjects(i.world.children, true).find((x) => shown(x.object));
+    if (!h) return null; const path = []; for (let n = h.object; n && n !== i.world; n = n.parent) path.push(n.name); return path.reverse().join('/'); }`;
+  const r = await page.evaluate(([fh]) => {
+    const hit = new Function('return ' + fh)(), i = PC.debug.scene(), gl = i.renderer.getContext(), m = i.world.getObjectByName('highlight');
+    m.geometry.computeBoundingBox(); const c = m.geometry.boundingBox.getCenter(new THREE.Vector3());
+    const read = () => { i.renderNow(); const W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, px = new Uint8Array(W * H * 4); gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px); return px; };
+    const on = read(); m.visible = false; const off = read(); m.visible = true; i.renderNow();
+    let orange = 0; for (let j = 0; j < on.length; j += 4) if ((on[j] !== off[j] || on[j + 1] !== off[j + 1]) && on[j] > 120 && on[j] - on[j + 1] > 40 && on[j] - on[j + 2] > 70) orange++;
+    // Reset view + Basement: the footprint centre at the basement floor
+    PC.view3d.select(null); PC.view3d.setLevel('B'); PC.view3d.resetView(); i.renderNow();
+    const h = i.house, fp = h.footprint, lv = h.levels.find((l) => l.id === 'B');
+    const mid = new THREE.Vector3(fp.u + fp.w / 2 - h.center[0], lv.baseY + 0.2 + 0.05, -(fp.v + fp.d / 2 - h.center[1]));
+    const res = { pick: hit(i, c), orange, reset: hit(i, mid), cap: i.world.getObjectByName('groundCap').visible };
+    PC.view3d.setLevel('all'); PC.view3d.resetView();
+    return res;
+  }, [firstHit]);
+  T.ok(r.pick && /^(highlight|level-B)/.test(r.pick) && r.orange >= 40, `${tag} QA B-1: basement pick, first visible hit on the eye -> highlight ray "${r.pick}", ${r.orange} orange pixels`);
+  T.ok(r.reset && r.reset.startsWith('level-B') && r.cap === false, `${tag} QA B-1: Reset + Basement, first visible hit towards the pit floor "${r.reset}" (not the ground)`);
 }
 function notBlank(res, back, msg) {
   const differ = res.out.filter((c) => c.some((v, k) => Math.abs(v - back[k]) > 12)).length;
@@ -172,6 +206,7 @@ async function scene(vp, dpr) {
       t.value = '12'; t.dispatchEvent(new Event('input', { bubbles: true })); se.value = 'summer'; se.dispatchEvent(new Event('change', { bubbles: true }));
     });
   }
+  if (vp.w > 900) await basement(page, tag);
   T.none(problems(), `${tag} no page errors, console errors or THREE. warnings`);
   await o.ctx.close();
 }

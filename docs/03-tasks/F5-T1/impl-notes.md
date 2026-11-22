@@ -139,3 +139,41 @@ duration check (1.0–1.5 s wall clock): the keyboard pick took 1.70 s, and the 
   unchanged.
   - Focused run: `node --test tests/unit/footprint.test.mjs`, 18 passed.
   - The full run is left to QA, after its trim.
+
+## 6. QA B-1 fix: the basement pit covered by `groundOuter` (for the TL)
+
+- **Bug** (QA `qa-report.md` B-1, present since F4-T1): `groundOuter` was a full `PlaneGeometry(outerK R)` at
+  Y −0.05. `groundPlot` has the footprint hole and `groundCap` fills it, but hiding the cap for the basement still left
+  `groundOuter` under the hole. Level B and the basement highlight never showed from above.
+- **Fix** (`src/js/three/build-shell.js`): `groundOuter` is now a `ShapeGeometry`, the same `outerK × R` square,
+  rotated −π/2, 0.05 m down, colour and material unchanged, with the **footprint** as its hole. The footprint Path is
+  the same one `groundPlot` uses, built by one helper `footHole()`.
+  - **Why the footprint and not the plot outline:**
+    - It is the smallest opening that frees the pit.
+    - `groundOuter` keeps lying under `groundPlot` everywhere outside the footprint, as before (A-10 offsets). A
+      plot-outline hole would leave a 0.05 m step exactly at the plot edge, which can show as a sliver at grazing
+      angles.
+    - The footprint is always inside the plot, so the hole never touches the square's outline.
+  - **Why not hide `groundOuter` with level B:** the plain ground outside the plot would vanish in the basement view.
+  - **Unchanged:**
+    - the pit walls (basement floor up to ground level);
+    - `groundCap`, which is still hidden only for B;
+    - the mesh count: same mesh, sample 15 and maximum house 21 (22 with a room selected);
+    - QA's F4-T1 oracle ("groundOuter below and around the plot", 174 view checks pass).
+- **Tests:**
+  - **`tests/three/shell.test.mjs`:** `groundOuter` is a ShapeGeometry with the square outline and exactly the
+    footprint hole.
+  - **`tests/e2e/view3d-real.spec.mjs`** (real r128, in the existing 1280×800 page load, no new launch), on the
+    maximum house:
+    - (1) After a finder pick on a basement edge room (Maid's room), the first *visible* object on the eye → highlight
+      ray is the highlight or level B, and the highlight draws ≥ 40 orange pixels.
+    - (2) With Reset view and the Basement level, the first visible hit from the eye towards the footprint centre at the
+      basement floor is in level B, not the ground.
+  - Proven against the old `build-shell.js`: both checks fail, with the hit `ground/groundOuter` and 0 orange pixels.
+- **Focused runs** (all passed):
+  - `node tests/qa/run-f5-t1.mjs`: F5-T1 model 4/4, view 18/18;
+  - `node tests/qa/run-f4-t1.mjs`: model 10/10, view 174/174;
+  - unit + three: 487;
+  - `view3d.spec` 97;
+  - `view3d-real` 50 (was 48).
+  - The full suite is left to QA.

@@ -1,5 +1,5 @@
 /* PC.three.buildShell(house, world, mats): the F4-T1 house shell into the `world` group (A-10, F4-T1 plan §5).
-   ground: groundOuter (plane, 0.05 m below), groundPlot (ShapeGeometry of the plot with the footprint as a hole),
+   ground: groundOuter (square of outerK x R, 0.05 m below, with the footprint as a hole: F5-T1 QA B-1), groundPlot (ShapeGeometry of the plot with the footprint as a hole),
    groundCap (plane over the footprint, 0.01 m up; hidden for the basement view). Per level a group "level-<id>"
    (userData.index) with "slab" (slab box whose top face is the hall tint + one tint quad per room at 0.015 m) and
    "walls" (exterior walls with the entrance gap on the ground front wall, merged partitions along room edges, stair
@@ -73,15 +73,24 @@
 
     // ground
     var ground = group('ground', world), flat = -Math.PI / 2;
-    var outer = mesh(new THREE.PlaneGeometry(H.outerK * R, H.outerK * R), mats.groundOuter, 'groundOuter', ground);
+    // the footprint as a Path in shape coordinates (x = u - cu, y = v - cv; the -PI/2 turn maps y to -Z)
+    function footHole() {
+      var p = new THREE.Path();
+      p.moveTo(fp.u - cu, fp.v - cv); p.lineTo(fp.u + fp.w - cu, fp.v - cv); p.lineTo(fp.u + fp.w - cu, fp.v + fp.d - cv); p.lineTo(fp.u - cu, fp.v + fp.d - cv);
+      p.closePath();
+      return p;
+    }
+    // F5-T1 QA B-1: groundOuter has the footprint as a hole too (it was a full plane, so it covered the basement pit
+    // once groundCap is hidden); a square of outerK x R around the plot centre, 0.05 m down
+    var sq = new THREE.Shape(), hs = H.outerK * R / 2;
+    sq.moveTo(-hs, -hs); sq.lineTo(hs, -hs); sq.lineTo(hs, hs); sq.lineTo(-hs, hs); sq.closePath();
+    sq.holes.push(footHole());
+    var outer = mesh(new THREE.ShapeGeometry(sq), mats.groundOuter, 'groundOuter', ground);
     outer.rotation.x = flat; outer.position.y = -H.outerDrop;
     var shape = new THREE.Shape();
     house.plot.pts.forEach(function (p, i) { if (i) shape.lineTo(p[0] - cu, p[1] - cv); else shape.moveTo(p[0] - cu, p[1] - cv); });
     shape.closePath();
-    var hole = new THREE.Path();
-    hole.moveTo(fp.u - cu, fp.v - cv); hole.lineTo(fp.u + fp.w - cu, fp.v - cv); hole.lineTo(fp.u + fp.w - cu, fp.v + fp.d - cv); hole.lineTo(fp.u - cu, fp.v + fp.d - cv);
-    hole.closePath();
-    shape.holes.push(hole);
+    shape.holes.push(footHole());
     var plot = mesh(new THREE.ShapeGeometry(shape), mats.ground, 'groundPlot', ground);
     plot.rotation.x = flat;
     var cap = mesh(new THREE.PlaneGeometry(fp.w, fp.d), mats.ground, 'groundCap', ground);
