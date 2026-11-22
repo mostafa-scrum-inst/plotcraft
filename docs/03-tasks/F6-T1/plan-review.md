@@ -195,3 +195,11 @@ If the runs are still over: QA measures f1-t1-layout 640x360 next, and any furth
 - **Limits:**
   - QA_FULL=1 stays ≤ 480 s. If it is still over, QA trims its own QA_FULL rows next, starting with f5-t3.
   - The noise rule is unchanged.
+
+## Addendum: default-run trim after F6-T1 (TL)
+- **Why a trim is required:** QA's two quiet default runs on fa8674d took 425.8 s and 432.8 s, two in a row over 420 s, and QA_FULL took 474.9 s, leaving only about 5 s of headroom.
+- **Agreed, from `qa-default-trim.md` (718f552):** rows 1–7, including options 6 and 7, move into the release step (QA_RELEASE). That is about 54 s of work, or about 18 s of wall time.
+  - The release step runs at every implementation-review gate, so each moved check still runs at every gate.
+  - The release step is expected at about 246 s (NOTE at 260 s, limit 300 s).
+  - The f1-t1 640x360 pass stays in the default run, because CD-7 is still open.
+- **Exit:** two quiet default runs ≤ 420 s, target ≤ 412 s. If they are still over, the next lever is FS's view3d-real file (TL with FS).
