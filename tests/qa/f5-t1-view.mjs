@@ -24,6 +24,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT, collector, launch } from './lib.mjs';
 import { sessions } from './session.mjs';
+import { roofTo } from './v3kit.mjs';
 import * as H from './f4-t1-ref.mjs';
 import * as F from './f5-t1-ref.mjs';
 
@@ -152,7 +153,7 @@ await guard('A 1280x800', async () => {
   R.check(`${T}: keyboard pick (ArrowDown on the focused select, ground floor): Roof off, the room's level (UI + scene), caption "${F.captionOf(groups[0].rooms[0].name, groups[0].level)}", tour buttons hidden, select keeps the room, focus stays; flight 1.0-1.5 s of summed capped steps without a jump, eye >= 1 m, lands on my A-14 pose; highlight on the room (no shadows, #C2410C); look at 22:00 winter untouched; loop idle after`, cut(g));
   // 2. Roof on through the switch clears (TL Q3); a first-floor pick turns it off again without clearing; the highlight shows in the pixels
   const p = [], up = groups[1].rooms[0];
-  await S.act('v3-roof'); await S.settle(); p.push(...clearedProblems(await S.page.evaluate(STATE), 'Roof on'));
+  await roofTo(S, true); p.push(...clearedProblems(await S.page.evaluate(STATE), 'Roof on'));   // the pick left the Roof off: one tap (F6-T1-safe helper)
   let c = await chooseIn(S, up.id); await landed(S); rec = await recStop(S); st = await S.page.evaluate(STATE);
   p.push(...selectedProblems(st, h, up.id, up.name), ...flightProblems(rec, up.name).f); let d = F.poseDiff(st.pose, expectPose(h, L, up.id, c.before)); if (d) p.push(`${up.name}: lands at ${d}`);
   const shot = async () => (await S.page.locator('[data-pc="v3-canvas"]').screenshot()).toString('base64');

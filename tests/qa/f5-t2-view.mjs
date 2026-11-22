@@ -20,6 +20,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT, collector, launch } from './lib.mjs';
 import { sessions } from './session.mjs';
+import { roofTo } from './v3kit.mjs';
 import * as H from './f4-t1-ref.mjs';
 import * as T from './f5-t2-ref.mjs';
 
@@ -170,7 +171,7 @@ await guard('A 1280x800', async () => {
     ['Stop', async () => { const r = await S.page.evaluate(() => { const a = PC.view3d.pose(); document.querySelector('[data-pc="v3-tour-stop"]').click(); return { a, b: PC.view3d.pose() }; }); if (JSON.stringify(r.a) !== JSON.stringify(r.b)) e.push(`Stop: pose changed by the click (${T.dist(T.eyeOf(r.a), T.eyeOf(r.b)).toFixed(4)} m)`); }, 'keep'],
     ['a level radio', () => S.act(pick('all')), 'level'],
     ['Reset view', () => S.act('v3-reset'), 'reset'],
-    ['Roof on', () => S.act('v3-roof'), 'roof'],
+    ['Roof on', () => roofTo(S, true), 'roof'],   // the tour turned the Roof off: one tap (F6-T1-safe helper)
     ['a finder pick', () => S.page.evaluate(() => { const s = document.querySelector('[data-pc="v3-room"]'), o = s.querySelectorAll('optgroup option'); s.value = o[o.length - 1].value; s.dispatchEvent(new Event('change', { bubbles: true })); }), 'pick'],
   ];
   for (const [name, act, kind] of ENDS) {

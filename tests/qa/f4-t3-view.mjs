@@ -28,6 +28,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT, collector, launch } from './lib.mjs';
 import { sessions } from './session.mjs';
+import { roofTo } from './v3kit.mjs';
 import * as Q from './f2-t1-ref.mjs';
 import * as H from './f4-t1-ref.mjs';
 import { loadTables } from './f3-t3-ref.mjs';
@@ -52,7 +53,8 @@ async function ready(S) { const ok = await S.until(() => S.page.evaluate(READY),
 async function to5(S, mut = '') {
   await S.page.evaluate((m) => { const st = PC.sample.state(); new Function('s', m)(st); st.plans = {}; st.stage = 1; PC.store.replace(st); PC.store.go(2); PC.store.go(3);
     PC.store.commit((s) => { for (const id in s.plans) if (!s.plans[id].error) s.plans[id].approved = true; }, { nav: true }); PC.store.go(4); PC.store.go(5); }, mut);
-  return ready(S);
+  const ok = await ready(S); await roofTo(S, false);   // F6-T1: reference frames and metrics stay Roof-off, whatever roofOnOpen says (plan §9.3)
+  return ok;
 }
 async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) return; const t = Date.now(); try { await fn(); } catch (e) { R.check(`${label}: ran to the end`, [String(e && e.stack || e).split('\n').slice(0, 3).join(' | ')]); } TIMES.push(`${label} ${((Date.now() - t) / 1000).toFixed(1)} s`); }
 const PRESET_HOOK = { 8: 'v3-preset-morning', 12: 'v3-preset-noon', 17.5: 'v3-preset-evening', 22: 'v3-preset-night' };

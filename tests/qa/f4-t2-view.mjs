@@ -15,6 +15,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT, collector, launch } from './lib.mjs';
 import { sessions } from './session.mjs';
+import { roofOpen, roofTo } from './v3kit.mjs';
 import * as Q from './f2-t1-ref.mjs';
 import * as H from './f4-t1-ref.mjs';
 import { loadTables } from './f3-t3-ref.mjs';
@@ -61,11 +62,14 @@ const browser = await launch();
 try {
 // ================= A. Roof switch per roof type =================
 for (const vp of [VP.phone, VP.desk]) await guard(`A roof ${vp.tag}`, async () => {
-  const S = await session(browser, vp, { three: 'real' }), T = `A ${vp.tag}`, f = [], imgs = {};
+  const S = await session(browser, vp, { three: 'real' }), T = `A ${vp.tag}`, f = [], imgs = {}; let first = true;
   for (const [name, mut] of [['flat', "s.ans.roofType = 'flat';"], ['pitched', "s.ans.roofType = 'pitched';"], ['terrace', "s.ans.roofType = 'terrace';"], ['usable flat + lift', "s.ans.roofType = 'flat'; s.ans.usableRoof = true; s.ans.lift = true;"]]) {
     await to5(S, mut); await viewTab(S); await S.act(pick('all')); await ready(S);
     let w = await W(S), i = await info(S);
-    if (i.roof || w.groups.roof) f.push(`${name}: opens with the roof shown`);
+    // F6-T1: the page session opens with roofOnOpen; later houses keep the session's Roof (left off below)
+    const RO = first ? await roofOpen(S.page) : false; first = false;
+    if (!!i.roof !== RO || !!w.groups.roof !== RO) f.push(`${name}: opens with the roof ${i.roof ? 'shown' : 'hidden'} (${RO ? 'on' : 'off'} expected)`);
+    await roofTo(S, false); w = await W(S);
     await S.act('v3-roof'); await ready(S); w = await W(S); i = await info(S);
     if (!i.roof || !w.groups.roof) f.push(`${name}: Roof on with All: roof group ${w.groups.roof}`);
     const st = await S.state(), nItems = nodeRoofItems(st); if (w.items['roof/roofBatch'] !== nItems) f.push(`${name}: page roofBatch ${w.items['roof/roofBatch']} items vs QA's node build ${nItems}`);
@@ -158,7 +162,7 @@ await guard('E budget', async () => {
   let w = await W(S); const st = await S.state();
   if (!ok || st.ans.rooms.length !== 40) f.push(`setup: ready ${ok}, ${st.ans.rooms.length} rooms`);
   const vx = ['trunks', 'canopies', 'shrubs'].filter((k) => w.names[k]).length; if (w.meshes > 18 + vx) f.push(`${w.meshes} meshes > 18${vx ? ` + ${vx} vegetation (F4-T3)` : ''}`);
-  await S.act('v3-roof'); await ready(S);
+  await roofTo(S, !(await S.page.evaluate(() => PC.debug.scene().roof))); await ready(S);   // one Roof change (F6-T1: whatever the open state)
   const idle = async (ms = 600) => { await S.page.evaluate(() => { window.__raf = 0; }); const r0 = (await info(S)).renders; await S.page.waitForTimeout(ms); const i = await info(S); return { raf: i.raf, renders: i.renders - r0 }; };   // the idle span is under test
   let z = await idle(); if (z.raf || z.renders) f.push(`idle after the build: ${JSON.stringify(z)}`);
   const names0 = (await W(S)).names, i0 = await info(S), img0 = await pixels(S);
