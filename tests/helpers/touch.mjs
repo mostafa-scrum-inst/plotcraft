@@ -17,6 +17,8 @@ export async function gestures(page, isTouch) {
         d.style.cssText = 'position:fixed;left:0;top:0;width:8px;height:8px;z-index:2147483647;touch-action:manipulation';
         d.addEventListener('mousedown', (e) => e.preventDefault());
         d.addEventListener('click', (e) => { e.stopPropagation(); window.__tapProbe = (window.__tapProbe || 0) + 1; });
+        // TL review: nothing else bubbles out either (document capture listeners, e.g. shell's lastInput, still see it)
+        ['pointerdown', 'pointerup', 'touchstart', 'touchend'].forEach((t) => d.addEventListener(t, (e) => e.stopPropagation()));
         document.body.appendChild(d);
       }
       window.__tapProbe = 0;
