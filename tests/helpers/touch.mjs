@@ -2,10 +2,39 @@
 export async function gestures(page, isTouch) {
   const cdp = isTouch ? await page.context().newCDPSession(page) : null;
   const send = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map((p, i) => ({ x: Math.round(p[0]), y: Math.round(p[1]), id: p[2] === undefined ? i : p[2] })) });
-  // The one fixed wait kept on purpose (A-16): for about 100 ms after an injected touch sequence Chrome drops the
-  // synthesized click of a tap that follows. Nothing in the page shows when that window is over, so there is no
-  // state to poll; 350 ms is a floor, not a race against the app.
-  const settle = () => page.waitForTimeout(350);
+  // After an injected touch sequence that moved (a drag, a path, a pinch, a hold), Chrome drops the synthesized click
+  // of a tap that follows for a while (about 100 ms on a quiet machine, longer under load: the F6-T2 QA_FULL flake,
+  // questions.spec 768x1024 "back to the sample answers", where the q-north-reset tap after the compass drag got its
+  // pointer and touch events but no click). The old fixed 350 ms floor raced that window. settle() now waits for the
+  // window to end: it taps an inert 8 px probe element laid over the page corner (its mousedown default is prevented,
+  // so focus does not move; its click does not bubble) until Chrome synthesizes the probe's click, then removes it.
+  // The page sees only the probe's pointer / touch events, as from any tap on the page background.
+  const probe = async () => {
+    await page.evaluate(() => {
+      let d = document.getElementById('__tap-probe');
+      if (!d) {
+        d = document.createElement('div'); d.id = '__tap-probe';
+        d.style.cssText = 'position:fixed;left:0;top:0;width:8px;height:8px;z-index:2147483647;touch-action:manipulation';
+        d.addEventListener('mousedown', (e) => e.preventDefault());
+        d.addEventListener('click', (e) => { e.stopPropagation(); window.__tapProbe = (window.__tapProbe || 0) + 1; });
+        document.body.appendChild(d);
+      }
+      window.__tapProbe = 0;
+    });
+    await send('touchStart', [[4, 4]]); await send('touchEnd', []);
+    await frames();
+    return page.evaluate(() => window.__tapProbe > 0);
+  };
+  const settle = async () => {
+    await frames();
+    const t = Date.now();
+    try {
+      while (!(await probe())) {
+        if (Date.now() - t > 5000) throw new Error('touch settle: Chrome still drops synthesized clicks 5 s after the gesture');
+        await page.waitForTimeout(50);
+      }
+    } finally { await page.evaluate(() => { const d = document.getElementById('__tap-probe'); if (d) d.remove(); }); }
+  };
   // Chrome hands touch moves to the page frame-aligned: wait for frames, not for time.
   const frames = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
   const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
