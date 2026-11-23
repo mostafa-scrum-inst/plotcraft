@@ -1847,9 +1847,13 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     // F6-T1b contact darkening (Designer C4, plan 6.2): wall-base skirts skirtH tall, x skirtK at the ground, skirtOut
     // proud; floor rings ringW wide, x ringK at the walls, ringLift over the tint; the footprint ring footW (at most)
     // wide, footGap clear of the plot outline, x footK at the footprint.
-    CONTACT: { skirtH: 0.6, skirtK: 0.82, skirtOut: 0.005, ringW: 0.3, ringK: 0.9, ringLift: 0.003, footW: 0.8, footGap: 0.05, footK: 0.8 },
+    CONTACT: { skirtH: 0.6, skirtK: 0.82, skirtOut: 0.005, ringW: 0.3, ringK: 0.9, ringLift: 0.003, footW: 0.8, footGap: 0.05, footK: 0.8,
+      // F6-T1c R3: the parapet band on the deck deckW wide (x deckK at the parapet), the head bands headW (x headK),
+      // bandLift over the deck (0.013 m over the slab top since deckLift 0.01)
+      deckW: 0.35, deckK: 0.80, headW: 0.25, headK: 0.85, bandLift: 0.003 },
     OPEN: { win: { w: 1.2, h: 1.4, sill: 0.9 }, small: { w: 0.6, h: 0.6, sill: 1.6 }, slot: { w: 0.6, h: 1.6, sill: 0.5 },
       door: { w: 1.0, h: 2.2 }, endClear: 0.6, pitch: 2.6, smallMin: 1.2, doorClear: 0.6, headGap: 0.3,
+      hallPitch: 3.9,   // F6-T1c W1: hall panes on free runs (no room, stair or lift), 1.5 x pitch
       // the decals (Q-D1): glass / reveal band offsets out of the wall plane, frame profile and proud depth, sill
       decal: { glass: 0.01, reveal: 0.06, revealD: 0.02, revealK: 0.65, frame: 0.06, proud: 0.05, mullionMin: 1.2,
         sillT: 0.04, sillOut: 0.08, sillOver: 0.02, leaf: 0.04 } },
@@ -1859,7 +1863,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     // 3 m, north needle L = clamp(0.06 x max bbox side, 1.5, 3) with 0.5 m spare from the wall.
     FURNISH: { inset: 0.15, overlap: 0.01, scales: [1, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6] },
     ROOF: { slab: 0.2, parapet: 0.3, parapetHigh: 1.0, parapetT: 0.15, pitchDeg: 30, pergolaH: 2.4, post: 0.15, beam: 0.1,
-      beamStep: 0.6, stairHead: 2.4, liftHead: 1.2 },
+      beamStep: 0.6, stairHead: 2.4, liftHead: 1.2,
+      // F6-T1c (Designer R1 / R2): coping copingT thick, copingOver past both parapet faces; the flat slab dripOut
+      // proud of the wall plane; the roof deck quad deckLift over the slab top (0.002 z-fought the slab top at Reset, Designer shots)
+      copingT: 0.05, copingOver: 0.03, dripOut: 0.04, deckLift: 0.01 },
     // F6-T1a street strip outside the street edge (Designer plan D3): footpath, kerb, road widths in m
     STREET: { path: 1.5, kerb: 0.15, road: 8 },
     SITE: { wallH: 1.2, wallT: 0.2, gateW: 3, post: 0.4, postH: 1.4, seat: 3, edgeClear: 0.3, pathHalf: 1,
@@ -4113,6 +4120,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   // evenly spaced endClear clear of each run end, none on a run shorter than the pane + 2 x endClear; service rooms
   // one small pane on a run longer than smallMin. The ground front gets the door at site.entrance; openings closer
   // than doorClear to its frame are dropped. Heads are clamped to storeyH - headGap.
+  // F6-T1c W1 (Designer plan 4, TL Q-F4): the free runs of a side (its extent minus the union of the room, stair and
+  // lift runs) are hall space and get panes by the room rule with hallPitch.
   var HAB = { living: 1, dining: 1, majlis: 1, bedroom: 1, office: 1, kitchen: 1 }, SVC = { bathroom: 1, laundry: 1, maid: 1, storage: 1 };
   var SIDES = ['front', 'back', 'left', 'right'], EPS = 1e-6;
   function openings(house) {
@@ -4139,6 +4148,19 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
             var n = Math.max(1, Math.floor((L - O.endClear) / O.pitch)), span = L - 2 * O.endClear;
             for (var i = 0; i < n; i++) put(list, lv, s, q[0] + O.endClear + span * (i + 0.5) / n, O.win.w, 'glazed', O.win.sill, O.win.h);
           } else if (SVC[r.type] && L > O.smallMin) put(list, lv, s, (q[0] + q[1]) / 2, O.small.w, 'small', O.small.sill, O.small.h);
+        });
+        var used = [];
+        lv.rooms.forEach(function (r) { var q = run(r, s); if (q) used.push(q); });
+        [lv.stair, lv.lift].forEach(function (r) { var q = r && run(r, s); if (q) used.push(q); });
+        used.sort(function (p, q) { return p[0] - q[0]; });
+        var lo = s === 'front' || s === 'back' ? fp.u : fp.v, hi = lo + (s === 'front' || s === 'back' ? fp.w : fp.d), free = [], at0 = lo;
+        used.forEach(function (q) { if (q[0] > at0 + EPS) free.push([at0, q[0]]); at0 = Math.max(at0, q[1]); });
+        if (hi > at0 + EPS) free.push([at0, hi]);
+        free.forEach(function (q) {
+          var L = q[1] - q[0];
+          if (L < O.win.w + 2 * O.endClear - EPS) return;
+          var n = Math.max(1, Math.floor((L - O.endClear) / O.hallPitch)), span = L - 2 * O.endClear;
+          for (var i = 0; i < n; i++) put(list, lv, s, q[0] + O.endClear + span * (i + 0.5) / n, O.win.w, 'glazed', O.win.sill, O.win.h);
         });
         var sq = lv.stair && run(lv.stair, s);
         if (sq && sq[1] - sq[0] >= O.slot.w) put(list, lv, s, (sq[0] + sq[1]) / 2, O.slot.w, 'slot', O.slot.sill, O.slot.h);
@@ -4186,7 +4208,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       var top = levels[levels.length - 1].index;
       var copy = function (o) { return o ? JSON.parse(JSON.stringify(o)) : null; };
       var house = {
-        v: 2, key: '',
+        v: 3, key: '',   // F6-T1c: v 3 (W1 hall panes change the derived openings)
         center: [cu, cv], radius: radius,
         plot: { pts: site.ptsL.map(function (p) { return [p[0], p[1]]; }), area: site.plotArea },
         northDeg: PC.frames.northL(state),
@@ -4642,7 +4664,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 <script>/* js/core/texgen.js */
 /* PC.texgen: procedural detail-texture pixels (F6-T1, CTO C-3.2; Designer plan B). Pure: numbers and typed arrays
    only (core layer, no 3D library). make(kind, size[, spec, seed]) -> { w, h, data: Uint8Array(w x h x 4) }, RGBA.
-   - Colour kinds (grass, paving, tiles, meadow): neutral grey detail, value = base x (1 + sum of the kind's terms),
+   - Colour kinds (grass, paving, tiles, meadow; F6-T1c membrane): neutral grey detail, value = base x (1 + sum of the kind's terms),
      clamped to 0..1, alpha 255. The colour still comes from the look tables (C-3.3); the texture multiplies it.
    - blob: radial alpha (RGB 0) for the contact-shadow quads (T1b), alpha = (1 - r)^1.5 with r = distance / half.
    - Every term is periodic over the tile, so opposite edges continue (tileable): value noise on a wrapped lattice of
@@ -4720,7 +4742,17 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
         }
       }
     },
-    meadow: function (S, size, r, f) { addNoise(f, size, S.noise, r); }
+    meadow: function (S, size, r, f) { addNoise(f, size, S.noise, r); },
+    // F6-T1c R2: membrane sheets along v, a 1 px seam column every size / (tileM / sheetW) px
+    membrane: function (S, size, r, f) {
+      addNoise(f, size, S.mottle, r);
+      var sp = size / (S.tileM / S.sheetW);
+      for (var y = 0; y < size; y++) for (var x = 0; x < size; x++) {
+        var i = y * size + x;
+        f[i] += (r() * 2 - 1) * S.speckle;
+        if (x % sp === 0) f[i] += S.seam;
+      }
+    }
   };
 
   function make(kind, size, spec, seed) {
@@ -4745,7 +4777,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 
   var cache = {};
   PC.texgen = {
-    KINDS: ['grass', 'paving', 'tiles', 'meadow', 'blob'],
+    KINDS: ['grass', 'paving', 'tiles', 'meadow', 'membrane', 'blob'],
     generated: 0,
     make: make,
     get: function (kind, size) {
@@ -4861,10 +4893,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 (function (PC) {
   'use strict';
   PC.data.exteriors = {
-    sand: { wall: '#D9C7A3', wallInner: '#F3EDE0', slab: '#A89F8E', roof: '#9C7E5E', trim: '#B89F78', parapet: '#B49A72', frame: '#5A5048', door: '#6B4A32' },
-    white: { wall: '#F2F0EA', wallInner: '#F8F7F3', slab: '#B3B5B1', roof: '#7F878C', trim: '#C9CCC8', parapet: '#E3E0C9', frame: '#3A3F44', door: '#4E5A63' },
-    terracotta: { wall: '#C4704F', wallInner: '#F4E9DE', slab: '#A3958A', roof: '#6E3A2A', trim: '#8F4A32', parapet: '#995744', frame: '#E8E2D6', door: '#4A3426' },
-    grey: { wall: '#9BA1A6', wallInner: '#EEF0F0', slab: '#8D9398', roof: '#454B51', trim: '#5F676E', parapet: '#72787D', frame: '#1F2428', door: '#2E3439' }
+    sand: { wall: '#D9C7A3', wallInner: '#F3EDE0', slab: '#A89F8E', roof: '#9C7E5E', trim: '#B89F78', parapet: '#B49A72', frame: '#5A5048', door: '#6B4A32', coping: '#E6DAC4' },
+    white: { wall: '#F2F0EA', wallInner: '#F8F7F3', slab: '#B3B5B1', roof: '#7F878C', trim: '#C9CCC8', parapet: '#E3E0C9', frame: '#3A3F44', door: '#4E5A63', coping: '#F4F2EA' },
+    terracotta: { wall: '#C4704F', wallInner: '#F4E9DE', slab: '#A3958A', roof: '#6E3A2A', trim: '#8F4A32', parapet: '#995744', frame: '#E8E2D6', door: '#4A3426', coping: '#D9CBB8' },
+    grey: { wall: '#9BA1A6', wallInner: '#EEF0F0', slab: '#8D9398', roof: '#454B51', trim: '#5F676E', parapet: '#72787D', frame: '#1F2428', door: '#2E3439', coping: '#B9BEC1' }
   };
   PC.data.interiors = {
     modern: { fabric: '#3B4652', wood: '#4E3D33', accent: '#C8742F', white: '#F2F1EC', metal: '#8A9299', dark: '#23292F', floorMix: 0.10 },
@@ -4877,7 +4909,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     hall: '#D9D6CE', stair: '#C5CBD0', lift: '#AEB7BB'
   };
   PC.data.siteColors = {
-    ground: '#668748', groundOuter: '#727E58', paving: '#C1B4A1', poolWater: '#398BB5', poolRim: '#F1E3C1',
+    ground: '#668748', groundOuter: '#6A8550', paving: '#C1B4A1', poolWater: '#398BB5', poolRim: '#F1E3C1',
     boundaryWall: '#B5A990', gate: '#3B4652', carCanopy: '#838D93', seating: '#7E664C', trunk: '#5B4636',
     northMarker: '#16212B', highlight: '#C2410C', asphalt: '#5D6063',
     glassTop: '#9FB6C6', glassBottom: '#34495A'
@@ -5027,8 +5059,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       { h: 24, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30, skyMid: '#0F1A2E', skyZenith: '#060B16', exposure: 1.3 }
     ],
     seasons: {
-      spring: { elevMax: 52, tint: '#F1F7E4', tintAmount: 0.08, canopy: '#558739', canopyVisible: true, shrub: '#67A344', ground: '#76A953', meadow: '#76865A' },
-      summer: { elevMax: 72, tint: '#FFF4DE', tintAmount: 0, canopy: '#477338', canopyVisible: true, shrub: '#507A3C', ground: '#668748', meadow: '#727E58' },
+      spring: { elevMax: 52, tint: '#F1F7E4', tintAmount: 0.08, canopy: '#558739', canopyVisible: true, shrub: '#67A344', ground: '#76A953', meadow: '#6F8A58' },
+      summer: { elevMax: 72, tint: '#FFF4DE', tintAmount: 0, canopy: '#477338', canopyVisible: true, shrub: '#507A3C', ground: '#668748', meadow: '#6A8550' },
       autumn: { elevMax: 52, tint: '#F6C58E', tintAmount: 0.15, canopy: '#A85D27', canopyVisible: true, shrub: '#8A5A2F', ground: '#877F4D', meadow: '#857D55' },
       winter: { elevMax: 32, tint: '#D3E0F2', tintAmount: 0.20, canopy: '#5F5C53', canopyVisible: false, shrub: '#CDEDFE', ground: '#FFFFFF', meadow: '#E4E8EA' }
     },
@@ -5047,14 +5079,18 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
    - tiles (B4, pitched roofTiles): rows x perRow per tile, staggered by half a tile; a lineW px shadow line at the
      bottom of each row at `line`, 1 px joints at `joint`, per-tile +-tile.
    - meadow (B8, groundOuter): low-frequency octaves.
-   - blob (C5, T1b): radial alpha (1 - r)^power. */
+   - blob (C5, T1b): radial alpha (1 - r)^power.
+   - membrane (R2, T1c, roofDeck on flat roofs): tileM / sheetW sheets per tile with a 1 px seam at `seam`, mottle
+     octaves, speckle +-speckle. */
 (function (PC) {
   'use strict';
   PC.data.textures = {
     grass: { tileM: 3, base: 0.86, noise: [[4, 0.10], [16, 0.05]], blades: 0.06, bladeLen: 3, bladeEvery: 40 },
     paving: { tileM: 2.4, base: 0.92, slabs: 4, joint: -0.28, slab: 0.05, speckle: 0.03 },
     tiles: { tileM: 1.5, base: 0.9, rows: 5, perRow: 6, lineW: 2, line: -0.30, joint: -0.15, tile: 0.06 },
-    meadow: { tileM: 12, base: 0.9, noise: [[3, 0.045], [12, 0.025]] },   // F6-T1a shots: 0.08 read as camouflage patches
+    meadow: { tileM: 48, base: 0.9, noise: [[2, 0.05], [6, 0.035], [24, 0.02]] },   // F6-T1c G2: 24 / 8 / 2 m features over one 48 m tile (T1a: 0.08 at 12 m read as camouflage patches)
+    // F6-T1c R2 (Designer): the flat roof deck membrane: sheets sheetW m wide along v with a seam, mottle, speckle
+    membrane: { tileM: 4, base: 0.9, sheetW: 1.0, seam: -0.12, mottle: [[2, 0.05], [8, 0.025]], speckle: 0.03 },
     blob: { power: 1.5 }
   };
 })(globalThis.PC = globalThis.PC || {});
@@ -5592,7 +5628,15 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
    glass quad 0.01 m out with the glassTop -> glassBottom gradient, a 0.06 m reveal band at 0.02 m in frame x 0.65,
    4 frame bars (0.06 m profile, 0.05 m proud, exteriors.frame), a mullion at mid-width from 1.2 m, and a sill
    0.04 m thick, 0.08 m proud under the bottom bar (exteriors.trim); the door: a 0.04 m leaf in exteriors.door at the
-   outer plane with top and side bars in frame. Shown with the rest of roofBatch (exterior mode). */
+   outer plane with top and side bars in frame. Shown with the rest of roofBatch (exterior mode).
+   F6-T1c (plan 1-3, Designer R1-R3, TL plan review): flat / terrace roofs
+   - R1: the slab box dripOut proud on every side in exteriors.slab; a coping ring (4 boxes, copingT, copingOver past
+     both parapet faces, exteriors.coping) on every parapet ring, and a cap copingOver wider on each head;
+   - R3: 'deckBand' face-up strips bandLift over the deck: deckW inside the parapet (x deckK at it -> x 1), headW
+     around each head (x headK -> x 1), clipped to the deck;
+   - R2: "roofDeck", one face-up quad inside the parapet deckLift over the slab top (world UVs in metres,
+     mats.deck: membrane, or the paving map on terrace / usable roofs), receives, does not cast.
+   The decals stay the last roofBatch items. */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
@@ -5645,7 +5689,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     house.levels.forEach(function (lv) {
       if (lv.index >= 0) ring(t, lv.baseY + H.slab + H.wallH, lv.baseY + house.pitch, E.wall);
     });
-    var y = roof.baseY, tm = null;
+    var y = roof.baseY, tm = null, deck = null;
     if (roof.type === 'pitched') {
       var alongX = fp.w >= fp.d, rise = Math.tan(R.pitchDeg * Math.PI / 180) * Math.min(fp.w, fp.d) / 2;
       b.addPrism(X(u0 + fp.w / 2), Z(v0 + fp.d / 2), fp.w, fp.d, y, rise, alongX, E.roof, E.wall, 'rest');
@@ -5653,9 +5697,15 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       tl.addPrism(X(u0 + fp.w / 2), Z(v0 + fp.d / 2), fp.w, fp.d, y, rise, alongX, E.roof, E.wall, 'slopes');
       tm = tl.build(mats.tiles, 'roofTiles');
     } else {
-      var top = y + R.slab, high = roof.usable || roof.type === 'terrace', p = R.parapetT;
-      box(u0, u1, v0, v1, y, top, E.roof);
-      ring(p, top, top + (high ? R.parapetHigh : R.parapet), E.parapet);
+      var top = y + R.slab, high = roof.usable || roof.type === 'terrace', p = R.parapetT, dr = R.dripOut, co = R.copingOver;
+      var pTop = top + (high ? R.parapetHigh : R.parapet);
+      box(u0 - dr, u1 + dr, v0 - dr, v1 + dr, y, top, E.slab);   // R1 drip edge
+      ring(p, top, pTop, E.parapet);
+      // R1 coping: the parapet ring's footprint widened by copingOver on both faces
+      box(u0 - co, u1 + co, v0 - co, v0 + p + co, pTop, pTop + R.copingT, E.coping);
+      box(u0 - co, u1 + co, v1 - p - co, v1 + co, pTop, pTop + R.copingT, E.coping);
+      box(u0 - co, u0 + p + co, v0 + p + co, v1 - p - co, pTop, pTop + R.copingT, E.coping);
+      box(u1 - p - co, u1 + co, v0 + p + co, v1 - p - co, pTop, pTop + R.copingT, E.coping);
       if (roof.type === 'terrace') {
         // pergola over the back third, inside the parapet
         var a0 = u0 + p, a1 = u1 - p, b0 = v0 + fp.d * 2 / 3, b1 = v1 - p, k = R.post, ph = top + R.pergolaH;
@@ -5666,14 +5716,43 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
           else box(s - w / 2, s + w / 2, b0, b1, ph - w, ph, E.roof);
         }
       }
-      [[roof.stairHead, R.stairHead], [roof.liftHead, R.liftHead]].forEach(function (h) {
-        if (h[0]) box(h[0].u, h[0].u + h[0].w, h[0].v, h[0].v + h[0].d, top, top + h[1], E.parapet);
+      var heads = [[roof.stairHead, R.stairHead], [roof.liftHead, R.liftHead]].filter(function (h) { return h[0]; });
+      heads.forEach(function (h) {
+        var r = h[0];
+        box(r.u, r.u + r.w, r.v, r.v + r.d, top, top + h[1], E.parapet);
+        box(r.u - co, r.u + r.w + co, r.v - co, r.v + r.d + co, top + h[1], top + h[1] + R.copingT, E.coping);
       });
+      // R3 bands on the deck rectangle D (inside the parapet), corners [u, v] with their factor
+      var C = PC.C.CONTACT, D = [u0 + p, u1 - p, v0 + p, v1 - p], yb = top + R.deckLift + C.bandLift;
+      var clamp = function (q) { return [Math.min(D[1], Math.max(D[0], q[0])), Math.min(D[3], Math.max(D[2], q[1]))]; };
+      function band(q, ks) {   // q: 4 [u, v] corners, ks: 4 factors
+        q = q.map(clamp);
+        var ar = (q[1][0] - q[0][0]) * (q[2][1] - q[0][1]) - (q[2][0] - q[0][0]) * (q[1][1] - q[0][1]);
+        var ar2 = (q[2][0] - q[0][0]) * (q[3][1] - q[0][1]) - (q[3][0] - q[0][0]) * (q[2][1] - q[0][1]);
+        if (Math.abs(ar) + Math.abs(ar2) < 1e-6) return;
+        b.addUpQuad(q.map(function (c) { return [X(c[0]), Z(c[1])]; }), yb, ks.map(function (k) { return b.shade(E.roof, k); }), 'deckBand');
+      }
+      // mitred bands of width w from the edge of rectangle [a0, a1] x [c0, c1]: inward (sg -1, the parapet) or
+      // outward (sg +1, around a head); x k at the edge, x 1 at the far side
+      function bands(a0, a1, c0, c1, w, sg, k) {
+        var A0 = a0 - sg * w, A1 = a1 + sg * w, C0 = c0 - sg * w, C1 = c1 + sg * w, kk = [k, k, 1, 1];
+        band([[a0, c0], [a1, c0], [A1, C0], [A0, C0]], kk);
+        band([[a1, c0], [a1, c1], [A1, C1], [A1, C0]], kk);
+        band([[a1, c1], [a0, c1], [A0, C1], [A1, C1]], kk);
+        band([[a0, c1], [a0, c0], [A0, C0], [A0, C1]], kk);
+      }
+      bands(D[0], D[1], D[2], D[3], C.deckW, -1, C.deckK);
+      heads.forEach(function (h) { var r = h[0]; bands(r.u, r.u + r.w, r.v, r.v + r.d, C.headW, 1, C.headK); });
+      // R2 the deck quad
+      var dk = new three.BoxBatch({ uv: true }), w1 = [1, 1, 1];
+      dk.addUpQuad([[X(D[0]), Z(D[2])], [X(D[1]), Z(D[2])], [X(D[1]), Z(D[3])], [X(D[0]), Z(D[3])]], top + R.deckLift, [w1, w1, w1, w1], 'deck');
+      if (mats.deck) { deck = dk.build(mats.deck, 'roofDeck'); deck.castShadow = false; deck.receiveShadow = true; }
     }
     openings(house, b);
     var g = world.getObjectByName('roof'), m = b.build(mats.batch, 'roofBatch'), out = [];
     if (m) { g.add(m); out.push(m); }
     if (tm) { g.add(tm); out.push(tm); }
+    if (deck) { g.add(deck); out.push(deck); }
     return out;
   };
 })(globalThis.PC = globalThis.PC || {});
@@ -6527,6 +6606,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       transparent: true, opacity: PC.data.vegetation.blob.opacity, depthWrite: false, toneMapped: false });
     S.textures.push(S.mats.blob.map);
     if (house.roof.type === 'pitched') S.mats.tiles = new THREE.MeshLambertMaterial({ vertexColors: true, map: tex('tiles') });
+    else {   // F6-T1c R2 (TL Q-F1 Lambert, Q2 one deck mesh): membrane on flat roofs, the paving texture object on walkable ones
+      var walk = house.roof.usable || house.roof.type === 'terrace';
+      S.mats.deck = new THREE.MeshLambertMaterial({ color: three.col(PC.data.exteriors[house.exterior].roof), map: walk ? S.mats.paving.map : tex('membrane') });
+    }
     S.meshes = three.buildShell(house, S.world, S.mats, { tier: S.tier }).concat(three.buildInterior(house, S.world, S.mats),
       three.buildRoof(house, S.world, S.mats), three.buildSite(house, S.world, S.mats, { tier: S.tier }));
     var keep = S.house && S.pose && S.house.radius === house.radius && S.house.center[0] === house.center[0] && S.house.center[1] === house.center[1];

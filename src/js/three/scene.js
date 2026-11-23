@@ -252,6 +252,10 @@
       transparent: true, opacity: PC.data.vegetation.blob.opacity, depthWrite: false, toneMapped: false });
     S.textures.push(S.mats.blob.map);
     if (house.roof.type === 'pitched') S.mats.tiles = new THREE.MeshLambertMaterial({ vertexColors: true, map: tex('tiles') });
+    else {   // F6-T1c R2 (TL Q-F1 Lambert, Q2 one deck mesh): membrane on flat roofs, the paving texture object on walkable ones
+      var walk = house.roof.usable || house.roof.type === 'terrace';
+      S.mats.deck = new THREE.MeshLambertMaterial({ color: three.col(PC.data.exteriors[house.exterior].roof), map: walk ? S.mats.paving.map : tex('membrane') });
+    }
     S.meshes = three.buildShell(house, S.world, S.mats, { tier: S.tier }).concat(three.buildInterior(house, S.world, S.mats),
       three.buildRoof(house, S.world, S.mats), three.buildSite(house, S.world, S.mats, { tier: S.tier }));
     var keep = S.house && S.pose && S.house.radius === house.radius && S.house.center[0] === house.center[0] && S.house.center[1] === house.center[1];

@@ -95,10 +95,10 @@ test('lite groundOuter: the B-1 footprint hole kept, inner ring white, the skirt
 
 test('textures (C-3.4): explicit filters, mipmaps, anisotropy min(4, max), sRGB colour maps, repeat 1 / tileM, the texgen cached pixels; disposed with each rebuild, counts constant over 20 rebuilds', () => {
   const E = opened(), PC = E.PC, t = E.info().textures.map((x) => E.mock.raw(x));
-  assert.deepEqual([...t.map((x) => x.image.width)], [512, 512, 512, 64]);   // F6-T1b: + the blob (64 px, linear, clamped, no repeat)
+  assert.deepEqual([...t.map((x) => x.image.width)], [512, 512, 512, 64, 512]);   // F6-T1b: + the blob (64 px, linear, clamped, no repeat); F6-T1c: + membrane (flat sample roof)
   const bl = t[3];
   assert.deepEqual([bl.encoding, bl.wrapS, bl.wrapT, E.mock.raw(bl.repeat).x, bl.image.data === PC.texgen.get('blob', 64).data], [3000, 1001, 1001, 1, true], 'blob');
-  for (const [x, kind] of t.slice(0, 3).map((x, k) => [x, ['grass', 'meadow', 'paving'][k]])) {
+  for (const [x, kind] of [0, 1, 2, 4].map((k) => [t[k], ['grass', 'meadow', 'paving', 0, 'membrane'][k]])) {
     assert.deepEqual([x.magFilter, x.minFilter, x.generateMipmaps, x.anisotropy, x.encoding, x.wrapS, x.wrapT, x.uploads], [1006, 1008, true, 4, 3001, 1000, 1000, 1], kind);
     assert.ok(Math.abs(E.mock.raw(x.repeat).x - 1 / PC.data.textures[kind].tileM) < 1e-12, kind + ' repeat');
     assert.equal(x.image.data, PC.texgen.get(kind, 512).data, kind + ' cached pixels');

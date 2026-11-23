@@ -58,9 +58,13 @@
     // F6-T1b contact darkening (Designer C4, plan 6.2): wall-base skirts skirtH tall, x skirtK at the ground, skirtOut
     // proud; floor rings ringW wide, x ringK at the walls, ringLift over the tint; the footprint ring footW (at most)
     // wide, footGap clear of the plot outline, x footK at the footprint.
-    CONTACT: { skirtH: 0.6, skirtK: 0.82, skirtOut: 0.005, ringW: 0.3, ringK: 0.9, ringLift: 0.003, footW: 0.8, footGap: 0.05, footK: 0.8 },
+    CONTACT: { skirtH: 0.6, skirtK: 0.82, skirtOut: 0.005, ringW: 0.3, ringK: 0.9, ringLift: 0.003, footW: 0.8, footGap: 0.05, footK: 0.8,
+      // F6-T1c R3: the parapet band on the deck deckW wide (x deckK at the parapet), the head bands headW (x headK),
+      // bandLift over the deck (0.013 m over the slab top since deckLift 0.01)
+      deckW: 0.35, deckK: 0.80, headW: 0.25, headK: 0.85, bandLift: 0.003 },
     OPEN: { win: { w: 1.2, h: 1.4, sill: 0.9 }, small: { w: 0.6, h: 0.6, sill: 1.6 }, slot: { w: 0.6, h: 1.6, sill: 0.5 },
       door: { w: 1.0, h: 2.2 }, endClear: 0.6, pitch: 2.6, smallMin: 1.2, doorClear: 0.6, headGap: 0.3,
+      hallPitch: 3.9,   // F6-T1c W1: hall panes on free runs (no room, stair or lift), 1.5 x pitch
       // the decals (Q-D1): glass / reveal band offsets out of the wall plane, frame profile and proud depth, sill
       decal: { glass: 0.01, reveal: 0.06, revealD: 0.02, revealK: 0.65, frame: 0.06, proud: 0.05, mullionMin: 1.2,
         sillT: 0.04, sillOut: 0.08, sillOver: 0.02, leaf: 0.04 } },
@@ -70,7 +74,10 @@
     // 3 m, north needle L = clamp(0.06 x max bbox side, 1.5, 3) with 0.5 m spare from the wall.
     FURNISH: { inset: 0.15, overlap: 0.01, scales: [1, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6] },
     ROOF: { slab: 0.2, parapet: 0.3, parapetHigh: 1.0, parapetT: 0.15, pitchDeg: 30, pergolaH: 2.4, post: 0.15, beam: 0.1,
-      beamStep: 0.6, stairHead: 2.4, liftHead: 1.2 },
+      beamStep: 0.6, stairHead: 2.4, liftHead: 1.2,
+      // F6-T1c (Designer R1 / R2): coping copingT thick, copingOver past both parapet faces; the flat slab dripOut
+      // proud of the wall plane; the roof deck quad deckLift over the slab top (0.002 z-fought the slab top at Reset, Designer shots)
+      copingT: 0.05, copingOver: 0.03, dripOut: 0.04, deckLift: 0.01 },
     // F6-T1a street strip outside the street edge (Designer plan D3): footpath, kerb, road widths in m
     STREET: { path: 1.5, kerb: 0.15, road: 8 },
     SITE: { wallH: 1.2, wallT: 0.2, gateW: 3, post: 0.4, postH: 1.4, seat: 3, edgeClear: 0.3, pathHalf: 1,

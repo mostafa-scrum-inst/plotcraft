@@ -5,7 +5,7 @@ import { opened, close } from '../helpers/scene3d.mjs';
 import { sampleApproved } from '../helpers/houses.mjs';
 import { rgbOf, sameRgb, windingProblems } from '../helpers/batch.mjs';
 
-const R = { slab: 0.2, parapet: 0.3, high: 1.0 };
+const R = { slab: 0.2, parapet: 0.3, high: 1.0, dripOut: 0.04, copingT: 0.05 };   // F6-T1c: + drip, coping (Designer R1)
 const withRoof = (f) => (PC) => sampleApproved(PC, f);
 const top = (items) => Math.max(...items.map((i) => i.y1));
 
@@ -17,7 +17,7 @@ test('F6-T1a: the roof group opens shown (PC.C.VIEW3D.roofOnOpen) and is shown o
   E.PC.view3d.setLevel('G'); assert.equal(g.visible, false, 'a single level selected: hidden');
   E.PC.view3d.setLevel('all'); assert.equal(g.visible, true);
   E.PC.view3d.setRoof(false); assert.equal(g.visible, false);
-  assert.equal(g.children.length, 1); assert.equal(g.children[0].name, 'roofBatch');
+  assert.equal(g.children.map((c) => c.name).join(), 'roofBatch,roofDeck', 'F6-T1c: + the deck');
 });
 
 test('Roof on = a closed exterior: wall bands of every above-ground level from floorY + 1.2 to baseY + pitch, flush, exteriors.wall', () => {
@@ -39,15 +39,17 @@ test('Roof on = a closed exterior: wall bands of every above-ground level from f
 test('flat: 0.2 m slab and a 0.3 m parapet; usable flat 1.0 m; terrace 1.0 m with a 2.4 m pergola over the back third', () => {
   const flat = opened(), y = flat.house.roof.baseY, fi = flat.items('roofBatch');
   const ex = flat.PC.data.exteriors.sand;
-  assert.ok(fi.some((i) => close(i.y0, y) && close(i.y1, y + R.slab) && sameRgb(i.side, rgbOf(flat.PC, ex.roof))), 'slab');
-  assert.ok(close(top(fi), y + R.slab + R.parapet), 'parapet 0.3 m');
+  // F6-T1c R1: the slab is the drip edge (exteriors.slab, dripOut proud); the parapet carries a copingT coping
+  const fp0 = flat.house.footprint, sl = fi.filter((i) => close(i.y0, y) && close(i.y1, y + R.slab) && sameRgb(i.side, rgbOf(flat.PC, ex.slab)));
+  assert.ok(sl.length === 1 && close(sl[0].x1 - sl[0].x0, fp0.w + 2 * R.dripOut) && close(sl[0].z1 - sl[0].z0, fp0.d + 2 * R.dripOut), 'slab');
+  assert.ok(close(top(fi), y + R.slab + R.parapet + R.copingT), 'parapet 0.3 m + coping');
   assert.ok(fi.filter((i) => close(i.y1, y + R.slab + R.parapet)).every((i) => sameRgb(i.side, rgbOf(flat.PC, ex.parapet))));
   const uf = opened(withRoof((d) => { d.ans.usableRoof = true; })), ui = uf.items('roofBatch');
   assert.ok(ui.some((i) => close(i.y1, y + R.slab + R.high)), 'usable: 1.0 m parapet');
   const ter = opened(withRoof((d) => { d.ans.roofType = 'terrace'; })), ti = ter.items('roofBatch'), fp = ter.house.footprint;
   assert.ok(ti.some((i) => close(i.y1, y + R.slab + R.high)), 'terrace: 1.0 m parapet');
   assert.ok(close(top(ti), y + R.slab + 2.4), 'pergola at 2.4 m');
-  const perg = ti.filter((i) => i.y1 > y + R.slab + R.high + 1e-3);
+  const perg = ti.filter((i) => i.y1 > y + R.slab + R.high + 1e-3 && !sameRgb(i.side, rgbOf(ter.PC, ter.PC.data.exteriors[ter.house.exterior].coping)));   // F6-T1c: not the coping
   assert.ok(perg.length >= 6, `${perg.length} pergola boxes (4 posts + beams)`);
   assert.ok(perg.every((i) => i.z1 <= ter.Z(fp.v + fp.d * 2 / 3) + 2e-5), 'over the back third');
   const posts = perg.filter((i) => close(i.y1 - i.y0, 2.4) && close(i.x1 - i.x0, 0.15));

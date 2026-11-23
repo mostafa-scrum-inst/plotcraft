@@ -1,6 +1,6 @@
 /* PC.texgen: procedural detail-texture pixels (F6-T1, CTO C-3.2; Designer plan B). Pure: numbers and typed arrays
    only (core layer, no 3D library). make(kind, size[, spec, seed]) -> { w, h, data: Uint8Array(w x h x 4) }, RGBA.
-   - Colour kinds (grass, paving, tiles, meadow): neutral grey detail, value = base x (1 + sum of the kind's terms),
+   - Colour kinds (grass, paving, tiles, meadow; F6-T1c membrane): neutral grey detail, value = base x (1 + sum of the kind's terms),
      clamped to 0..1, alpha 255. The colour still comes from the look tables (C-3.3); the texture multiplies it.
    - blob: radial alpha (RGB 0) for the contact-shadow quads (T1b), alpha = (1 - r)^1.5 with r = distance / half.
    - Every term is periodic over the tile, so opposite edges continue (tileable): value noise on a wrapped lattice of
@@ -78,7 +78,17 @@
         }
       }
     },
-    meadow: function (S, size, r, f) { addNoise(f, size, S.noise, r); }
+    meadow: function (S, size, r, f) { addNoise(f, size, S.noise, r); },
+    // F6-T1c R2: membrane sheets along v, a 1 px seam column every size / (tileM / sheetW) px
+    membrane: function (S, size, r, f) {
+      addNoise(f, size, S.mottle, r);
+      var sp = size / (S.tileM / S.sheetW);
+      for (var y = 0; y < size; y++) for (var x = 0; x < size; x++) {
+        var i = y * size + x;
+        f[i] += (r() * 2 - 1) * S.speckle;
+        if (x % sp === 0) f[i] += S.seam;
+      }
+    }
   };
 
   function make(kind, size, spec, seed) {
@@ -103,7 +113,7 @@
 
   var cache = {};
   PC.texgen = {
-    KINDS: ['grass', 'paving', 'tiles', 'meadow', 'blob'],
+    KINDS: ['grass', 'paving', 'tiles', 'meadow', 'membrane', 'blob'],
     generated: 0,
     make: make,
     get: function (kind, size) {

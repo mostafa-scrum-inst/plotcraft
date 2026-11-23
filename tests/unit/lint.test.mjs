@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { RULES, scan, scanHtml, scanExternal, scanVendor, DIST_MAX_BYTES, lintProject, THREE_TAG } from '../lint-constraints.mjs';
+import { RULES, scan, scanHtml, scanExternal, scanVendor, scanBudget, DIST_MAX_BYTES, DIST_BUDGET_BYTES, lintProject, THREE_TAG } from '../lint-constraints.mjs';
 
 // For every rule: texts that must be flagged (pos) and close look-alikes that must not be (neg).
 const CASES = {
@@ -114,5 +114,18 @@ test('the vendored three.js never reaches the build: licence banner and size tri
   assert.equal(scanVendor('/** Copyright 2010-2021 Three.js Authors */', 'x').length, 1);
   assert.equal(scanVendor('x'.repeat(DIST_MAX_BYTES), 'x').length, 1);
   const vendored = readFileSync(new URL('../vendor/three-r128.min.js', import.meta.url), 'utf8');
-  assert.ok(scanVendor(vendored, 'x').length === 2, 'the vendored file itself trips both checks');
+  // F6-T1c (TL / CTO): the tripwire is 700 000 bytes; the vendored file alone (603 445) trips the banner, and inlined into
+  // the built page (app + three) it trips both
+  assert.equal(DIST_MAX_BYTES, 700000);
+  assert.equal(scanVendor(vendored, 'x').length, 1, 'the vendored file alone: the banner');
+  const dist = readFileSync(new URL('../../dist/index.html', import.meta.url), 'utf8');
+  assert.equal(scanVendor(dist + vendored, 'x').length, 2, 'the build with three inlined trips both checks');
+});
+
+test('F6 dist budget (CTO C-1.3, F6-T1c): DIST_BUDGET_BYTES = 547 302 + 80 000; budget - 1 passes, budget + 1 fails naming C-1.3 and a CTO review', () => {
+  assert.equal(DIST_BUDGET_BYTES, 547302 + 80000);
+  assert.deepEqual(scanBudget('x'.repeat(DIST_BUDGET_BYTES - 1), 'd'), []);
+  assert.deepEqual(scanBudget('x'.repeat(DIST_BUDGET_BYTES), 'd'), []);
+  const over = scanBudget('x'.repeat(DIST_BUDGET_BYTES + 1), 'd');
+  assert.ok(over.length === 1 && /C-1\.3/.test(over[0]) && /CTO review/.test(over[0]), over[0]);
 });

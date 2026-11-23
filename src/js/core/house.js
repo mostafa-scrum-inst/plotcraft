@@ -27,6 +27,8 @@
   // evenly spaced endClear clear of each run end, none on a run shorter than the pane + 2 x endClear; service rooms
   // one small pane on a run longer than smallMin. The ground front gets the door at site.entrance; openings closer
   // than doorClear to its frame are dropped. Heads are clamped to storeyH - headGap.
+  // F6-T1c W1 (Designer plan 4, TL Q-F4): the free runs of a side (its extent minus the union of the room, stair and
+  // lift runs) are hall space and get panes by the room rule with hallPitch.
   var HAB = { living: 1, dining: 1, majlis: 1, bedroom: 1, office: 1, kitchen: 1 }, SVC = { bathroom: 1, laundry: 1, maid: 1, storage: 1 };
   var SIDES = ['front', 'back', 'left', 'right'], EPS = 1e-6;
   function openings(house) {
@@ -53,6 +55,19 @@
             var n = Math.max(1, Math.floor((L - O.endClear) / O.pitch)), span = L - 2 * O.endClear;
             for (var i = 0; i < n; i++) put(list, lv, s, q[0] + O.endClear + span * (i + 0.5) / n, O.win.w, 'glazed', O.win.sill, O.win.h);
           } else if (SVC[r.type] && L > O.smallMin) put(list, lv, s, (q[0] + q[1]) / 2, O.small.w, 'small', O.small.sill, O.small.h);
+        });
+        var used = [];
+        lv.rooms.forEach(function (r) { var q = run(r, s); if (q) used.push(q); });
+        [lv.stair, lv.lift].forEach(function (r) { var q = r && run(r, s); if (q) used.push(q); });
+        used.sort(function (p, q) { return p[0] - q[0]; });
+        var lo = s === 'front' || s === 'back' ? fp.u : fp.v, hi = lo + (s === 'front' || s === 'back' ? fp.w : fp.d), free = [], at0 = lo;
+        used.forEach(function (q) { if (q[0] > at0 + EPS) free.push([at0, q[0]]); at0 = Math.max(at0, q[1]); });
+        if (hi > at0 + EPS) free.push([at0, hi]);
+        free.forEach(function (q) {
+          var L = q[1] - q[0];
+          if (L < O.win.w + 2 * O.endClear - EPS) return;
+          var n = Math.max(1, Math.floor((L - O.endClear) / O.hallPitch)), span = L - 2 * O.endClear;
+          for (var i = 0; i < n; i++) put(list, lv, s, q[0] + O.endClear + span * (i + 0.5) / n, O.win.w, 'glazed', O.win.sill, O.win.h);
         });
         var sq = lv.stair && run(lv.stair, s);
         if (sq && sq[1] - sq[0] >= O.slot.w) put(list, lv, s, (sq[0] + sq[1]) / 2, O.slot.w, 'slot', O.slot.sill, O.slot.h);
@@ -100,7 +115,7 @@
       var top = levels[levels.length - 1].index;
       var copy = function (o) { return o ? JSON.parse(JSON.stringify(o)) : null; };
       var house = {
-        v: 2, key: '',
+        v: 3, key: '',   // F6-T1c: v 3 (W1 hall panes change the derived openings)
         center: [cu, cv], radius: radius,
         plot: { pts: site.ptsL.map(function (p) { return [p[0], p[1]]; }), area: site.plotArea },
         northDeg: PC.frames.northL(state),
