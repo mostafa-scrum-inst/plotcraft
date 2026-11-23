@@ -36,3 +36,8 @@ The plan follows the Designer-plan rulings. The scope is R1, R2, R3, G1 and W1. 
    - both duration tables re-timed.
 
 VERDICT: APPROVED
+
+## Addendum: dist tripwire (TL)
+- The lint `DIST_MAX_BYTES` tripwire (the inlined three.js check) goes from 600 000 to 700 000. T1c brings the dist to 604 890 bytes.
+- C-1.3, dist ≤ 627 kB, remains the budget and is unchanged. T1c leaves about 22 kB of it. The CTO was informed.
+- CTO condition: the C-1.3 line becomes the exported `DIST_BUDGET_BYTES = 627302`, with a message pointing to a CTO review and a boundary test, landing in T1c. The kB check has existed since T1a.
