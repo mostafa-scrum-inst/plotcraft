@@ -58,3 +58,11 @@ Reviewed: branch `f6t2` at 5ccfd2b.
 - Deviation 922b498 is approved: release processes run serially by default, `RELEASE_JOBS` is opt-in, and each process stays ≤ 260 / 300 s.
 
 VERDICT: APPROVED
+
+## Addendum 1: CTO conditions on findings 3 and 4 (binding)
+- **Serial release step:**
+  - each process stays ≤ 260 s at the NOTE line and ≤ 300 s at the limit;
+  - every gate report records the release wall time, now about 651 s;
+  - if that wall time exceeds 800 s, QA cuts duplicates before anything else is added;
+  - `RELEASE_JOBS` > 1 is never used for a gate.
+- **Indoor real checks under QA_FULL only:** if anything in `src/js/three/**`, `data/look3d.js`, `data/sky.js` or `data/furniture.js` changes after the last QA_FULL run, a fresh QA_FULL run is required before merge or publish.
