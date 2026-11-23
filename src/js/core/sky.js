@@ -9,7 +9,8 @@
      sunColor / hemiSky / background toward season.tint by tintAmount x day; hemiGround toward season.ground by
      groundBounce x day. Intensities are the key values. Vegetation and ground colours (F6-T1b: also meadowColor, the outer ground) are the season's as they are.
      F6-T1a (additive): skyHorizon (= background), skyMid and skyZenith (the sky dome's 0 / 15 / 90 degree rows, each
-     key lerp then the same season blend as background) and exposure (the key lerp; renderer.toneMappingExposure). */
+     key lerp then the same season blend as background) and exposure (the key lerp; renderer.toneMappingExposure).
+     F6-T2 N1: indoor (0-1, the key lerp; no season blend): the indoor-light factor applyLook scales every emissive by. */
 (function (PC) {
   'use strict';
   var D = Math.PI / 180, MIN_Y = 0.15;
@@ -34,6 +35,7 @@
     k.sunI = a.sunI + (b.sunI - a.sunI) * t;
     k.hemiI = a.hemiI + (b.hemiI - a.hemiI) * t;
     k.exposure = a.exposure + (b.exposure - a.exposure) * t;
+    k.indoor = (a.indoor || 0) + ((b.indoor || 0) - (a.indoor || 0)) * t;
     return k;
   }
 
@@ -62,7 +64,7 @@
       sunColor: mix(K.sunColor, se.tint, w), sunIntensity: K.sunI,
       hemiSky: mix(K.hemiSky, se.tint, w), hemiGround: mix(K.hemiGround, se.ground, T.groundBounce * day), hemiIntensity: K.hemiI,
       background: mix(K.background, se.tint, w),
-      skyHorizon: mix(K.background, se.tint, w), skyMid: mix(K.skyMid, se.tint, w), skyZenith: mix(K.skyZenith, se.tint, w), exposure: K.exposure,
+      skyHorizon: mix(K.background, se.tint, w), skyMid: mix(K.skyMid, se.tint, w), skyZenith: mix(K.skyZenith, se.tint, w), exposure: K.exposure, indoor: K.indoor,
       canopyColor: se.canopy, canopyVisible: se.canopyVisible, shrubColor: se.shrub, groundColor: se.ground, meadowColor: se.meadow
     };
   }

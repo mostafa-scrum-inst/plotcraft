@@ -25,9 +25,9 @@ const dE = (a, b) => { const p = lab(a), q = lab(b); return Math.hypot(p[0] - q[
 const hue = (h) => { const [, a, b] = lab(h); return Math.atan2(b, a) * 180 / Math.PI; };
 
 const EXT_KEYS = ['wall', 'wallInner', 'slab', 'roof', 'trim', 'parapet', 'frame', 'door', 'coping'];   // F6-T1b: + frame, door (Designer A2 / Q-D3); F6-T1c: + coping (R1)
-const INT_KEYS = ['fabric', 'wood', 'accent', 'white', 'metal', 'dark', 'floorMix'];
+const INT_KEYS = ['fabric', 'wood', 'accent', 'white', 'metal', 'dark', 'floorMix', 'rooms'];   // F6-T2 I3: + rooms
 const SITE_KEYS = ['ground', 'groundOuter', 'paving', 'poolWater', 'poolRim', 'boundaryWall', 'gate', 'carCanopy', 'seating', 'trunk', 'northMarker', 'highlight', 'asphalt', 'glassTop', 'glassBottom'];   // F6-T1a: + asphalt; F6-T1b: + glassTop, glassBottom
-const KEY_KEYS = ['h', 'background', 'sunColor', 'sunI', 'hemiSky', 'hemiGround', 'hemiI', 'skyMid', 'skyZenith', 'exposure'];   // F6-T1a: the dome rows + exposure
+const KEY_KEYS = ['h', 'background', 'sunColor', 'sunI', 'hemiSky', 'hemiGround', 'hemiI', 'skyMid', 'skyZenith', 'exposure', 'indoor'];   // F6-T1a: the dome rows + exposure; F6-T2 N1: indoor
 const SEASON_KEYS = ['elevMax', 'tint', 'tintAmount', 'canopy', 'canopyVisible', 'shrub', 'ground', 'meadow'];   // F6-T1b: + meadow (the outer ground per season)
 const SEASONS = ['spring', 'summer', 'autumn', 'winter'];
 const PIECE_KEYS = ['id', 'w', 'd', 'h', 'y0', 'anchor', 'color', 'sparse'];
@@ -96,7 +96,9 @@ test('F3-T3 furniture: A-11 schema, counts, height cap, sparse set fits the S ro
     assert.equal(new Set(ids).size, ids.length, t + ' ids unique');
     for (const p of L) {
       const at = `${t}.${p.id}`;
-      assert.deepEqual(Object.keys(p).filter((k) => k !== 'off'), PIECE_KEYS, at);
+      assert.deepEqual(Object.keys(p).filter((k) => !['off', 'parts', 'face'].includes(k)), PIECE_KEYS, at);
+      if ('parts' in p) assert.ok(PC.data.furnitureParts[p.parts], at + ' parts template');
+      if ('face' in p) assert.ok(['front', 'left', 'right'].includes(p.face), at + ' face');
       assert.ok(p.w > 0 && p.d > 0 && p.h >= 0.05 && p.y0 >= 0 && p.y0 + p.h <= 1.1 + 1e-9, at + ' sizes');
       assert.ok(ANCHORS.includes(p.anchor), at + ' anchor');
       assert.ok(COLOR_KEYS.includes(p.color), at + ' colour');

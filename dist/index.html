@@ -3759,6 +3759,33 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
     return ('0000000' + h.toString(16)).slice(-8);
   }
+
+  function roomStyle(style, type) { return Object.assign({}, style, (style.rooms || {})[type]); }
+  function shade(hex, k) {
+    if (k === 1) return hex;
+    var out = '#';
+    for (var i = 1; i < 7; i += 2) { var c = Math.min(255, Math.round(parseInt(hex.slice(i, i + 2), 16) * k)); out += (c < 16 ? '0' : '') + c.toString(16).toUpperCase(); }
+    return out;
+  }
+  var BACK = { back: [0, 1], bl: [0, 1], br: [0, 1], front: [0, -1], fl: [0, -1], fr: [0, -1], left: [-1, 0], right: [1, 0] };
+  function backOf(row, alongX) {
+    var b = row.anchor === 'center' ? (alongX ? [0, 1] : [-1, 0]) : BACK[row.anchor], a = [b[1], -b[0]];
+    if (row.face === 'front') return [-b[0], -b[1]];
+    if (row.face === 'left') return [-a[0], -a[1]];
+    if (row.face === 'right') return a;
+    return b;
+  }
+  function partsOf(pc, row, key, rs, alongX) {
+    var T = row && row.parts && PC.data.furnitureParts[row.parts];
+    if (!T) return null;
+    var b = backOf(row, alongX), a = [b[1], -b[0]], La = a[0] ? pc.w : pc.d, Lb = b[0] ? pc.w : pc.d;
+    function span(dir, f0, f1, L, lo) { return dir > 0 ? [lo + f0 * L, lo + f1 * L] : [lo + L - f1 * L, lo + L - f0 * L]; }
+    return T.map(function (t) {
+      var ea = span(a[0] || a[1], t[0], t[1], La, a[0] ? pc.u : pc.v), eb = span(b[0] || b[1], t[2], t[3], Lb, b[0] ? pc.u : pc.v);
+      var eu = a[0] ? ea : eb, ev = a[0] ? eb : ea, role = t[6], hex = role === 'main' ? rs[key] : role.charAt(0) === '#' ? role : rs[role];
+      return { u: eu[0], v: ev[0], w: eu[1] - eu[0], d: ev[1] - ev[0], y0: pc.y0 + t[4] * pc.h, h: (t[5] - t[4]) * pc.h, color: shade(hex, t[7]), mat: t[8] };
+    });
+  }
   function rect(fp, r) { return r ? { u: fp.u + r.x, v: fp.v + r.y, w: r.w, d: r.h } : null; }
 
   var HAB = { living: 1, dining: 1, majlis: 1, bedroom: 1, office: 1, kitchen: 1 }, SVC = { bathroom: 1, laundry: 1, maid: 1, storage: 1 };
@@ -3817,6 +3844,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   PC.house = {
     hash: hash,
     openings: openings,
+    parts: partsOf,   // F6-T2 (tests): (piece in L, furniture row, colour key, room style, room alongX) -> parts | null
     build: function (state) {
       var st = PC.stages.status(state);
       if (!st[3].reachable || !st[3].valid) return null;
@@ -3834,8 +3862,11 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
         return {
           id: id, name: L.name(id), index: index, baseY: index * pitch,
           rooms: state.plans[id].rooms.map(function (r) {
-            var pieces = PC.furnish.room(r, PC.data.furniture[types[r.id]], a.interior.density).map(function (q) {
-              return { kind: q.kind, u: fp.u + q.x, v: fp.v + q.y, w: q.w, d: q.d, h: q.h, y0: q.y0, color: style[q.color] };
+            var table = PC.data.furniture[types[r.id]], rs = roomStyle(style, types[r.id]);
+            var pieces = PC.furnish.room(r, table, a.interior.density).map(function (q) {
+              var row = table.filter(function (t) { return t.id === q.kind; })[0], pc = { kind: q.kind, u: fp.u + q.x, v: fp.v + q.y, w: q.w, d: q.d, h: q.h, y0: q.y0, color: rs[q.color] };
+              pc.parts = partsOf(pc, row, q.color, rs, r.w >= r.h);
+              return pc;
             });
             return { id: r.id, name: names[r.id], type: types[r.id], u: fp.u + r.x, v: fp.v + r.y, w: r.w, d: r.h, area: r.w * r.h, furniture: pieces };
           }),
@@ -3845,7 +3876,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       var top = levels[levels.length - 1].index;
       var copy = function (o) { return o ? JSON.parse(JSON.stringify(o)) : null; };
       var house = {
-        v: 3, key: '',   // F6-T1c: v 3 (W1 hall panes change the derived openings)
+        v: 4, key: '',   // F6-T2: v 4 (furniture parts and room palettes are in the model and the key)
         center: [cu, cv], radius: radius,
         plot: { pts: site.ptsL.map(function (p) { return [p[0], p[1]]; }), area: site.plotArea },
         northDeg: PC.frames.northL(state),
@@ -4081,6 +4112,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     k.sunI = a.sunI + (b.sunI - a.sunI) * t;
     k.hemiI = a.hemiI + (b.hemiI - a.hemiI) * t;
     k.exposure = a.exposure + (b.exposure - a.exposure) * t;
+    k.indoor = (a.indoor || 0) + ((b.indoor || 0) - (a.indoor || 0)) * t;
     return k;
   }
 
@@ -4108,7 +4140,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       sunColor: mix(K.sunColor, se.tint, w), sunIntensity: K.sunI,
       hemiSky: mix(K.hemiSky, se.tint, w), hemiGround: mix(K.hemiGround, se.ground, T.groundBounce * day), hemiIntensity: K.hemiI,
       background: mix(K.background, se.tint, w),
-      skyHorizon: mix(K.background, se.tint, w), skyMid: mix(K.skyMid, se.tint, w), skyZenith: mix(K.skyZenith, se.tint, w), exposure: K.exposure,
+      skyHorizon: mix(K.background, se.tint, w), skyMid: mix(K.skyMid, se.tint, w), skyZenith: mix(K.skyZenith, se.tint, w), exposure: K.exposure, indoor: K.indoor,
       canopyColor: se.canopy, canopyVisible: se.canopyVisible, shrubColor: se.shrub, groundColor: se.ground, meadowColor: se.meadow
     };
   }
@@ -4413,9 +4445,17 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     grey: { wall: '#9BA1A6', wallInner: '#EEF0F0', slab: '#8D9398', roof: '#454B51', trim: '#5F676E', parapet: '#72787D', frame: '#1F2428', door: '#2E3439', coping: '#B9BEC1' }
   };
   PC.data.interiors = {
-    modern: { fabric: '#3B4652', wood: '#4E3D33', accent: '#C8742F', white: '#F2F1EC', metal: '#8A9299', dark: '#23292F', floorMix: 0.10 },
-    classic: { fabric: '#E3D3B5', wood: '#7A4A2E', accent: '#8E3B33', white: '#F7F1E6', metal: '#B08D45', dark: '#3A2A22', floorMix: 0.15 },
-    minimal: { fabric: '#C9CDCF', wood: '#C8A878', accent: '#8FA698', white: '#FAFAF8', metal: '#AEB3B5', dark: '#6E7477', floorMix: 0.10 }
+    modern: { fabric: '#3B4652', wood: '#4E3D33', accent: '#C8742F', white: '#F2F1EC', metal: '#8A9299', dark: '#23292F', floorMix: 0.10,
+      rooms: { bedroom: { fabric: '#5C6B7A', accent: '#D9A441' }, majlis: { fabric: '#7A2E2E', accent: '#C9A54A' }, dining: { fabric: '#8A7E70' }, office: { fabric: '#2F3A44', accent: '#4F7A6A' } } },
+    classic: { fabric: '#E3D3B5', wood: '#7A4A2E', accent: '#8E3B33', white: '#F7F1E6', metal: '#B08D45', dark: '#3A2A22', floorMix: 0.15,
+      rooms: { bedroom: { fabric: '#CDB8A6', accent: '#6E4A6B' }, majlis: { fabric: '#8E3B33', accent: '#B08D45' }, dining: { fabric: '#A6845C' }, office: { fabric: '#4A3A2C', accent: '#2F4A3A' } } },
+    minimal: { fabric: '#C9CDCF', wood: '#C8A878', accent: '#8FA698', white: '#FAFAF8', metal: '#AEB3B5', dark: '#6E7477', floorMix: 0.10,
+      rooms: { bedroom: { fabric: '#DCD9D2', accent: '#8FA698' }, majlis: { fabric: '#B9A48A', accent: '#6F8A7A' }, dining: { fabric: '#E0DDD6' }, office: { fabric: '#9AA3A8', accent: '#C8A878' } } }
+  };
+  PC.data.indoor = {
+    glazing: { hex: '#FFB866', k: 0.9 }, lift: { hex: '#FFB070', k: 0.08 }, lamp: { hex: '#FFD9A8', k: 1.4, color: '#F2EBDD' },
+    pool: { hex: '#FFB870', lampK: 0.20, roomK: 0.14, spillK: 0.12, patchK: 0.35, lampD: 2.2, roomD: 0.6, spillW: 2.0, spillD: 1.4, patchOut: 0.01, patchPad: 0.1 },
+    litShare: { glazed: 0.75, small: 0.4, slot: 1 }
   };
   PC.data.roomTints = {
     bedroom: '#B8CCE7', bathroom: '#A1D8D1', kitchen: '#E5D179', living: '#BFD7A0', dining: '#EBC097',
@@ -4445,80 +4485,120 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   'use strict';
   PC.data.furniture = {
     bedroom: [
-      { id: 'bed', w: 1.6, d: 2.0, h: 0.5, y0: 0, anchor: 'back', color: 'fabric', sparse: true },
-      { id: 'wardrobe', w: 1.2, d: 0.6, h: 1.1, y0: 0, anchor: 'fl', color: 'wood', sparse: true },
-      { id: 'sideL', w: 0.45, d: 0.45, h: 0.5, y0: 0, anchor: 'bl', color: 'wood', sparse: false },
-      { id: 'sideR', w: 0.45, d: 0.45, h: 0.5, y0: 0, anchor: 'br', color: 'wood', sparse: false },
-      { id: 'dresser', w: 1.0, d: 0.45, h: 0.8, y0: 0, anchor: 'right', color: 'wood', sparse: false },
-      { id: 'armchair', w: 0.7, d: 0.7, h: 0.8, y0: 0, anchor: 'fr', color: 'accent', sparse: false }
+      { id: 'bed', w: 1.6, d: 2.0, h: 1.0, y0: 0, anchor: 'back', color: 'fabric', sparse: true, parts: 'bed' },
+      { id: 'wardrobe', w: 1.2, d: 0.6, h: 1.1, y0: 0, anchor: 'fl', color: 'wood', sparse: true, parts: 'cabinet' },
+      { id: 'sideL', w: 0.45, d: 0.45, h: 0.95, y0: 0, anchor: 'bl', color: 'wood', sparse: false, parts: 'sideLamp' },
+      { id: 'sideR', w: 0.45, d: 0.45, h: 0.95, y0: 0, anchor: 'br', color: 'wood', sparse: false, parts: 'sideLamp' },
+      { id: 'dresser', w: 1.0, d: 0.45, h: 0.8, y0: 0, anchor: 'right', color: 'wood', sparse: false, parts: 'cabinet' },
+      { id: 'armchair', w: 0.7, d: 0.7, h: 0.8, y0: 0, anchor: 'fr', color: 'accent', sparse: false, parts: 'chair1' }
     ],
     bathroom: [
-      { id: 'toilet', w: 0.4, d: 0.65, h: 0.45, y0: 0, anchor: 'bl', color: 'white', sparse: true },
-      { id: 'shower', w: 0.85, d: 0.85, h: 0.1, y0: 0, anchor: 'br', color: 'metal', sparse: true },
-      { id: 'basin', w: 0.55, d: 0.45, h: 0.85, y0: 0, anchor: 'fl', color: 'white', sparse: true },
-      { id: 'cabinet', w: 0.45, d: 0.3, h: 0.9, y0: 0, anchor: 'fr', color: 'wood', sparse: false },
+      { id: 'toilet', w: 0.4, d: 0.65, h: 0.45, y0: 0, anchor: 'bl', color: 'white', sparse: true, parts: 'toilet' },
+      { id: 'shower', w: 0.85, d: 0.85, h: 0.1, y0: 0, anchor: 'br', color: 'metal', sparse: true, parts: 'shower' },
+      { id: 'basin', w: 0.55, d: 0.45, h: 0.85, y0: 0, anchor: 'fl', color: 'white', sparse: true, parts: 'basin' },
+      { id: 'cabinet', w: 0.45, d: 0.3, h: 0.9, y0: 0, anchor: 'fr', color: 'wood', sparse: false, parts: 'cabinet' },
       { id: 'mat', w: 0.5, d: 0.35, h: 0.05, y0: 0, anchor: 'center', color: 'accent', sparse: false },
       { id: 'basket', w: 0.4, d: 0.35, h: 0.45, y0: 0, anchor: 'front', color: 'fabric', sparse: false }
     ],
     kitchen: [
-      { id: 'counter', w: 1.9, d: 0.6, h: 0.9, y0: 0, anchor: 'bl', color: 'white', sparse: true },
-      { id: 'fridge', w: 0.7, d: 0.7, h: 1.1, y0: 0, anchor: 'fr', color: 'metal', sparse: true },
-      { id: 'island', w: 1.2, d: 0.7, h: 0.9, y0: 0, anchor: 'center', color: 'wood', sparse: false },
-      { id: 'pantry', w: 0.6, d: 0.6, h: 1.1, y0: 0, anchor: 'left', color: 'wood', sparse: false },
-      { id: 'sideCounter', w: 1.2, d: 0.6, h: 0.9, y0: 0, anchor: 'right', color: 'white', sparse: false },
-      { id: 'stoolL', w: 0.4, d: 0.4, h: 0.65, y0: 0, anchor: 'center', color: 'dark', sparse: false, off: [-0.3, -0.6] },
-      { id: 'stoolR', w: 0.4, d: 0.4, h: 0.65, y0: 0, anchor: 'center', color: 'dark', sparse: false, off: [0.3, -0.6] }
+      { id: 'counter', w: 1.9, d: 0.6, h: 0.9, y0: 0, anchor: 'bl', color: 'white', sparse: true, parts: 'counter' },
+      { id: 'fridge', w: 0.7, d: 0.7, h: 1.1, y0: 0, anchor: 'fr', color: 'metal', sparse: true, parts: 'fridge' },
+      { id: 'island', w: 1.2, d: 0.7, h: 0.9, y0: 0, anchor: 'center', color: 'wood', sparse: false, parts: 'counter' },
+      { id: 'pantry', w: 0.6, d: 0.6, h: 1.1, y0: 0, anchor: 'left', color: 'wood', sparse: false, parts: 'cabinet' },
+      { id: 'sideCounter', w: 1.2, d: 0.6, h: 0.9, y0: 0, anchor: 'right', color: 'white', sparse: false, parts: 'counter' },
+      { id: 'stoolL', w: 0.4, d: 0.4, h: 0.65, y0: 0, anchor: 'center', color: 'dark', sparse: false, off: [-0.3, -0.6], parts: 'stool' },
+      { id: 'stoolR', w: 0.4, d: 0.4, h: 0.65, y0: 0, anchor: 'center', color: 'dark', sparse: false, off: [0.3, -0.6], parts: 'stool' }
     ],
     living: [
-      { id: 'sofa', w: 2.2, d: 0.9, h: 0.75, y0: 0, anchor: 'back', color: 'fabric', sparse: true },
-      { id: 'coffeeTable', w: 1.1, d: 0.6, h: 0.4, y0: 0, anchor: 'center', color: 'wood', sparse: true },
-      { id: 'tvUnit', w: 1.8, d: 0.45, h: 0.5, y0: 0, anchor: 'front', color: 'dark', sparse: false },
-      { id: 'armchairL', w: 0.8, d: 0.8, h: 0.8, y0: 0, anchor: 'left', color: 'accent', sparse: false },
-      { id: 'armchairR', w: 0.8, d: 0.8, h: 0.8, y0: 0, anchor: 'right', color: 'accent', sparse: false },
-      { id: 'sideTable', w: 0.45, d: 0.45, h: 0.5, y0: 0, anchor: 'bl', color: 'wood', sparse: false }
+      { id: 'sofa', w: 2.2, d: 0.9, h: 0.75, y0: 0, anchor: 'back', color: 'fabric', sparse: true, parts: 'sofa' },
+      { id: 'coffeeTable', w: 1.1, d: 0.6, h: 0.4, y0: 0, anchor: 'center', color: 'wood', sparse: true, parts: 'table' },
+      { id: 'tvUnit', w: 1.8, d: 0.45, h: 1.1, y0: 0, anchor: 'front', color: 'dark', sparse: false, parts: 'media' },
+      { id: 'armchairL', w: 0.8, d: 0.8, h: 0.8, y0: 0, anchor: 'left', color: 'accent', sparse: false, parts: 'chair1' },
+      { id: 'armchairR', w: 0.8, d: 0.8, h: 0.8, y0: 0, anchor: 'right', color: 'accent', sparse: false, parts: 'chair1' },
+      { id: 'sideTable', w: 0.45, d: 0.45, h: 0.95, y0: 0, anchor: 'bl', color: 'wood', sparse: false, parts: 'sideLamp' }
     ],
     dining: [
-      { id: 'table', w: 1.6, d: 0.9, h: 0.75, y0: 0, anchor: 'center', color: 'wood', sparse: true },
-      { id: 'chairB', w: 0.45, d: 0.45, h: 0.9, y0: 0, anchor: 'center', color: 'fabric', sparse: true, off: [0, 0.75] },
-      { id: 'chairF', w: 0.45, d: 0.45, h: 0.9, y0: 0, anchor: 'center', color: 'fabric', sparse: true, off: [0, -0.75] },
-      { id: 'chairL', w: 0.45, d: 0.45, h: 0.9, y0: 0, anchor: 'center', color: 'fabric', sparse: false, off: [-1.075, 0] },
-      { id: 'chairR', w: 0.45, d: 0.45, h: 0.9, y0: 0, anchor: 'center', color: 'fabric', sparse: false, off: [1.075, 0] },
-      { id: 'sideboard', w: 1.4, d: 0.45, h: 0.8, y0: 0, anchor: 'back', color: 'wood', sparse: false }
+      { id: 'table', w: 1.6, d: 0.9, h: 0.75, y0: 0, anchor: 'center', color: 'wood', sparse: true, parts: 'table' },
+      { id: 'chairB', w: 0.45, d: 0.45, h: 0.9, y0: 0, anchor: 'center', color: 'fabric', sparse: true, off: [0, 0.75], parts: 'chair' },
+      { id: 'chairF', w: 0.45, d: 0.45, h: 0.9, y0: 0, anchor: 'center', color: 'fabric', sparse: true, off: [0, -0.75], parts: 'chair', face: 'front' },
+      { id: 'chairL', w: 0.45, d: 0.45, h: 0.9, y0: 0, anchor: 'center', color: 'fabric', sparse: false, off: [-1.075, 0], parts: 'chair', face: 'left' },
+      { id: 'chairR', w: 0.45, d: 0.45, h: 0.9, y0: 0, anchor: 'center', color: 'fabric', sparse: false, off: [1.075, 0], parts: 'chair', face: 'right' },
+      { id: 'sideboard', w: 1.4, d: 0.45, h: 0.8, y0: 0, anchor: 'back', color: 'wood', sparse: false, parts: 'cabinet' }
     ],
     majlis: [
-      { id: 'seatBack', w: 2.6, d: 0.8, h: 0.35, y0: 0, anchor: 'back', color: 'fabric', sparse: true },
-      { id: 'lowTable', w: 1.0, d: 0.6, h: 0.3, y0: 0, anchor: 'center', color: 'wood', sparse: true },
-      { id: 'seatLeft', w: 2.0, d: 0.8, h: 0.35, y0: 0, anchor: 'left', color: 'fabric', sparse: false },
-      { id: 'seatRight', w: 2.0, d: 0.8, h: 0.35, y0: 0, anchor: 'right', color: 'fabric', sparse: false },
-      { id: 'sideFL', w: 0.4, d: 0.4, h: 0.4, y0: 0, anchor: 'fl', color: 'accent', sparse: false },
-      { id: 'sideFR', w: 0.4, d: 0.4, h: 0.4, y0: 0, anchor: 'fr', color: 'accent', sparse: false }
+      { id: 'seatBack', w: 2.6, d: 0.8, h: 0.7, y0: 0, anchor: 'back', color: 'fabric', sparse: true, parts: 'floorSeat' },
+      { id: 'lowTable', w: 1.0, d: 0.6, h: 0.3, y0: 0, anchor: 'center', color: 'wood', sparse: true, parts: 'table' },
+      { id: 'seatLeft', w: 2.0, d: 0.8, h: 0.7, y0: 0, anchor: 'left', color: 'fabric', sparse: false, parts: 'floorSeat' },
+      { id: 'seatRight', w: 2.0, d: 0.8, h: 0.7, y0: 0, anchor: 'right', color: 'fabric', sparse: false, parts: 'floorSeat' },
+      { id: 'sideFL', w: 0.4, d: 0.4, h: 0.95, y0: 0, anchor: 'fl', color: 'accent', sparse: false, parts: 'sideLamp' },
+      { id: 'sideFR', w: 0.4, d: 0.4, h: 0.95, y0: 0, anchor: 'fr', color: 'accent', sparse: false, parts: 'sideLamp' }
     ],
     office: [
-      { id: 'desk', w: 1.4, d: 0.7, h: 0.75, y0: 0, anchor: 'back', color: 'wood', sparse: true },
-      { id: 'chair', w: 0.55, d: 0.55, h: 0.9, y0: 0, anchor: 'back', color: 'dark', sparse: true, off: [0, -0.75] },
-      { id: 'shelf', w: 1.2, d: 0.4, h: 1.1, y0: 0, anchor: 'left', color: 'wood', sparse: false },
-      { id: 'cabinet', w: 0.45, d: 0.6, h: 0.7, y0: 0, anchor: 'br', color: 'metal', sparse: false },
-      { id: 'armchair', w: 0.7, d: 0.7, h: 0.8, y0: 0, anchor: 'fr', color: 'accent', sparse: false }
+      { id: 'desk', w: 1.4, d: 0.7, h: 1.1, y0: 0, anchor: 'back', color: 'wood', sparse: true, parts: 'deskLamp' },
+      { id: 'chair', w: 0.55, d: 0.55, h: 0.9, y0: 0, anchor: 'back', color: 'dark', sparse: true, off: [0, -0.75], parts: 'chair', face: 'front' },
+      { id: 'shelf', w: 1.2, d: 0.4, h: 1.1, y0: 0, anchor: 'left', color: 'wood', sparse: false, parts: 'shelves' },
+      { id: 'cabinet', w: 0.45, d: 0.6, h: 0.7, y0: 0, anchor: 'br', color: 'metal', sparse: false, parts: 'cabinet' },
+      { id: 'armchair', w: 0.7, d: 0.7, h: 0.8, y0: 0, anchor: 'fr', color: 'accent', sparse: false, parts: 'chair1' }
     ],
     maid: [
-      { id: 'bed', w: 0.9, d: 2.0, h: 0.5, y0: 0, anchor: 'bl', color: 'fabric', sparse: true },
-      { id: 'cupboard', w: 0.8, d: 0.55, h: 1.1, y0: 0, anchor: 'fr', color: 'wood', sparse: true },
-      { id: 'desk', w: 0.9, d: 0.45, h: 0.75, y0: 0, anchor: 'right', color: 'wood', sparse: false },
-      { id: 'chair', w: 0.45, d: 0.45, h: 0.9, y0: 0, anchor: 'right', color: 'dark', sparse: false, off: [-0.5, 0] },
+      { id: 'bed', w: 0.9, d: 2.0, h: 1.0, y0: 0, anchor: 'bl', color: 'fabric', sparse: true, parts: 'bed1' },
+      { id: 'cupboard', w: 0.8, d: 0.55, h: 1.1, y0: 0, anchor: 'fr', color: 'wood', sparse: true, parts: 'cabinet' },
+      { id: 'desk', w: 0.9, d: 0.45, h: 1.1, y0: 0, anchor: 'right', color: 'wood', sparse: false, parts: 'deskLamp' },
+      { id: 'chair', w: 0.45, d: 0.45, h: 0.9, y0: 0, anchor: 'right', color: 'dark', sparse: false, off: [-0.5, 0], parts: 'chair', face: 'front' },
       { id: 'rug', w: 1.0, d: 0.6, h: 0.05, y0: 0, anchor: 'center', color: 'accent', sparse: false }
     ],
     storage: [
-      { id: 'shelvesBack', w: 1.6, d: 0.45, h: 1.1, y0: 0, anchor: 'back', color: 'metal', sparse: true },
-      { id: 'shelvesLeft', w: 1.2, d: 0.45, h: 1.1, y0: 0, anchor: 'left', color: 'metal', sparse: false },
-      { id: 'shelvesRight', w: 1.2, d: 0.45, h: 1.1, y0: 0, anchor: 'right', color: 'metal', sparse: false },
+      { id: 'shelvesBack', w: 1.6, d: 0.45, h: 1.1, y0: 0, anchor: 'back', color: 'metal', sparse: true, parts: 'shelves' },
+      { id: 'shelvesLeft', w: 1.2, d: 0.45, h: 1.1, y0: 0, anchor: 'left', color: 'metal', sparse: false, parts: 'shelves' },
+      { id: 'shelvesRight', w: 1.2, d: 0.45, h: 1.1, y0: 0, anchor: 'right', color: 'metal', sparse: false, parts: 'shelves' },
       { id: 'crate', w: 0.5, d: 0.5, h: 0.4, y0: 0, anchor: 'fl', color: 'wood', sparse: false }
     ],
     laundry: [
-      { id: 'washer', w: 0.6, d: 0.6, h: 0.85, y0: 0, anchor: 'bl', color: 'white', sparse: true },
-      { id: 'dryer', w: 0.6, d: 0.6, h: 0.85, y0: 0, anchor: 'bl', color: 'white', sparse: true, off: [0.65, 0] },
+      { id: 'washer', w: 0.6, d: 0.6, h: 0.85, y0: 0, anchor: 'bl', color: 'white', sparse: true, parts: 'appliance' },
+      { id: 'dryer', w: 0.6, d: 0.6, h: 0.85, y0: 0, anchor: 'bl', color: 'white', sparse: true, off: [0.65, 0], parts: 'appliance' },
       { id: 'basket', w: 0.45, d: 0.35, h: 0.4, y0: 0, anchor: 'fr', color: 'accent', sparse: false },
-      { id: 'rack', w: 1.0, d: 0.4, h: 1.0, y0: 0, anchor: 'front', color: 'metal', sparse: false }
+      { id: 'rack', w: 1.0, d: 0.4, h: 1.0, y0: 0, anchor: 'front', color: 'metal', sparse: false, parts: 'shelves' }
     ]
+  };
+  PC.data.furnitureParts = {
+    sofa: [[0.03, 0.97, 0.05, 0.95, 0, 0.1, 'dark', 1, 'plain'], [0.1, 0.9, 0, 0.8, 0.1, 0.55, 'main', 1, 'weave'], [0, 1, 0.8, 1, 0.1, 1, 'main', 0.9, 'weave'],
+      [0, 0.1, 0, 0.8, 0.1, 0.8, 'main', 0.9, 'weave'], [0.9, 1, 0, 0.8, 0.1, 0.8, 'main', 0.9, 'weave'],
+      [0.1, 0.5, 0.05, 0.75, 0.55, 0.68, 'main', 1.08, 'weave'], [0.5, 0.9, 0.05, 0.75, 0.55, 0.68, 'main', 1.08, 'weave']],
+    chair1: [[0.03, 0.97, 0.05, 0.95, 0, 0.1, 'dark', 1, 'plain'], [0.15, 0.85, 0, 0.75, 0.1, 0.5, 'main', 1, 'weave'], [0, 1, 0.75, 1, 0.1, 1, 'main', 0.9, 'weave'],
+      [0, 0.15, 0, 0.75, 0.1, 0.75, 'main', 0.9, 'weave'], [0.85, 1, 0, 0.75, 0.1, 0.75, 'main', 0.9, 'weave'], [0.15, 0.85, 0.05, 0.7, 0.5, 0.64, 'main', 1.08, 'weave']],
+    bed: [[0, 1, 0, 0.94, 0, 0.3, 'wood', 1, 'planks'], [0.03, 0.97, 0.03, 0.92, 0.3, 0.5, 'white', 1, 'weave'], [0.02, 0.98, 0, 0.62, 0.45, 0.56, 'main', 1, 'weave'],
+      [0.08, 0.46, 0.72, 0.9, 0.5, 0.62, 'white', 1.04, 'weave'], [0.54, 0.92, 0.72, 0.9, 0.5, 0.62, 'white', 1.04, 'weave'], [0, 1, 0.94, 1, 0, 1, 'main', 0.85, 'weave']],
+    bed1: [[0, 1, 0, 0.94, 0, 0.3, 'wood', 1, 'planks'], [0.03, 0.97, 0.03, 0.92, 0.3, 0.5, 'white', 1, 'weave'], [0.02, 0.98, 0, 0.62, 0.45, 0.56, 'main', 1, 'weave'],
+      [0.2, 0.8, 0.72, 0.9, 0.5, 0.62, 'white', 1.04, 'weave'], [0, 1, 0.94, 1, 0, 1, 'main', 0.85, 'weave']],
+    table: [[0, 1, 0, 1, 0.92, 1, 'main', 1, 'planks'], [0.04, 0.1, 0.04, 0.1, 0, 0.92, 'main', 0.85, 'plain'], [0.9, 0.96, 0.04, 0.1, 0, 0.92, 'main', 0.85, 'plain'],
+      [0.04, 0.1, 0.9, 0.96, 0, 0.92, 'main', 0.85, 'plain'], [0.9, 0.96, 0.9, 0.96, 0, 0.92, 'main', 0.85, 'plain']],
+    chair: [[0.06, 0.14, 0.06, 0.14, 0, 0.5, 'dark', 1, 'plain'], [0.86, 0.94, 0.06, 0.14, 0, 0.5, 'dark', 1, 'plain'], [0.06, 0.14, 0.8, 0.88, 0, 0.5, 'dark', 1, 'plain'],
+      [0.86, 0.94, 0.8, 0.88, 0, 0.5, 'dark', 1, 'plain'], [0.04, 0.96, 0.04, 0.9, 0.5, 0.58, 'main', 1, 'weave'], [0.04, 0.96, 0.86, 0.96, 0.58, 1, 'main', 1, 'plain']],
+    stool: [[0.08, 0.16, 0.08, 0.16, 0, 0.88, 'dark', 1, 'plain'], [0.84, 0.92, 0.08, 0.16, 0, 0.88, 'dark', 1, 'plain'], [0.08, 0.16, 0.84, 0.92, 0, 0.88, 'dark', 1, 'plain'],
+      [0.84, 0.92, 0.84, 0.92, 0, 0.88, 'dark', 1, 'plain'], [0.04, 0.96, 0.04, 0.96, 0.88, 1, 'main', 1.1, 'plain']],
+    cabinet: [[0.03, 0.97, 0.1, 1, 0, 0.05, 'dark', 1, 'plain'], [0, 1, 0.05, 1, 0.05, 1, 'main', 1, 'planks'],
+      [0.02, 0.49, 0.02, 0.05, 0.07, 0.97, 'main', 1.06, 'plain'], [0.51, 0.98, 0.02, 0.05, 0.07, 0.97, 'main', 1.06, 'plain'],
+      [0.44, 0.47, 0, 0.02, 0.45, 0.6, 'metal', 1, 'plain'], [0.53, 0.56, 0, 0.02, 0.45, 0.6, 'metal', 1, 'plain']],
+    shelves: [[0, 0.04, 0, 1, 0, 1, 'main', 1, 'planks'], [0.96, 1, 0, 1, 0, 1, 'main', 1, 'planks'], [0.04, 0.96, 0.94, 1, 0, 1, 'main', 0.9, 'plain'],
+      [0.04, 0.96, 0, 0.94, 0, 0.04, 'main', 1, 'plain'], [0.04, 0.96, 0, 0.94, 0.33, 0.37, 'main', 1, 'plain'], [0.04, 0.96, 0, 0.94, 0.66, 0.7, 'main', 1, 'plain'],
+      [0.04, 0.96, 0, 0.94, 0.96, 1, 'main', 1, 'plain']],
+    counter: [[0, 1, 0.08, 1, 0, 0.08, 'dark', 1, 'plain'], [0, 1, 0.02, 1, 0.08, 0.92, 'main', 1, 'plain'], [0, 1, 0, 1, 0.92, 1, 'dark', 1.2, 'plain'],
+      [0.02, 0.32, 0, 0.02, 0.12, 0.88, 'main', 0.94, 'plain'], [0.35, 0.65, 0, 0.02, 0.12, 0.88, 'main', 0.94, 'plain'], [0.68, 0.98, 0, 0.02, 0.12, 0.88, 'main', 0.94, 'plain']],
+    appliance: [[0, 1, 0.02, 1, 0, 1, 'main', 1, 'plain'], [0.15, 0.85, 0, 0.02, 0.2, 0.8, 'dark', 1, 'plain']],
+    fridge: [[0, 1, 0.02, 1, 0, 1, 'main', 1, 'plain'], [0, 1, 0, 0.02, 0.64, 0.66, 'dark', 1, 'plain'], [0.85, 0.9, 0, 0.02, 0.3, 0.6, 'dark', 1, 'plain'],
+      [0.85, 0.9, 0, 0.02, 0.7, 0.95, 'dark', 1, 'plain']],
+    media: [[0, 1, 0.2, 1, 0, 0.45, 'main', 1, 'plain'], [0.1, 0.9, 0.55, 0.62, 0.45, 1, '#0E1114', 1, 'plain']],
+    floorSeat: [[0, 1, 0, 1, 0, 0.5, 'main', 1, 'weave'], [0, 1, 0.75, 1, 0.5, 1, 'main', 0.88, 'weave'],
+      [0.12, 0.28, 0.6, 0.75, 0.5, 0.8, 'accent', 1, 'weave'], [0.42, 0.58, 0.6, 0.75, 0.5, 0.8, 'accent', 1, 'weave'], [0.72, 0.88, 0.6, 0.75, 0.5, 0.8, 'accent', 1, 'weave']],
+    toilet: [[0.2, 0.8, 0, 0.7, 0, 0.6, 'main', 1, 'plain'], [0, 1, 0.75, 1, 0, 1, 'main', 1, 'plain'], [0.2, 0.8, 0, 0.7, 0.6, 0.66, 'main', 0.96, 'plain']],
+    basin: [[0.3, 0.7, 0.4, 1, 0, 0.85, 'main', 1, 'plain'], [0, 1, 0, 1, 0.85, 1, 'main', 1, 'plain']],
+    shower: [[0, 1, 0, 1, 0, 0.6, 'main', 1, 'plain'], [0.45, 0.55, 0.45, 0.55, 0.6, 1, 'dark', 1, 'plain']],
+    sideLamp: [[0, 1, 0, 1, 0.49, 0.53, 'main', 1, 'planks'], [0.05, 0.15, 0.05, 0.15, 0, 0.49, 'main', 0.85, 'plain'], [0.85, 0.95, 0.05, 0.15, 0, 0.49, 'main', 0.85, 'plain'],
+      [0.05, 0.15, 0.85, 0.95, 0, 0.49, 'main', 0.85, 'plain'], [0.85, 0.95, 0.85, 0.95, 0, 0.49, 'main', 0.85, 'plain'],
+      [0.37, 0.63, 0.37, 0.63, 0.53, 0.58, 'metal', 1, 'plain'], [0.47, 0.53, 0.47, 0.53, 0.58, 0.79, 'metal', 1, 'plain'], [0.21, 0.79, 0.21, 0.79, 0.79, 1, '#F2EBDD', 1, 'lamp']],
+    deskLamp: [[0, 1, 0, 1, 0.64, 0.68, 'main', 1, 'planks'], [0.03, 0.08, 0.04, 0.12, 0, 0.64, 'main', 0.85, 'plain'], [0.92, 0.97, 0.04, 0.12, 0, 0.64, 'main', 0.85, 'plain'],
+      [0.03, 0.08, 0.88, 0.96, 0, 0.64, 'main', 0.85, 'plain'], [0.92, 0.97, 0.88, 0.96, 0, 0.64, 'main', 0.85, 'plain'],
+      [0.03, 0.12, 0.72, 0.9, 0.68, 0.72, 'metal', 1, 'plain'], [0.065, 0.085, 0.8, 0.83, 0.72, 0.85, 'metal', 1, 'plain'], [0.01, 0.15, 0.66, 0.97, 0.85, 1, '#F2EBDD', 1, 'lamp']]
   };
 })(globalThis.PC = globalThis.PC || {});
 
@@ -4528,17 +4608,17 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   'use strict';
   PC.data.sky = {
     keys: [
-      { h: 0, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30, skyMid: '#0F1A2E', skyZenith: '#060B16', exposure: 1.3 },
-      { h: 4.5, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30, skyMid: '#0F1A2E', skyZenith: '#060B16', exposure: 1.3 },
-      { h: 6, background: '#E8B08A', sunColor: '#FFB27A', sunI: 0.36, hemiSky: '#B6A6C8', hemiGround: '#8A7A66', hemiI: 0.36, skyMid: '#C9B9C8', skyZenith: '#5F7FAF', exposure: 1.15 },
-      { h: 7.5, background: '#A9CBE6', sunColor: '#FFE2BC', sunI: 0.67, hemiSky: '#C9DCEE', hemiGround: '#B3A890', hemiI: 0.44, skyMid: '#BBD3EA', skyZenith: '#7BA6D6', exposure: 1.1 },
-      { h: 12, background: '#B9D6EE', sunColor: '#FFF7E8', sunI: 1.0, hemiSky: '#D6E6F5', hemiGround: '#C9BFA6', hemiI: 0.40, skyMid: '#A9CDEB', skyZenith: '#5E97D1', exposure: 1.05 },
-      { h: 16, background: '#BED6EA', sunColor: '#FFEBCF', sunI: 0.93, hemiSky: '#D2E0EE', hemiGround: '#C2B79C', hemiI: 0.40, skyMid: '#B3CBE0', skyZenith: '#6390C8', exposure: 1.05 },
-      { h: 17, background: '#D8B994', sunColor: '#FFC98A', sunI: 0.99, hemiSky: '#D0D4DC', hemiGround: '#AEB08E', hemiI: 0.44, skyMid: '#C6C4CF', skyZenith: '#6F86B8', exposure: 1.5 },
-      { h: 18, background: '#E59A6E', sunColor: '#FF9A5C', sunI: 0.89, hemiSky: '#BCC4DA', hemiGround: '#A2A684', hemiI: 0.40, skyMid: '#C792A0', skyZenith: '#4E5F95', exposure: 1.65 },
-      { h: 19.5, background: '#2C3556', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#6E7BA6', hemiGround: '#2A2A38', hemiI: 0.32, skyMid: '#2E3658', skyZenith: '#151C38', exposure: 1.25 },
-      { h: 21, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30, skyMid: '#0F1A2E', skyZenith: '#060B16', exposure: 1.3 },
-      { h: 24, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30, skyMid: '#0F1A2E', skyZenith: '#060B16', exposure: 1.3 }
+      { h: 0, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30, skyMid: '#0F1A2E', skyZenith: '#060B16', exposure: 1.3, indoor: 0.6 },
+      { h: 4.5, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30, skyMid: '#0F1A2E', skyZenith: '#060B16', exposure: 1.3, indoor: 0.3 },
+      { h: 6, background: '#E8B08A', sunColor: '#FFB27A', sunI: 0.36, hemiSky: '#B6A6C8', hemiGround: '#8A7A66', hemiI: 0.36, skyMid: '#C9B9C8', skyZenith: '#5F7FAF', exposure: 1.15, indoor: 0.2 },
+      { h: 7.5, background: '#A9CBE6', sunColor: '#FFE2BC', sunI: 0.67, hemiSky: '#C9DCEE', hemiGround: '#B3A890', hemiI: 0.44, skyMid: '#BBD3EA', skyZenith: '#7BA6D6', exposure: 1.1, indoor: 0 },
+      { h: 12, background: '#B9D6EE', sunColor: '#FFF7E8', sunI: 1.0, hemiSky: '#D6E6F5', hemiGround: '#C9BFA6', hemiI: 0.40, skyMid: '#A9CDEB', skyZenith: '#5E97D1', exposure: 1.05, indoor: 0 },
+      { h: 16, background: '#BED6EA', sunColor: '#FFEBCF', sunI: 0.93, hemiSky: '#D2E0EE', hemiGround: '#C2B79C', hemiI: 0.40, skyMid: '#B3CBE0', skyZenith: '#6390C8', exposure: 1.05, indoor: 0 },
+      { h: 17, background: '#D8B994', sunColor: '#FFC98A', sunI: 0.99, hemiSky: '#D0D4DC', hemiGround: '#AEB08E', hemiI: 0.44, skyMid: '#C6C4CF', skyZenith: '#6F86B8', exposure: 1.5, indoor: 0 },
+      { h: 18, background: '#E59A6E', sunColor: '#FF9A5C', sunI: 0.89, hemiSky: '#BCC4DA', hemiGround: '#A2A684', hemiI: 0.40, skyMid: '#C792A0', skyZenith: '#4E5F95', exposure: 1.65, indoor: 0.35 },
+      { h: 19.5, background: '#2C3556', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#6E7BA6', hemiGround: '#2A2A38', hemiI: 0.32, skyMid: '#2E3658', skyZenith: '#151C38', exposure: 1.25, indoor: 1 },
+      { h: 21, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30, skyMid: '#0F1A2E', skyZenith: '#060B16', exposure: 1.3, indoor: 1 },
+      { h: 24, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30, skyMid: '#0F1A2E', skyZenith: '#060B16', exposure: 1.3, indoor: 0.6 }
     ],
     seasons: {
       spring: { elevMax: 52, tint: '#F1F7E4', tintAmount: 0.08, canopy: '#558739', canopyVisible: true, shrub: '#67A344', ground: '#76A953', meadow: '#6F8A58' },
