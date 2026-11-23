@@ -255,3 +255,27 @@ QA ran three QA_FULL runs: all green, no flake, and both smoke mutations caught.
 | 3 | 478.4 s | 1144.9 s | 666.5 s | 58 ms |
 
 Run 2's QA_FULL part is over the 480 s limit. My own run was 467.5 s. QA put three options to the TL: accept it, re-run on a quiet machine, or cut QA_FULL duplicates. That decision is open.
+
+## Follow-up after merge: the questions.spec flake at 768x1024 (branch fix-north-flake)
+
+**Symptom.** In 1 of QA's 3 QA_FULL runs, questions.spec at 768x1024 failed "back to the sample answers". The q-north-reset after the compass drag left `ans.north` at 90.
+
+**Cause: the test harness, not the app.** The touch helper's tap after an injected touch drag lost its synthesized click.
+- **The trace.** A capture probe on the reset button recorded `pointerdown, touchstart, pointerup, touchend` and **no `click`**, so the reset handler never ran.
+  - The app state was right at every step: the drag committed 90 on release, and a click resets synchronously.
+  - The release is synchronous: View2D's pointerup calls onDragEnd, then `northSet`, then `store.commit`. No timer or rAF commit is left pending; `live(null)` clears the pending value.
+- **Why the click was lost.** After a touch sequence that moved, Chrome drops the synthesized click of a following tap for a while: about 100 ms when quiet, longer under load. The helper's `settle()` waited a fixed 350 ms floor, and under QA_FULL load the window outlasted it.
+- **Reproduced deterministically** by shrinking the floor to 0 or 50 ms: the same two failures at 768x1024, with the same `north: 90`.
+- **No app race.** A real user can't lift a finger off the compass and tap Reset inside that window; if they did, it would be Chrome's own tap suppression, not the app's state handling.
+
+**Fix (tests/helpers/touch.mjs).**
+- `settle()` no longer sleeps. It waits for the condition itself: it taps an inert 8 px probe element laid over the page corner until Chrome synthesizes the probe's click, then removes the probe, and gives up with a clear error after 5 s.
+- The probe keeps the page from reacting:
+  - its mousedown default is prevented, so focus does not move;
+  - its click does not bubble;
+  - the page sees only pointer and touch events, as from a tap on the background.
+- On a quiet machine, 4 of the spec's 12 settles saw the first probe dropped and waited it out. That is the window the old floor was racing.
+
+**Checks.**
+- questions.spec is green (432 / 0) with no floor at all, where a 0 or 50 ms floor failed before.
+- The default run-all is green: 438.8 s on a slow machine (three step 26.2 s). Every gesture spec ran equal to or faster than its durations entry: questions 37.8 vs 37.1 s, plot 30.1 vs 35.3 s, edges 28.6 vs 30.1 s.
