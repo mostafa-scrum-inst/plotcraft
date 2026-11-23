@@ -463,7 +463,8 @@ async function maxBudget(page, tag) {
   const best = Math.min(...r.build);
   // Regression guard only (TL ruling; raised to 1200 ms after loaded runs read up to 970 ms): <= 1200 ms in every run, other browser files running beside it. C-4.8 itself
   // (<= 400 ms) is tests/solo/build-time.mjs, which run-all runs alone under QA_FULL=1.
-  T.ok(best <= 1200, `${tag} maximum house build ${best.toFixed(0)} ms (best of ${r.build.map((x) => x.toFixed(0)).join(', ')}) <= 1200 ms (regression guard, TL 2026-11-22: loaded runs read 414-970 ms; C-4.8 is the QA_FULL solo step)`);
+  // F6-T2 gate ruling (TL, CTO): raised to 1500 ms with the solo C-4.8 at 55-69 ms (<= the 250 ms T2 budget); a trip still means re-running solo first
+  T.ok(best <= 1500, `${tag} maximum house build ${best.toFixed(0)} ms (best of ${r.build.map((x) => x.toFixed(0)).join(', ')}) <= 1500 ms (regression guard, TL F6-T2 gate ruling: loaded runs read up to 1271 ms; C-4.8 is the QA_FULL solo step)`);
   console.log(`  [record] ${tag} max house: calls ${r.on[0]} / ${r.off[0]}, triangles ${r.on[1]} / ${r.off[1]}, build best ${best.toFixed(0)} ms (loaded), meshes ${r.meshes}`);
 }
 
