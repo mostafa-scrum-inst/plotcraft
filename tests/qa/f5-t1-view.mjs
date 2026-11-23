@@ -243,8 +243,9 @@ await guard('A 1280x800', async () => {
   m.push(...selectedProblems(st, hm, bm.id, bm.name), ...flightMore(rec, bm.name)); d = F.poseDiff(st.pose, expectPose(hm, Lm, bm.id, c.before)); if (d) m.push(`${bm.name}: lands at ${d}`);
   if (Math.abs(st.pose.phi - 15 * F.D2R) > 1e-6) m.push(`${bm.name}: basement phi ${(st.pose.phi / F.D2R).toFixed(2)} deg`);
   if (!F.pitCrossing(hm, st.pose).ok) m.push(`${bm.name}: the eye line meets ground level outside the footprint`);
-  if (st.meshes !== m0 + 1 || st.meshes > 40) m.push(`${bm.name}: ${st.meshes} meshes (${m0} + 1 highlight, <= 40)`);
-  const TLN = PC.C.ROOF && PC.C.ROOF.copingT !== undefined ? 28 : PC.C.CONTACT ? 27 : (PC.texgen || (PC.C.VIEW3D && PC.C.VIEW3D.tiers)) ? 25 : 22;   // F6-T1a: 24 + the highlight (impl-notes §6); T1b: + groundRing + blobs; T1c: + roofDeck (FS: 27 + highlight)
+  const T2M = PC.data.furnitureParts ? 13 : 0;   // F6-T2 plan §5: + textured / glow / lamps on 4 levels + glazing (40, CTO <= 40; + the highlight)
+  if (st.meshes !== m0 + 1 || st.meshes > 40 + (T2M ? 1 : 0)) m.push(`${bm.name}: ${st.meshes} meshes (${m0} + 1 highlight, <= ${40 + (T2M ? 1 : 0)})`);
+  const TLN = T2M + (PC.C.ROOF && PC.C.ROOF.copingT !== undefined ? 28 : PC.C.CONTACT ? 27 : (PC.texgen || (PC.C.VIEW3D && PC.C.VIEW3D.tiers)) ? 25 : 22);   // F6-T1a: 24 + the highlight (impl-notes §6); T1b: + groundRing + blobs; T1c: + roofDeck (FS: 27 + highlight)
   if (st.meshes !== TLN) m.push(`${bm.name}: ${st.meshes} meshes with a room selected (${TLN} by the TL count)`);
   const above = await S.page.evaluate(() => { const w = PC.debug.scene().world, o = []; w.traverse((n) => { if (/^level-?(G|1|2)$/i.test(n.name) || (n.userData && ['G', '1', '2'].includes(n.userData.level) && n.parent === w)) { let v = true; for (let q = n; q; q = q.parent) if (!q.visible) v = false; if (v) o.push(n.name || n.userData.level); } }); return o; });
   if (above.length) m.push(`${bm.name}: levels above still visible ${above}`);

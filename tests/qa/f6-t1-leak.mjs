@@ -43,7 +43,8 @@ const PROBE = () => {
     if (o.isMesh || o.isInstancedMesh) { meshes++; if (o.name === 'highlight') hl = true; }
     if (o.geometry) geo.add(o.geometry.uuid);
     if (o.isLight && o.castShadow) shadowLights++;
-    for (const m of [].concat(o.material || [])) { if (m.transparent && o.isMesh) transparent.push(o.name); for (const k of ['map', 'alphaMap', 'bumpMap', 'normalMap', 'roughnessMap', 'aoMap', 'emissiveMap', 'lightMap', 'specularMap', 'envMap']) if (m[k] && m[k].isTexture) tex.add(m[k].uuid); }
+    for (const m of [].concat(o.material || [])) { if (m.transparent && o.isMesh && !(/^glow-/.test(o.name) && m.blending === THREE.AdditiveBlending && !m.depthWrite)) transparent.push(o.name);   // F6-T2 N4: glow-* is additive, no depth write (plan transparent rule)
+ for (const k of ['map', 'alphaMap', 'bumpMap', 'normalMap', 'roughnessMap', 'aoMap', 'emissiveMap', 'lightMap', 'specularMap', 'envMap']) if (m[k] && m[k].isTexture) tex.add(m[k].uuid); }
   });
   if (i.scene.background && i.scene.background.isTexture) tex.add(i.scene.background.uuid);
   return { meshes, hl, shadowLights, transparent, sceneGeo: geo.size, sceneTex: tex.size, memGeo: r.info.memory.geometries, memTex: r.info.memory.textures, pr: r.getPixelRatio(), lost: !!i.lost,

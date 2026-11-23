@@ -32,6 +32,9 @@ const END = 0.6, PITCH = 2.6, SMALL_MIN = 1.2, DOOR_CLEAR = 0.6, HEAD_GAP = 0.3,
 // F6-T1c W1 (plan §5, house v 3; marker PC.C.OPEN.hallPitch): hall panes on the free runs of a side (its extent minus the
 // room, stair and lift runs), glazed, n = max(1, floor((L - 0.6) / 3.9)) on L >= 2.4, evenly spaced 0.6 m clear of the ends
 const W1 = !!(PC.C.OPEN && PC.C.OPEN.hallPitch !== undefined), HALL_PITCH = 3.9;
+// F6-T2 (plan I1 / N2, TL ruling 2; marker PC.data.furnitureParts): house v 4 (parts in the key); the 'glass' quads leave
+// roofBatch for their own "glazing" mesh in the roof group (receives, does not cast), with userData.panes per non-door opening
+const T2 = !!PC.data.furnitureParts;
 
 function make(mut) { const s = Q.plain(PC.sample.state()); if (mut) mut(s); s.plans = {}; PC.plans.sync(s); for (const id in s.plans) if (!s.plans[id].error) s.plans[id].approved = true; return s; }
 const MAXM = (s) => { s.plot.pts = [[0, 0], [60, 0], [60, 50], [0, 50]]; s.ans.streetEdge = 0; s.ans.footprintPct = 40; s.ans.floors = 3; s.ans.basement = true; s.ans.lift = true; s.ans.usableRoof = true; s.ans.roofType = 'terrace';
@@ -76,7 +79,7 @@ function freeRuns(h, L, side) {
 }
 function openingProblems(tag, s, h) {
   const f = [], O = h.openings || [], fp = h.footprint, storeyH = h.storeyH;
-  if (h.v !== (W1 ? 3 : 2)) f.push(`${tag}: house.v ${h.v} (${W1 ? 3 : 2} expected)`);
+  const VW = T2 ? 4 : W1 ? 3 : 2; if (h.v !== VW) f.push(`${tag}: house.v ${h.v} (${VW} expected)`);
   const levelOf = Object.fromEntries(h.levels.map((l) => [l.id, l]));
   if (O.some((o) => !levelOf[o.level] || levelOf[o.level].index < 0)) f.push(`${tag}: openings on a basement or unknown level: ${JSON.stringify(O.filter((o) => !levelOf[o.level] || levelOf[o.level].index < 0).slice(0, 2))}`);
   const en = h.site.entrance, door = O.filter((o) => o.kind === 'door');
@@ -137,8 +140,21 @@ function decalProblems(tag, s, h) {
   const mats = { batch: M(), paving: M(), ui: new THREE.MeshBasicMaterial({ vertexColors: true }), tiles: M(), ground: new THREE.MeshLambertMaterial(), groundOuter: new THREE.MeshLambertMaterial(), groundRing: M(), poolWater: new THREE.MeshLambertMaterial(), trunk: new THREE.MeshLambertMaterial(), canopy: new THREE.MeshLambertMaterial(), shrub: new THREE.MeshLambertMaterial(), blob: new THREE.MeshBasicMaterial() };
   PC.three.buildShell(h, world, mats); PC.three.buildRoof(h, world, mats); world.updateMatrixWorld(true);
   const rb = world.getObjectByName('roofBatch'); if (!rb) return [`${tag}: no roofBatch`];
-  const sum = H.summarize(world).find((m) => m.name === 'roofBatch'), items = []; let v = 0;
-  for (const [k, n] of sum.kinds || []) { const P = sum.pos.slice(3 * v, 3 * (v + n)), C = sum.col ? sum.col.slice(3 * v, 3 * (v + n)) : [];
+  const all = H.summarize(world), sum = all.find((m) => m.name === 'roofBatch'), items = []; let v = 0;
+  const gz = all.find((m) => m.name === 'glazing'), gzKinds = [];
+  if (T2) { const gm = world.getObjectByName('glazing'), nd = h.openings.filter((o) => o.kind !== 'door').length;
+    if (!gz || !gm) { if (nd) f.push(`${tag}: no glazing mesh for ${nd} panes`); }
+    else { if (gz.group !== 'roof') f.push(`${tag}: glazing in ${gz.group}, not the roof group`);
+      if (gm.castShadow || !gm.receiveShadow) f.push(`${tag}: glazing cast ${gm.castShadow} receive ${gm.receiveShadow} (receives, does not cast)`);
+      if (gm.visible !== rb.visible) f.push(`${tag}: glazing visible ${gm.visible}, roofBatch ${rb.visible}`);
+      const pn = gm.userData.panes || [];
+      if (pn.length !== nd) f.push(`${tag}: ${pn.length} userData.panes for ${nd} panes`);
+      if ((gz.kinds || []).some(([k]) => k !== 'glass')) f.push(`${tag}: glazing items ${[...new Set(gz.kinds.map(([k]) => k))]} (glass only)`);
+      let w = 0; for (const [k, n] of gz.kinds || []) { gzKinds.push([k, n, w]); w += n; } }
+    if ((sum.kinds || []).some(([k]) => k === 'glass')) f.push(`${tag}: glass quads still in roofBatch`); }
+  for (const [k, n, w0, src] of [...(sum.kinds || []).map(([k, n]) => [k, n, null, null]), ...gzKinds.map(([k, n, w]) => [k, n, w, gz])]) { if (src) { const P = src.pos.slice(3 * w0, 3 * (w0 + n)), C = src.col ? src.col.slice(3 * w0, 3 * (w0 + n)) : [];
+      const xs = [], ys = [], zs = []; for (let i = 0; i < P.length; i += 3) { xs.push(P[i]); ys.push(P[i + 1]); zs.push(P[i + 2]); }
+      items.push({ kind: k, min: [Math.min(...xs), Math.min(...ys), Math.min(...zs)], max: [Math.max(...xs), Math.max(...ys), Math.max(...zs)], P, C }); continue; } const P = sum.pos.slice(3 * v, 3 * (v + n)), C = sum.col ? sum.col.slice(3 * v, 3 * (v + n)) : [];
     const xs = [], ys = [], zs = []; for (let i = 0; i < P.length; i += 3) { xs.push(P[i]); ys.push(P[i + 1]); zs.push(P[i + 2]); }
     items.push({ kind: k, min: [Math.min(...xs), Math.min(...ys), Math.min(...zs)], max: [Math.max(...xs), Math.max(...ys), Math.max(...zs)], P, C }); v += n; }
   const nonDoor = h.openings.filter((o) => o.kind !== 'door'), glass = items.filter((x) => x.kind === 'glass'), rev = items.filter((x) => x.kind === 'reveal');
@@ -191,6 +207,6 @@ if (want('O')) {
   R.check(`O openings (plan §6.1, my rules) on ${RUN_CASES.length} houses: on a room edge of their side, kind by room type, sizes / sill / head (<= storeyH - 0.3), 0.6 m end and door clearances, glazed count and even spacing, one slot per stair edge, one door at the entrance, sorted, no basement, deterministic`, cut(fo));
   R.note(`O counts: ${counts.filter((c) => !c.startsWith('fuzz')).join('; ')}; fuzz ${RUN_CASES.filter(([t]) => t.startsWith('fuzz')).length - skipped} houses built (${skipped} without a model)`);
 }
-if (want('D')) R.check(`D roofBatch decals: one glass quad per pane on the outer wall plane 0.01 m proud (glassTop above / glassBottom below), 4 reveal quads each, the door leaf in exteriors.door across the entrance, nothing more than 0.09 m outside the footprint (${RUN_CASES.length} houses)`, cut(fd));
+if (want('D')) R.check(`D ${T2 ? 'roofBatch + glazing (F6-T2 N2: glass only in the glazing mesh of the roof group, receives / not cast, visible with roofBatch, one userData.panes entry per pane)' : 'roofBatch'} decals: one glass quad per pane on the outer wall plane 0.01 m proud (glassTop above / glassBottom below), 4 reveal quads each, the door leaf in exteriors.door across the entrance, nothing more than 0.09 m outside the footprint (${RUN_CASES.length} houses)`, cut(fd));
 R.note(`run ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 process.exit(R.done() ? 0 : 1);

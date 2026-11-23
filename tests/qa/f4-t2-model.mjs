@@ -35,7 +35,8 @@ const SEAT_TEXT = 'Garden seating does not fit in the yard: it is left out of th
 function make(mut) { const s = Q.plain(PC.sample.state()); if (mut) mut(s); s.plans = {}; PC.plans.sync(s); for (const id in s.plans) if (!s.plans[id].error) s.plans[id].approved = true; return s; }
 function scene(house) {
   const world = new THREE.Group(); world.name = 'world';
-  const mats = { deck: new THREE.MeshLambertMaterial(), batch: new THREE.MeshLambertMaterial({ vertexColors: true }), paving: new THREE.MeshLambertMaterial({ vertexColors: true }), ui: new THREE.MeshBasicMaterial({ vertexColors: true }), tiles: new THREE.MeshLambertMaterial({ vertexColors: true }), ground: new THREE.MeshLambertMaterial(), groundOuter: new THREE.MeshLambertMaterial(), poolWater: new THREE.MeshLambertMaterial(), trunk: new THREE.MeshLambertMaterial(), canopy: new THREE.MeshLambertMaterial(), shrub: new THREE.MeshLambertMaterial() };   // F4-T3 vegetation materials (unused before)
+  const mats = { deck: new THREE.MeshLambertMaterial(), batch: new THREE.MeshLambertMaterial({ vertexColors: true }), paving: new THREE.MeshLambertMaterial({ vertexColors: true }), ui: new THREE.MeshBasicMaterial({ vertexColors: true }), tiles: new THREE.MeshLambertMaterial({ vertexColors: true }), ground: new THREE.MeshLambertMaterial(), groundOuter: new THREE.MeshLambertMaterial(), poolWater: new THREE.MeshLambertMaterial(), trunk: new THREE.MeshLambertMaterial(), canopy: new THREE.MeshLambertMaterial(), shrub: new THREE.MeshLambertMaterial(),
+    furniture: new THREE.MeshLambertMaterial({ vertexColors: true }), interior: new THREE.MeshLambertMaterial({ vertexColors: true }), lamp: new THREE.MeshLambertMaterial({ vertexColors: true }), glazing: new THREE.MeshLambertMaterial({ vertexColors: true }) };   // F4-T3 vegetation materials (unused before); F6-T2 furniture / interior / lamp / glazing
   const made = PC.three.buildShell(house, world, mats).concat(PC.three.buildInterior(house, world, mats), PC.three.buildRoof(house, world, mats), PC.three.buildSite(house, world, mats));
   world.updateMatrixWorld(true); return { world, made };
 }
@@ -115,12 +116,35 @@ const VEG = (h) => (h.site.trees && h.site.trees.length ? 2 : 0) + (h.site.shrub
 const byName = (world, name) => meshes(world).filter((m) => m.name === name);
 // F6-T1a (impl-notes §6): pads, seating pad, pool rim and footpath moved to 'paving', the N needle half to 'northNeedle',
 // the pitched slopes to 'roofTiles'; the site checks read the union of the site meshes (version-aware: absent before F6).
-const F6 = !!(PC.texgen || (PC.C.VIEW3D && PC.C.VIEW3D.tiers)), F6_NEW = ['paving', 'northNeedle', 'roofTiles', 'sky', 'groundRing', 'blobs', 'roofDeck'];   // roofDeck: F6-T1c R2 (flat / terrace roofs)
+const F6 = !!(PC.texgen || (PC.C.VIEW3D && PC.C.VIEW3D.tiers)), F6_NEW = ['paving', 'northNeedle', 'roofTiles', 'sky', 'groundRing', 'blobs', 'roofDeck'];
+const isNew = (n) => F6_NEW.includes(n) || /^(textured|lamps|glow)-/.test(n) || n === 'glazing';   // F6-T2 meshes (plan §5)   // roofDeck: F6-T1c R2 (flat / terrace roofs)
 // F6-T1b (plan §6.1 / §6.2): opening decals and the wall-base skirt stand 0.005-0.05 m proud of the facade, so a ray from
 // outside may meet them first (impl-notes T1b); marker PC.C.CONTACT
 const T1B = !!PC.C.CONTACT, PROUD = T1B ? 0.09 : 0;   // the sill stands 0.08 m out (designer-plan Q-D1)
 const siteItems = (world) => ['siteBatch', 'paving', 'northNeedle'].flatMap((n) => byName(world, n).flatMap(itemsOf));
 
+// F6-T2 I1 / I3 (marker PC.data.furnitureParts; Designer plan 3 and the furniture.js schema text): my own expansion of a
+// placed piece into its parts. Back (z = 1) = the anchor wall (back / bl / br +v, front / fl / fr -v, left -u, right +u;
+// centre pieces +v, or -u when A-11 turns them in a room deeper than wide), face 'front' flips it, 'right' / 'left' turn
+// it to a / -a, a = the back turned clockwise; x runs along a. Fractions map into the envelope (w along u, d along v),
+// y = y0 + f h. Colour: role 'main' = the piece's key, a key, or a literal hex, through the room palette
+// (interiors[style] with rooms[type] over it), each 0-255 channel x k rounded and clamped (k = 1 keeps the hex).
+const T2 = !!PC.data.furnitureParts;
+const myShade = (hex, k) => (k === 1 ? hex : '#' + [1, 3, 5].map((i) => Math.min(255, Math.round(parseInt(hex.slice(i, i + 2), 16) * k)).toString(16).toUpperCase().padStart(2, '0')).join(''));
+const MY_BACK = { back: [0, 1], bl: [0, 1], br: [0, 1], front: [0, -1], fl: [0, -1], fr: [0, -1], left: [-1, 0], right: [1, 0] };
+function myParts(p, row, rs, roomWide) {
+  const T = row.parts && T3.furnitureParts[row.parts]; if (!T) return null;
+  let b = row.anchor === 'center' ? (roomWide ? [0, 1] : [-1, 0]) : MY_BACK[row.anchor];
+  const cw = (d) => [d[1], -d[0]];
+  if (row.face === 'front') b = [-b[0], -b[1]]; else if (row.face === 'right') b = cw(b); else if (row.face === 'left') b = cw(b).map((x) => -x);
+  const a = cw(b);
+  const ax = (d, f0, f1) => { const alongU = d[0] !== 0, lo = alongU ? p.u : p.v, L = alongU ? p.w : p.d, s = d[0] || d[1];
+    return { alongU, r: s > 0 ? [lo + f0 * L, lo + f1 * L] : [lo + L - f1 * L, lo + L - f0 * L] }; };
+  return T.map(([x0, x1, z0, z1, y0, y1, role, k, mat]) => { const A = ax(a, x0, x1), B = ax(b, z0, z1), U = A.alongU ? A.r : B.r, V = A.alongU ? B.r : A.r;
+    const hex = role === 'main' ? rs[row.color] : role[0] === '#' ? role : rs[role];
+    return { u: U[0], v: V[0], w: U[1] - U[0], d: V[1] - V[0], y0: p.y0 + y0 * p.h, h: (y1 - y0) * p.h, color: myShade(hex, k), mat }; });
+}
+const partEq = (g, m) => g && m && g.length === m.length && g.every((q, i) => ['u', 'v', 'w', 'd', 'y0', 'h'].every((k) => near(q[k], m[i][k], 1e-9)) && q.color === m[i].color && q.mat === m[i].mat);
 // ================= F. furniture =================
 if (want('F')) {
   const f = [], cont = [], t3 = [], st = { rooms: 0, pieces: 0, sparse: 0, full: 0, houses: 0 };
@@ -140,7 +164,10 @@ if (want('F')) {
       const mine = [];
       for (const rm of lv.rooms) { st.rooms++;
         const pl = furnish(T3.furniture[types[rm.id]], rm.w, rm.d, s.ans.interior.density).placed, tbl = Object.fromEntries(T3.furniture[types[rm.id]].map((p) => [p.id, p]));
-        const exp = pl.map((p) => ({ kind: p.id, u: rm.u + p.l, v: rm.v + p.f, w: p.r - p.l, d: p.b - p.f, h: tbl[p.id].h, y0: tbl[p.id].y0, color: I[tbl[p.id].color] }));
+        const RS = T2 ? { ...I, ...((I.rooms || {})[types[rm.id]] || {}) } : I;   // F6-T2 I3: the room type's palette over the style
+        const exp = pl.map((p) => ({ kind: p.id, u: rm.u + p.l, v: rm.v + p.f, w: p.r - p.l, d: p.b - p.f, h: tbl[p.id].h, y0: tbl[p.id].y0, color: RS[tbl[p.id].color] }));
+        if (T2) for (const g of rm.furniture) { const row = tbl[g.kind], m = row && myParts(g, row, RS, rm.w >= rm.d);
+          if (!(m === null ? g.parts === null : partEq(g.parts, m))) { st.badParts = (st.badParts || 0) + 1; if (f.length < 12) f.push(`${tag} ${lv.id} ${rm.id} ${types[rm.id]} ${g.kind} (${row && row.anchor}${row && row.face ? ' face ' + row.face : ''}): parts ${JSON.stringify(g.parts && g.parts.slice(0, 2))} vs mine ${JSON.stringify(m && m.slice(0, 2))}`); } else if (m) st.parts = (st.parts || 0) + m.length; }
         const got = rm.furniture; st.pieces += got.length; st[s.ans.interior.density] += got.length;
         const same = got.length === exp.length && got.every((g, k) => g.kind === exp[k].kind && ['u', 'v', 'w', 'd', 'h', 'y0'].every((q) => near(g[q], exp[k][q], 1e-9)) && g.color === exp[k].color);
         if (!same) f.push(`${tag} ${lv.id} ${rm.id} ${types[rm.id]} ${rm.w}x${rm.d}: model ${JSON.stringify(got.map((g) => [g.kind, +g.u.toFixed(3), +g.v.toFixed(3), +g.w.toFixed(3), +g.d.toFixed(3), g.color]))} vs QA ${JSON.stringify(exp.map((g) => [g.kind, +g.u.toFixed(3), +g.v.toFixed(3), +g.w.toFixed(3), +g.d.toFixed(3), g.color]))}`);
@@ -157,21 +184,41 @@ if (want('F')) {
       if (!mine.length) { if (fm.length) t3.push(`${tag} ${lv.id}: furniture mesh without pieces`); continue; }
       if (fm.length !== 1) { t3.push(`${tag} ${lv.id}: ${fm.length} furniture meshes`); continue; }
       const it = itemsOf(fm[0]);
+      if (T2) {   // F6-T2: plain parts (and part-less pieces) in furniture, planks / weave parts in textured-<id>, shades in lamps-<id>
+        const want = { plain: [], tex: [], lamp: [] };
+        for (const p of mine) { if (!p.parts) { want.plain.push({ ...p, kind: p.kind }); continue; }
+          for (const q of p.parts) want[q.mat === 'plain' ? 'plain' : q.mat === 'lamp' ? 'lamp' : 'tex'].push({ ...q, kind: p.kind, floorY: p.floorY }); }
+        const one = (name) => { const ms = g.children.filter((m) => m.name === name); return ms.length === 1 ? itemsOf(ms[0]) : (t3.push(`${tag} ${lv.id}: ${ms.length} ${name} meshes`), null); };
+        const gate = lv.id === 'G' && h.site.wall && h.site.gate ? 2 : 0;   // TL F2: two gate-lamp shades end lamps-G
+        const tx = one('textured-' + lv.id), lm = want.lamp.length + gate ? one('lamps-' + lv.id) : (g.children.some((m) => m.name === 'lamps-' + lv.id) && t3.push(`${tag} ${lv.id}: lamps mesh without lamps`), []);
+        const cmp = (name, items, ws) => { if (!items) return;
+          if (items.length !== ws.length) { t3.push(`${tag} ${lv.id}: ${name} ${items.length} part items, want ${ws.length}`); return; }
+          ws.forEach((q, k) => { if (!boxEq(items[k], tb(F, q.u, q.u + q.w, q.v, q.v + q.d, q.floorY + q.y0, q.floorY + q.y0 + q.h))) t3.push(`${tag} ${lv.id} ${name} ${q.kind} part ${k}: box ${items[k].min.map((x) => x.toFixed(3))}..${items[k].max.map((x) => x.toFixed(3))}`);
+            else if (!isCol(items[k], q.color)) t3.push(`${tag} ${lv.id} ${name} ${q.kind} part ${k}: colour not col(${q.color})`); }); };
+        if (it.some((x) => x.kind !== 'box')) t3.push(`${tag} ${lv.id}: furniture items not all boxes`);
+        cmp('furniture', it, want.plain); st.items = (st.items || 0) + it.length;
+        cmp('textured', tx && tx.filter((x) => x.kind === 'part'), want.tex);
+        cmp('lamps', lm && lm.slice(0, lm.length - gate), want.lamp);
+        if (lm && lm.length - gate !== want.lamp.length) t3.push(`${tag} ${lv.id}: lamps ${lm.length} items, want ${want.lamp.length} + ${gate} gate`);
+        if (!fm[0].castShadow || !fm[0].receiveShadow) t3.push(`${tag} ${lv.id}: furniture not cast + receive`);
+        const wm = g.children.find((m) => m.name === 'walls'); if (wm && fm[0].material === wm.material) t3.push(`${tag} ${lv.id}: furniture shares the walls' material (F6-T2 N3: its own)`);
+        continue;
+      }
       if (it.length !== mine.length || it.some((x) => x.kind !== 'box')) { t3.push(`${tag} ${lv.id}: ${it.length} items for ${mine.length} pieces`); continue; }
       mine.forEach((p, k) => { if (!boxEq(it[k], tb(F, p.u, p.u + p.w, p.v, p.v + p.d, p.floorY + p.y0, p.floorY + p.y0 + p.h))) t3.push(`${tag} ${lv.id} ${p.kind}: box ${it[k].min.map((x) => x.toFixed(2))}..${it[k].max.map((x) => x.toFixed(2))}`); else if (!isCol(it[k], p.color)) t3.push(`${tag} ${lv.id} ${p.kind}: colour not col(${p.color})`); });
       if (!fm[0].castShadow || !fm[0].receiveShadow) t3.push(`${tag} ${lv.id}: furniture not cast + receive`);
     }
   }
-  R.note(`F houses built: ${st.houses}`); R.check(`F ${st.rooms} rooms in ${st.houses} houses (sample x 3 styles x full / sparse, 24 seeded houses, m and ft): every room's furniture = QA's A-11 placement mapped to L, colour = the Q18 style's hex`, cut(f));
+  R.note(`F houses built: ${st.houses}`); R.check(`F ${st.rooms} rooms in ${st.houses} houses (sample x 3 styles x full / sparse, 24 seeded houses, m and ft): every room's furniture = QA's A-11 placement mapped to L, colour = the Q18 style's hex${T2 ? ` (F6-T2: through the room type's I3 palette; every piece's parts = my expansion of its template, ${st.parts || 0} parts)` : ''}`, cut(f));
   R.check('F every piece keeps 0.15 m to its room\'s walls, enters no other room, the stair or the lift, and stays out of the entrance gap', cut(cont));
-  R.check('F 3D: one furniture batch per furnished level, one box per piece at floor + y0 .. + h exactly over the piece, colour col(hex), cast + receive', cut(t3));
+  R.check(T2 ? `F 3D (F6-T2): per furnished level one furniture batch with one box per plain part (or part-less piece), the planks / weave parts in textured-<level>, the lamp shades in lamps-<level> (+ 2 gate lamps on G), each at floor + y0 .. + h over the part in my colour; furniture cast + receive (${st.items || 0} furniture boxes)` : 'F 3D: one furniture batch per furnished level, one box per piece at floor + y0 .. + h exactly over the piece, colour col(hex), cast + receive', cut(t3));
   // sparse vs full, Q18 colours only
   const g = [];
   for (const style of ['modern', 'classic', 'minimal']) { const a = PC.house.build(make((s) => { s.ans.interior = { style, density: 'full' }; })), b = PC.house.build(make((s) => { s.ans.interior = { style, density: 'sparse' }; }));
     const n = (h) => h.levels.reduce((x, l) => x + l.rooms.reduce((y, r) => y + r.furniture.length, 0), 0); if (!(n(b) < n(a))) g.push(`${style}: sparse ${n(b)} vs full ${n(a)}`); }
   const base = make((s) => { s.ans.interior = { style: 'modern', density: 'full' }; }), hb = PC.house.build(base);
   for (const style of ['classic', 'minimal']) { const s2 = make((s) => { s.ans.interior = { style, density: 'full' }; }), h2 = PC.house.build(s2);
-    const boxes = (h) => h.levels.map((l) => l.rooms.map((r) => r.furniture.map(({ color, ...p }) => p))), cols = (h) => h.levels.flatMap((l) => l.rooms.flatMap((r) => r.furniture.map((p) => p.color)));
+    const boxes = (h) => h.levels.map((l) => l.rooms.map((r) => r.furniture.map(({ color, parts, ...p }) => ({ ...p, parts: parts ? parts.map(({ color: c, ...q }) => q) : parts })))), cols = (h) => h.levels.flatMap((l) => l.rooms.flatMap((r) => r.furniture.map((p) => p.color)));
     if (!eq(boxes(h2), boxes(hb))) g.push(`${style}: boxes differ from modern`);
     if (eq(cols(h2), cols(hb))) g.push(`${style}: colours equal modern`);
     if (h2.key === hb.key) g.push(`${style}: same key`);
@@ -401,7 +448,7 @@ if (want('P')) {
 // ================= B. budget =================
 if (want('B')) {
   const f = [];
-  const smp = make(), hs = PC.house.build(smp), sw0 = scene(hs).world, ms = meshes(sw0).length, nNew = (w) => meshes(w).filter((m) => F6_NEW.includes(m.name)).length;
+  const smp = make(), hs = PC.house.build(smp), sw0 = scene(hs).world, ms = meshes(sw0).length, nNew = (w) => meshes(w).filter((m) => isNew(m.name)).length;
   const LIM = F6 ? 64 : 18;   // F6-T1: the mesh budget is 64 (plan §8 / C-4); the new meshes are counted by name
   const mx = make((s) => { s.plot.pts = [[0, 0], [60, 0], [60, 50], [0, 50]]; s.ans.streetEdge = 0; s.ans.footprintPct = 40; s.ans.floors = 3; s.ans.basement = true; s.ans.lift = true; s.ans.usableRoof = true; s.ans.roofType = 'terrace';
     s.ans.pool = { on: true, size: 'L' }; s.ans.parking = { cars: 4, covered: true }; s.ans.extras = { wall: true, gate: 'right', seating: true }; s.ans.interior = { style: 'classic', density: 'full' }; s.ans.pairs = []; s.ans.rooms = []; let n = 1;
@@ -412,7 +459,7 @@ if (want('B')) {
     const vx = VEG(hm); if (mm > LIM + (F6 ? 0 : vx)) f.push(`${mm} meshes > ${LIM}${vx && !F6 ? ` + ${vx} vegetation` : ''}`);
     if (!hm.site.pool || !hm.site.parking || !hm.site.gate || !hm.site.seating || !hm.roof.stairHead || !hm.roof.liftHead) f.push(`items missing: ${JSON.stringify({ pool: !!hm.site.pool, parking: !!hm.site.parking, gate: !!hm.site.gate, seating: !!hm.site.seating, heads: [!!hm.roof.stairHead, !!hm.roof.liftHead] })}`);
     if (hm.levels.some((l) => !l.rooms.every((r) => r.furniture.length))) f.push('a room without furniture'); }
-  if (ms !== 12 + VEG(hs) + nNew(sw0)) f.push(`sample: ${ms} meshes (FS reports 12${VEG(hs) ? ` + ${VEG(hs)} vegetation (F4-T3)` : ''}${F6 ? ` + ${nNew(sw0)} F6 (paving / needle / tiles / sky / groundRing / blobs / roofDeck)` : ''})`);
+  if (ms !== 12 + VEG(hs) + nNew(sw0)) f.push(`sample: ${ms} meshes (FS reports 12${VEG(hs) ? ` + ${VEG(hs)} vegetation (F4-T3)` : ''}${F6 ? ` + ${nNew(sw0)} F6 (paving / needle / tiles / sky / groundRing / blobs / roofDeck${T2 ? ' / textured / lamps / glazing' : ''})` : ''})`);
   R.check(`B maximum house (4 levels x 10 room types, full, lift, pool L, 4 covered cars, wall, gate, seating, usable terrace): ${mm} meshes <= ${F6 ? '64 (F6-T1 budget)' : '18 (+ vegetation from F4-T3)'}, every item present, every room furnished; sample ${ms} meshes`, f);
   R.note(`B maximum house: ${mm} meshes, sample ${ms}; model ${tm} ms, batches ${tb3} ms (node, r128 without renderer)`);
 }
