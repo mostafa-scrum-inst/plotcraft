@@ -60,3 +60,8 @@ Every CD-8 item is now visible in the shots:
 Once the gate condition is met, the CD-8 brief is complete for the MVP. Still deferred to later batches: R4 (tank and AC units), R5 (pitched eaves), W2 (string course) and G2b.
 
 VERDICT: APPROVED
+
+## Addendum 1 (QA trim, main 341d187)
+- **QA's run:** a + b moved about 41 s of work. QA's quiet default run took 411.7 s. The release processes took 235.1 s (rows) and 162.0 s (stream). No check was lost.
+- **Gate:** still open until FS's two quiet confirm runs are in.
+- **Release rows process:** at 235 s it has 25 s left under the 260 s NOTE line. The next feature that moves rows there must split it or re-balance it.
