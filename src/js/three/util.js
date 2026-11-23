@@ -155,13 +155,40 @@
     this.corners(ps, [0, 1, 0], cs.map(this.rgbOf, this));
     this.quads++; this.items.push([kind || 'quadUp', 4]);
   };
-  BoxBatch.prototype.corners = function (ps, n, cs) {
-    var base = this.pos.length / 3, B = this.uv && basis(n), self = this;
+  BoxBatch.prototype.corners = function (ps, n, cs, uvs) {
+    var base = this.pos.length / 3, B = this.uv && !uvs && basis(n), self = this;
     ps.forEach(function (p, i) {
       self.pos.push(p[0], p[1], p[2]); self.nor.push(n[0], n[1], n[2]); self.rgb.push(cs[i][0], cs[i][1], cs[i][2]);
       if (B) self.uv.push(dot(p, B[0]), dot(p, B[1]));
+      else if (uvs) self.uv.push(uvs[i][0], uvs[i][1]);
     });
     this.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  };
+
+  // F6-T2 I2 (CTO atlas condition): atlas-mapped geometry in a BoxBatch({ uv: true }). rect = an atlas cell's content
+  // { u0, v0, u1, v1 } already inset by half a texel (three.atlasCells). addCellBox maps every face of the box onto the
+  // whole cell once (furniture parts); addCellUp is a face-up quad over 4 XZ points with one colour and one uv per
+  // corner (floor and rug tiles, each inside one cell tile).
+  BoxBatch.prototype.addCellBox = function (cx, cy, cz, sx, sy, sz, hex, rect, kind) {
+    var c = [cx, cy, cz], h = [sx / 2, sy / 2, sz / 2], rgb = this.color(hex), self = this;
+    var uvs = CORNERS.map(function (k) { return [k[0] < 0 ? rect.u0 : rect.u1, k[1] < 0 ? rect.v0 : rect.v1]; });
+    FACES.forEach(function (f) {
+      var n = [0, 0, 0], ps = CORNERS.map(function (k) { var p = c.slice(); p[f[0]] += f[1] * h[f[0]]; p[f[2]] += k[0] * h[f[2]]; p[f[3]] += k[1] * h[f[3]]; return p; });
+      n[f[0]] = f[1]; self.corners(ps, n, [rgb, rgb, rgb, rgb], uvs);
+    });
+    this.boxes++; this.items.push([kind || 'cellBox', 24]);
+  };
+  BoxBatch.prototype.addCellUp = function (pts, y, rgbs, uvs, kind) {
+    var ps = pts.map(function (p) { return [p[0], y, p[1]]; }), cs = rgbs.slice(), us = uvs.slice(), g = cross(sub(ps[1], ps[0]), sub(ps[2], ps[0]));
+    if (g[1] < 0) { ps.reverse(); cs.reverse(); us.reverse(); }
+    this.corners(ps, [0, 1, 0], cs.map(this.rgbOf, this), us);
+    this.quads++; this.items.push([kind || 'cellUp', 4]);
+  };
+  // The interior atlas cells at `size` px, by name, each inset by half a texel (CTO atlas condition).
+  three.atlasCells = function (size) {
+    var out = {}, e = 0.5 / size;
+    PC.texgen.cells(size).forEach(function (c) { out[c.name] = { u0: c.u0 + e, v0: c.v0 + e, u1: c.u1 - e, v1: c.v1 - e }; });
+    return out;
   };
   BoxBatch.prototype.count = function () { return this.items.length; };
   // One Mesh, or null when nothing was added.

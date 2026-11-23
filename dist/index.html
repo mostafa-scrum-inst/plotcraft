@@ -4334,6 +4334,51 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     }
   };
 
+  var CELL = {
+    planks: function (S, n, r) {
+      var f = new F32(n * n), bw = n / S.boards, len = n / S.perLen, off = cellRand(S.boards, r), per = cellRand(S.boards * S.perLen, r);
+      var grain = noise(n, 4, r), streak = cellRand(n, r);
+      for (var y = 0; y < n; y++) for (var x = 0; x < n; x++) {
+        var b = floor(x / bw), sy = (y + floor((off[b] + 1) / 2 * len)) % n, seg = floor(sy / len), i = y * n + x;
+        f[i] = per[b * S.perLen + seg] * S.board + streak[x] * grain[(y * 7 % n) * n + x] * S.grain;
+        if (x - b * bw < 1 || sy - seg * len < 1) f[i] += S.seam;
+      }
+      return f;
+    },
+    tile: function (S, n, r) {
+      var f = new F32(n * n), tw = n / S.tiles, per = cellRand(S.tiles * S.tiles, r);
+      addNoise(f, n, S.mottle, r);
+      for (var y = 0; y < n; y++) for (var x = 0; x < n; x++) {
+        var cx = floor(x / tw), cy = floor(y / tw), i = y * n + x;
+        f[i] += per[cy * S.tiles + cx] * S.tile;
+        if (x - cx * tw < S.groutW || y - cy * tw < S.groutW) f[i] += S.grout;
+      }
+      return f;
+    },
+    carpet: function (S, n, r) { var f = new F32(n * n); addNoise(f, n, S.noise, r); return f; },
+    weave: function (S, n, r) {
+      var f = new F32(n * n);
+      for (var y = 0; y < n; y++) for (var x = 0; x < n; x++) f[y * n + x] = ((x + y) % 2 ? S.cross : -S.cross) + (r() * 2 - 1) * S.noise;
+      return f;
+    }
+  };
+  function cells(size) {
+    var S = PC.data.textures.interior, half = size / 2, pad = round(half * S.pad), n = half - 2 * pad;
+    return S.cells.map(function (name, i) {
+      var x = (i % 2) * half + pad, y = floor(i / 2) * half + pad;
+      return { name: name, x: x, y: y, n: n, pad: pad, u0: x / size, v0: y / size, u1: (x + n) / size, v1: (y + n) / size };
+    });
+  }
+  function atlas(S, size, r, data) {
+    cells(size).forEach(function (c) {
+      var C = S[c.name], f = CELL[c.name](C, c.n, r);
+      for (var y = -c.pad; y < c.n + c.pad; y++) for (var x = -c.pad; x < c.n + c.pad; x++) {
+        var sx = (x + c.n) % c.n, sy = (y + c.n) % c.n, v = round(min(1, max(0, C.base * (1 + f[sy * c.n + sx]))) * 255), o = ((c.y + y) * size + c.x + x) * 4;
+        data[o] = data[o + 1] = data[o + 2] = v; data[o + 3] = 255;
+      }
+    });
+  }
+
   function make(kind, size, spec, seed) {
     var S = spec || PC.data.textures[kind], data = new U8(size * size * 4), r = rng(seed === undefined ? fnv(kind) : seed), i;
     if (!S) throw new Error('texgen: unknown kind ' + kind);
@@ -4341,10 +4386,11 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       var half = size / 2;
       for (var y = 0; y < size; y++) for (var x = 0; x < size; x++) {
         var d = hypot(x + 0.5 - half, y + 0.5 - half) / half, a = d >= 1 ? 0 : pow(1 - d, S.power);
-        data[(y * size + x) * 4 + 3] = round(a * 255);
+        var o = (y * size + x) * 4; data[o] = data[o + 1] = data[o + 2] = 255; data[o + 3] = round(a * 255);
       }
       return { w: size, h: size, data: data };
     }
+    if (kind === 'interior') { atlas(S, size, r, data); return { w: size, h: size, data: data }; }
     var f = new F32(size * size);
     KINDS[kind](S, size, r, f);
     for (i = 0; i < f.length; i++) {
@@ -4356,7 +4402,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 
   var cache = {};
   PC.texgen = {
-    KINDS: ['grass', 'paving', 'tiles', 'meadow', 'membrane', 'blob'],
+    KINDS: ['grass', 'paving', 'tiles', 'meadow', 'membrane', 'blob', 'interior'],
+    cells: cells,
     generated: 0,
     make: make,
     get: function (kind, size) {
@@ -4453,9 +4500,18 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       rooms: { bedroom: { fabric: '#DCD9D2', accent: '#8FA698' }, majlis: { fabric: '#B9A48A', accent: '#6F8A7A' }, dining: { fabric: '#E0DDD6' }, office: { fabric: '#9AA3A8', accent: '#C8A878' } } }
   };
   PC.data.indoor = {
-    glazing: { hex: '#FFB866', k: 0.9 }, lift: { hex: '#FFB070', k: 0.08 }, lamp: { hex: '#FFD9A8', k: 1.4, color: '#F2EBDD' },
+    glazing: { hex: '#FFB866', k: 0.9 }, lift: { hex: '#FFB070', k: 0.08 }, lamp: { hex: '#FFD9A8', k: 1.4, color: '#F2EBDD', gate: 0.25 },
     pool: { hex: '#FFB870', lampK: 0.20, roomK: 0.14, spillK: 0.12, patchK: 0.35, lampD: 2.2, roomD: 0.6, spillW: 2.0, spillD: 1.4, patchOut: 0.01, patchPad: 0.1 },
     litShare: { glazed: 0.75, small: 0.4, slot: 1 }
+  };
+  PC.data.floors = {
+    kind: { living: 'planks', dining: 'planks', bedroom: 'planks', office: 'planks', hall: 'planks', majlis: 'carpet',
+      kitchen: 'tile', bathroom: 'tile', laundry: 'tile', storage: 'tile', maid: 'tile' },
+    modern: { planks: '#8A6E55', tile: '#B9B7B2', carpet: '#6B5A4C' },
+    classic: { planks: '#9A6A44', tile: '#D8CBB4', carpet: '#7A2F2C' },
+    minimal: { planks: '#C9AE86', tile: '#E3E1DC', carpet: '#A89C88' },
+    tint: 0.12,
+    rug: { lift: 0.01, living: [0.55, 0.5, 2.4, 1.7], bed: [1.6, 1.0], diningPad: 0.6, accentMix: 0.5 }
   };
   PC.data.roomTints = {
     bedroom: '#B8CCE7', bathroom: '#A1D8D1', kitchen: '#E5D179', living: '#BFD7A0', dining: '#EBC097',
@@ -4640,7 +4696,12 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     tiles: { tileM: 1.5, base: 0.9, rows: 5, perRow: 6, lineW: 2, line: -0.30, joint: -0.15, tile: 0.06 },
     meadow: { tileM: 48, base: 0.9, noise: [[2, 0.05], [6, 0.035], [24, 0.02]] },   // F6-T1c G2: 24 / 8 / 2 m features over one 48 m tile (T1a: 0.08 at 12 m read as camouflage patches)
     membrane: { tileM: 4, base: 0.9, sheetW: 1.0, seam: -0.12, mottle: [[2, 0.05], [8, 0.025]], speckle: 0.03 },
-    blob: { power: 1.5 }
+    blob: { power: 1.5 },
+    interior: { pad: 0.03125, cells: ['planks', 'tile', 'carpet', 'weave'],
+      planks: { tileM: 1.2, base: 0.89, boards: 8, perLen: 2, seam: -0.25, board: 0.06, grain: 0.04 },
+      tile: { tileM: 1.2, base: 0.89, tiles: 2, groutW: 2, grout: -0.30, tile: 0.03, mottle: [[3, 0.04]] },
+      carpet: { tileM: 0.5, base: 0.88, noise: [[16, 0.05], [64, 0.06]] },
+      weave: { base: 0.88, cross: 0.05, noise: 0.03 } }
   };
 })(globalThis.PC = globalThis.PC || {});
 
@@ -4767,13 +4828,35 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     this.corners(ps, [0, 1, 0], cs.map(this.rgbOf, this));
     this.quads++; this.items.push([kind || 'quadUp', 4]);
   };
-  BoxBatch.prototype.corners = function (ps, n, cs) {
-    var base = this.pos.length / 3, B = this.uv && basis(n), self = this;
+  BoxBatch.prototype.corners = function (ps, n, cs, uvs) {
+    var base = this.pos.length / 3, B = this.uv && !uvs && basis(n), self = this;
     ps.forEach(function (p, i) {
       self.pos.push(p[0], p[1], p[2]); self.nor.push(n[0], n[1], n[2]); self.rgb.push(cs[i][0], cs[i][1], cs[i][2]);
       if (B) self.uv.push(dot(p, B[0]), dot(p, B[1]));
+      else if (uvs) self.uv.push(uvs[i][0], uvs[i][1]);
     });
     this.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  };
+
+  BoxBatch.prototype.addCellBox = function (cx, cy, cz, sx, sy, sz, hex, rect, kind) {
+    var c = [cx, cy, cz], h = [sx / 2, sy / 2, sz / 2], rgb = this.color(hex), self = this;
+    var uvs = CORNERS.map(function (k) { return [k[0] < 0 ? rect.u0 : rect.u1, k[1] < 0 ? rect.v0 : rect.v1]; });
+    FACES.forEach(function (f) {
+      var n = [0, 0, 0], ps = CORNERS.map(function (k) { var p = c.slice(); p[f[0]] += f[1] * h[f[0]]; p[f[2]] += k[0] * h[f[2]]; p[f[3]] += k[1] * h[f[3]]; return p; });
+      n[f[0]] = f[1]; self.corners(ps, n, [rgb, rgb, rgb, rgb], uvs);
+    });
+    this.boxes++; this.items.push([kind || 'cellBox', 24]);
+  };
+  BoxBatch.prototype.addCellUp = function (pts, y, rgbs, uvs, kind) {
+    var ps = pts.map(function (p) { return [p[0], y, p[1]]; }), cs = rgbs.slice(), us = uvs.slice(), g = cross(sub(ps[1], ps[0]), sub(ps[2], ps[0]));
+    if (g[1] < 0) { ps.reverse(); cs.reverse(); us.reverse(); }
+    this.corners(ps, [0, 1, 0], cs.map(this.rgbOf, this), us);
+    this.quads++; this.items.push([kind || 'cellUp', 4]);
+  };
+  three.atlasCells = function (size) {
+    var out = {}, e = 0.5 / size;
+    PC.texgen.cells(size).forEach(function (c) { out[c.name] = { u0: c.u0 + e, v0: c.v0 + e, u1: c.u1 - e, v1: c.v1 - e }; });
+    return out;
   };
   BoxBatch.prototype.count = function () { return this.items.length; };
   BoxBatch.prototype.build = function (material, name) {
@@ -5035,18 +5118,6 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       var g = group('level-' + lv.id, world); g.userData.index = lv.index; g.userData.id = lv.id;
       var floorY = lv.baseY + H.slab, top = floorY + H.wallH, slab = new three.BoxBatch(), walls = new three.BoxBatch();
       box(slab, fp.u, fp.u + fp.w, fp.v, fp.v + fp.d, lv.baseY, floorY, E.slab, hall);
-      lv.rooms.forEach(function (r) {
-        slab.addQuad(X(r.u + r.w / 2), floorY + H.tintLift, Z(r.v + r.d / 2), r.w, r.d, mix(RT[r.type], I.wood, I.floorMix));
-      });
-      lv.rooms.forEach(function (r) {
-        var hex = mix(RT[r.type], I.wood, I.floorMix), k = Math.min(C.ringW, Math.min(r.w, r.d) / 2 - 0.01), o = slab.shade(hex, C.ringK), i = slab.shade(hex, 1);
-        if (k <= 0) return;
-        var a0 = X(r.u), a1 = X(r.u + r.w), b0 = Z(r.v + r.d), b1 = Z(r.v), y = floorY + H.tintLift + C.ringLift;
-        [[[a0, b0], [a1, b0], [a1 - k, b0 + k], [a0 + k, b0 + k]], [[a1, b0], [a1, b1], [a1 - k, b1 - k], [a1 - k, b0 + k]],
-          [[a1, b1], [a0, b1], [a0 + k, b1 - k], [a1 - k, b1 - k]], [[a0, b1], [a0, b0], [a0 + k, b0 + k], [a0 + k, b1 - k]]].forEach(function (q) {
-          slab.addUpQuad(q, y, [o, o, i, i], 'ring');
-        });
-      });
       var u0 = fp.u, u1 = fp.u + fp.w, v0 = fp.v, v1 = fp.v + fp.d;
       if (lv.index < 0) {                         // basement: pit walls from the basement floor to ground level
         box(walls, u0, u1, v0, v0 + t, floorY, 0, E.slab); box(walls, u0, u1, v1 - t, v1, floorY, 0, E.slab);
@@ -5086,7 +5157,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   'use strict';
   var three = PC.three = PC.three || {};
 
-  function openings(house, b) {
+  function openings(house, b, gl, panes) {
     var O = PC.C.OPEN.decal, fp = house.footprint, E = PC.data.exteriors[house.exterior], SC = PC.data.siteColors;
     var cu = house.center[0], cv = house.center[1], byId = {};
     house.levels.forEach(function (lv) { byId[lv.id] = lv; });
@@ -5099,7 +5170,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       function bar(t, y, bw, bh, depth, hex) {   // a box bw along the wall, bh tall, from the plane to depth out
         var c = at(t, depth / 2); b.add(c[0], y, c[1], ax === 2 ? bw : depth, bh, ax === 2 ? depth : bw, hex);
       }
-      function quad(t, y, qw, qh, d, top, bot, kind) { var c = at(t, d); b.addQuadV(c[0], y, c[1], ax, sg, qw, qh, top, bot, kind); }
+      function quad(t, y, qw, qh, d, top, bot, kind, into) { var c = at(t, d); (into || b).addQuadV(c[0], y, c[1], ax, sg, qw, qh, top, bot, kind); }
       var f = O.frame, hw = w / 2;
       if (o.kind === 'door') {
         bar(along, ys + h / 2, w, h, O.leaf, E.door);
@@ -5107,7 +5178,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
         bar(along - hw - f / 2, ys + h / 2, f, h, O.proud, E.frame); bar(along + hw + f / 2, ys + h / 2, f, h, O.proud, E.frame);
         return;
       }
-      quad(along, ys + h / 2, w, h, O.glass, SC.glassTop, SC.glassBottom, 'glass');
+      quad(along, ys + h / 2, w, h, O.glass, SC.glassTop, SC.glassBottom, 'glass', gl);   // F6-T2 N2: in "glazing"
+      var pc = at(along, O.glass);
+      panes.push({ level: o.level, kind: o.kind, side: o.side, i: panes.length, x: pc[0], y: ys + h / 2, z: pc[1], w: w, h: h, ax: ax, sg: sg });
       var r = O.reveal;   // the reveal band just inside the opening: top, bottom, then the two sides
       quad(along, yh - r / 2, w, r, O.revealD, reveal, reveal, 'reveal'); quad(along, ys + r / 2, w, r, O.revealD, reveal, reveal, 'reveal');
       quad(along - hw + r / 2, ys + h / 2, r, h - 2 * r, O.revealD, reveal, reveal, 'reveal'); quad(along + hw - r / 2, ys + h / 2, r, h - 2 * r, O.revealD, reveal, reveal, 'reveal');
@@ -5184,9 +5257,12 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       dk.addUpQuad([[X(D[0]), Z(D[2])], [X(D[1]), Z(D[2])], [X(D[1]), Z(D[3])], [X(D[0]), Z(D[3])]], top + R.deckLift, [w1, w1, w1, w1], 'deck');
       if (mats.deck) { deck = dk.build(mats.deck, 'roofDeck'); deck.castShadow = false; deck.receiveShadow = true; }
     }
-    openings(house, b);
+    var gl = new three.BoxBatch(), panes = [];
+    openings(house, b, gl, panes);
     var g = world.getObjectByName('roof'), m = b.build(mats.batch, 'roofBatch'), out = [];
     if (m) { g.add(m); out.push(m); }
+    var gm = gl.build(mats.glazing || mats.batch, 'glazing');   // F6-T2 N2 (TL ruling 2): receives, does not cast
+    if (gm) { gm.castShadow = false; gm.receiveShadow = true; gm.userData.panes = panes; g.add(gm); out.push(gm); }
     if (tm) { g.add(tm); out.push(tm); }
     if (deck) { g.add(deck); out.push(deck); }
     return out;
@@ -5198,18 +5274,140 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
+  var FLOOR_STEP = 0.01;   // room floors over the hall floor (the T1c deck lesson: 0.002 z-fought, 0.01 does not)
 
-  three.buildInterior = function (house, world, mats) {
-    var H = PC.C.HOUSE, cu = house.center[0], cv = house.center[1], made = [];
+  function tiles(b, X, Z, u0, u1, v0, v1, y, tileM, rect, colourAt, extraU, extraV, kind) {
+    function cuts(a0, a1, extra) {
+      var c = [a0, a1].concat(extra.filter(function (x) { return x > a0 + 1e-6 && x < a1 - 1e-6; }));
+      for (var k = Math.ceil(a0 / tileM + 1e-9); k * tileM < a1 - 1e-6; k++) c.push(k * tileM);
+      return c.sort(function (p, q) { return p - q; }).filter(function (x, i, a) { return i === 0 || x - a[i - 1] > 1e-6; });
+    }
+    var cu = cuts(u0, u1, extraU), cv = cuts(v0, v1, extraV), du = rect.u1 - rect.u0, dv = rect.v1 - rect.v0;
+    for (var i = 0; i < cu.length - 1; i++) for (var j = 0; j < cv.length - 1; j++) {
+      var a = cu[i], b2 = cu[i + 1], c = cv[j], d = cv[j + 1], tu = Math.floor((a + b2) / 2 / tileM) * tileM, tv = Math.floor((c + d) / 2 / tileM) * tileM;
+      var fu = function (u) { return rect.u0 + (u - tu) / tileM * du; }, fv = function (v) { return rect.v0 + (v - tv) / tileM * dv; };
+      var P = [[a, c], [b2, c], [b2, d], [a, d]];
+      b.addCellUp(P.map(function (p) { return [X(p[0]), Z(p[1])]; }), y, P.map(function (p) { return colourAt(p[0], p[1]); }),
+        P.map(function (p) { return [fu(p[0]), fv(p[1])]; }), kind);
+    }
+  }
+
+  three.buildInterior = function (house, world, mats, opt) {
+    var H = PC.C.HOUSE, C = PC.C.CONTACT, cu = house.center[0], cv = house.center[1], made = [], fp = house.footprint;
+    var FL = PC.data.floors, RT = PC.data.roomTints, mix = three.mixHex, style = house.interior.style, FS = FL[style];
+    var I = PC.data.interiors[style], T = PC.data.textures.interior, cells = (opt && opt.cells) || three.atlasCells(512);
+    var X = function (u) { return u - cu; }, Z = function (v) { return -(v - cv); };
+    function floorHex(type) { return mix(FS[FL.kind[type]], RT[type], FL.tint); }
+    function put(b, mat, name, g, shadows) {
+      var m = b.build(mat, name);
+      if (!m) return;
+      if (!shadows) { m.castShadow = false; m.receiveShadow = false; }
+      g.add(m); made.push(m);
+    }
     house.levels.forEach(function (lv) {
-      var b = new three.BoxBatch(), floorY = lv.baseY + H.slab;
+      if (!lv.rooms.length) return;
+      var g = world.getObjectByName('level-' + lv.id), floorY = lv.baseY + H.slab, y0 = floorY + H.tintLift;
+      var plain = new three.BoxBatch(), tex = new three.BoxBatch({ uv: true }), lamps = new three.BoxBatch();
+      var hall = tex.color(floorHex('hall'));
+      tiles(tex, X, Z, fp.u, fp.u + fp.w, fp.v, fp.v + fp.d, y0, T.planks.tileM, cells.planks, function () { return hall; }, [], [], 'hallFloor');
       lv.rooms.forEach(function (r) {
-        r.furniture.forEach(function (p) {
-          b.add(p.u + p.w / 2 - cu, floorY + p.y0 + p.h / 2, -(p.v + p.d / 2 - cv), p.w, p.h, p.d, p.color);
+        var kind = FL.kind[r.type], hex = floorHex(r.type), k = Math.min(C.ringW, Math.min(r.w, r.d) / 2 - 0.01), u1 = r.u + r.w, v1 = r.v + r.d;
+        var at = function (u, v) {
+          var dd = Math.min(u - r.u, u1 - u, v - r.v, v1 - v), f = k > 0 ? C.ringK + (1 - C.ringK) * Math.min(1, dd / k) : 1;
+          return tex.shade(hex, f);
+        };
+        var lu = k > 0 ? [r.u + k, u1 - k] : [], lvv = k > 0 ? [r.v + k, v1 - k] : [];
+        tiles(tex, X, Z, r.u, u1, r.v, v1, y0 + FLOOR_STEP, T[kind].tileM, cells[kind], at, lu, lvv, 'floor');
+      });
+      lv.rooms.forEach(function (r) {
+        var R = FL.rug, rs = Object.assign({}, I, (I.rooms || {})[r.type]), hex = mix(rs.accent, rs.fabric, R.accentMix), c = tex.color(hex);
+        var ins = PC.C.FURNISH.inset, rects = [];
+        r.furniture.forEach(function (q) {
+          var qu = q.u + q.w / 2, qv = q.v + q.d / 2;
+          if (r.type === 'living' && q.kind === 'coffeeTable') {
+            var w = Math.min(R.living[2], R.living[0] * r.w), d = Math.min(R.living[3], R.living[1] * r.d);
+            rects.push([qu - w / 2, qu + w / 2, qv - d / 2, qv + d / 2]);
+          } else if (r.type === 'dining' && q.kind === 'table') {
+            rects.push([q.u - R.diningPad, q.u + q.w + R.diningPad, q.v - R.diningPad, q.v + q.d + R.diningPad]);
+          } else if (r.type === 'bedroom' && q.kind === 'bed' && q.parts) {
+            var hb = q.parts[q.parts.length - 1], bx = hb.u + hb.w / 2 - qu, by = hb.v + hb.d / 2 - qv, alongV = Math.abs(by) >= Math.abs(bx);
+            var len = alongV ? q.d : q.w, s = alongV ? Math.sign(by) : Math.sign(bx), fu = alongV ? qu : qu - s * len / 2, fv = alongV ? qv - s * len / 2 : qv;
+            var a = R.bed[0] / 2, e = R.bed[1] / 2;
+            rects.push(alongV ? [fu - a, fu + a, fv - e, fv + e] : [fu - e, fu + e, fv - a, fv + a]);
+          }
+        });
+        rects.forEach(function (q) {
+          var a0 = Math.max(q[0], r.u + ins), a1 = Math.min(q[1], r.u + r.w - ins), b0 = Math.max(q[2], r.v + ins), b1 = Math.min(q[3], r.v + r.d - ins);
+          if (a1 - a0 > 0.05 && b1 - b0 > 0.05) tiles(tex, X, Z, a0, a1, b0, b1, y0 + FLOOR_STEP + R.lift, T.carpet.tileM, cells.carpet, function () { return c; }, [], [], 'rug');
         });
       });
-      var m = b.build(mats.batch, 'furniture');
-      if (m) { world.getObjectByName('level-' + lv.id).add(m); made.push(m); }
+      lv.rooms.forEach(function (r) {
+        r.furniture.forEach(function (p) {
+          if (!p.parts) { plain.add(X(p.u + p.w / 2), floorY + p.y0 + p.h / 2, Z(p.v + p.d / 2), p.w, p.h, p.d, p.color); return; }
+          p.parts.forEach(function (t) {
+            var x = X(t.u + t.w / 2), y = floorY + t.y0 + t.h / 2, z = Z(t.v + t.d / 2);
+            if (t.mat === 'lamp') lamps.add(x, y, z, t.w, t.h, t.d, t.color);
+            else if (t.mat === 'plain') plain.add(x, y, z, t.w, t.h, t.d, t.color);
+            else tex.addCellBox(x, y, z, t.w, t.h, t.d, t.color, cells[t.mat], 'part');
+          });
+        });
+      });
+      var S = house.site, SC = PC.C.SITE, gs = PC.data.indoor.lamp.gate;
+      if (lv.id === 'G' && S.wall && S.gate) [S.gate.u - S.gate.w / 2 - SC.post / 2, S.gate.u + S.gate.w / 2 + SC.post / 2].forEach(function (u) {
+        lamps.add(X(u), SC.postH + gs / 2, Z(SC.post / 2), gs, gs, gs, PC.data.indoor.lamp.color);
+      });
+      put(plain, mats.furniture, 'furniture', g, true);
+      put(tex, mats.interior, 'textured-' + lv.id, g, true);
+      put(lamps, mats.lamp, 'lamps-' + lv.id, g, false);
+    });
+    return made;
+  };
+
+  var HABITABLE = { living: 1, dining: 1, bedroom: 1, majlis: 1, office: 1, kitchen: 1, maid: 1 };
+  three.litPane = function (house, p) {
+    var share = PC.data.indoor.litShare[p.kind];
+    return share >= 1 || parseInt(PC.house.hash(house.key + ':' + p.level + ':' + p.side + ':' + p.i), 16) / 4294967296 < (share || 0);
+  };
+  three.buildGlow = function (house, world, mats, opt) {
+    if (!mats.glow || (opt && opt.tier && !opt.tier.fog)) return [];
+    var H = PC.C.HOUSE, P = PC.data.indoor.pool, cu = house.center[0], cv = house.center[1], made = [];
+    var X = function (u) { return u - cu; }, Z = function (v) { return -(v - cv); };
+    var gm = world.getObjectByName('glazing'), panes = gm ? gm.userData.panes : [];
+    var up = new THREE.Quaternion(); up.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+    var face = { x: new THREE.Quaternion(), z: new THREE.Quaternion() };
+    house.levels.forEach(function (lv) {
+      var floorY = lv.baseY + H.slab + H.tintLift + 0.03, pools = [], spill = [], patch = [];
+      lv.rooms.forEach(function (r) {
+        var lit = false;
+        r.furniture.forEach(function (q) { (q.parts || []).forEach(function (t) {
+          if (t.mat === 'lamp') { lit = true; pools.push([X(t.u + t.w / 2), floorY, Z(t.v + t.d / 2), P.lampD, P.lampD, P.lampK, up]); }
+        }); });
+        if (!lit && HABITABLE[r.type]) { var d = P.roomD * Math.min(r.w, r.d); pools.push([X(r.u + r.w / 2), floorY, Z(r.v + r.d / 2), d, d, P.roomK, up]); }
+      });
+      if (lv.id === 'G' && house.site.wall && house.site.gate) {   // the gate lamps' ground pools (spill group)
+        var g = house.site.gate, SC = PC.C.SITE;
+        [g.u - g.w / 2 - SC.post / 2, g.u + g.w / 2 + SC.post / 2].forEach(function (u) { spill.push([X(u), 0.03, Z(-0.6), P.lampD * 0.6, P.lampD * 0.6, P.spillK, up]); });
+      }
+      panes.filter(function (p) { return p.level === lv.id && three.litPane(house, p); }).forEach(function (p) {
+        var nx = p.ax === 0 ? p.sg : 0, nz = p.ax === 2 ? p.sg : 0, q = new THREE.Quaternion();
+        q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), p.ax === 0 ? p.sg * Math.PI / 2 : (p.sg > 0 ? 0 : Math.PI));
+        if (lv.index === 0) spill.push([p.x + nx * (P.spillD / 2 + 0.05), 0.03, p.z + nz * (P.spillD / 2 + 0.05), p.ax === 2 ? P.spillW : P.spillD, p.ax === 2 ? P.spillD : P.spillW, P.spillK, up]);
+        patch.push([p.x + nx * P.patchOut, p.y, p.z + nz * P.patchOut, p.w + P.patchPad, p.h + P.patchPad, P.patchK, q]);
+      });
+      var all = pools.concat(spill, patch);
+      if (!all.length) return;
+      var m = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), mats.glow, all.length), mm = new THREE.Matrix4(), base = three.col(P.hex);
+      all.forEach(function (e, i) {
+        var sx = e[3], sz = e[4];
+        if (e[6] === up) { mm.compose(new THREE.Vector3(e[0], e[1], e[2]), up, new THREE.Vector3(sx, sz, 1)); }
+        else mm.compose(new THREE.Vector3(e[0], e[1], e[2]), e[6], new THREE.Vector3(sx, sz, 1));
+        m.setMatrixAt(i, mm);
+        var c = base.clone(); c.r *= e[5]; c.g *= e[5]; c.b *= e[5]; m.setColorAt(i, c);
+      });
+      m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true;
+      m.name = 'glow-' + lv.id; m.frustumCulled = false; m.castShadow = false; m.receiveShadow = false; m.renderOrder = 2; m.visible = false;
+      m.userData.ranges = { pools: pools.length, spill: spill.length, all: all.length };
+      world.getObjectByName('level-' + lv.id).add(m); made.push(m);
     });
     return made;
   };
@@ -5541,6 +5739,13 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       var near = ctx.limits.rMax + R, far = Math.max(near + 1, Math.min(near + V.fogSpanK * R, 0.9 * PC.C.HOUSE.outerK * R / 2));
       fog.color = new THREE.Color(L.skyHorizon); fog.near = near; fog.far = far;
     }
+    var IN = PC.data.indoor, k = L.indoor || 0, M = ctx.mats;
+    if (M.glazing) M.glazing.emissiveIntensity = IN.glazing.k * k;
+    if (M.furniture) M.furniture.emissiveIntensity = IN.lift.k * k;
+    if (M.interior) M.interior.emissiveIntensity = IN.lift.k * k;
+    if (M.lamp) M.lamp.emissiveIntensity = IN.lamp.k * k;
+    if (M.glow) { M.glow.color.r = k; M.glow.color.g = k; M.glow.color.b = k; }
+    ctx.world.children.forEach(function (g) { g.children.forEach(function (m) { if (m.name.indexOf('glow-') === 0) m.visible = k > 0; }); });
     var outer = ctx.world.getObjectByName('groundOuter'), sk = outer && outer.userData.skirt;
     if (sk) {
       var h = col(L.skyHorizon), m = col(L.meadowColor || PC.data.siteColors.groundOuter), a = sk.colors.array;
@@ -5801,7 +6006,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     if (!S.house) return;
     S.limits = PC.cam.limits(S.house, aspect());
     if (S.pose) S.pose = PC.cam.clamp(S.pose, S.limits);
-    if (S.mats) apply(S.house);
+    if (S.mats) { apply(S.house); shadowsDirty(); }   // a re-fit stays an unconditional update (CTO F6-T1)
   }
   function resize(inFrame) {
     var c = S.canvas;
@@ -5866,7 +6071,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   function apply(house) {
     var L = PC.sky.compute(S.look.hour, S.look.season, house.northDeg);
     three.applyLook({ scene: S.scene, sun: S.sun, hemi: S.hemi, mats: S.mats, world: S.world, house: house, renderer: S.renderer, limits: S.limits }, L);
-    shadowsDirty();
+    var c = S.sun.shadow.camera, p = S.sun.position, can = S.world.getObjectByName('canopies');
+    var sig = [p.x, p.y, p.z, S.sun.intensity, c.left, c.right, c.top, c.bottom, c.near, c.far, can ? can.visible : null].join(',');
+    if (sig !== S.shadowSig) { S.shadowSig = sig; shadowsDirty(); }
   }
   function lights(house) { apply(house); S.looks++; }
   function tex(kind) { var t = three.texture(kind, S.tier.tex, S.renderer); S.textures.push(t); return t; }
@@ -5896,8 +6103,15 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       var walk = house.roof.usable || house.roof.type === 'terrace';
       S.mats.deck = new THREE.MeshLambertMaterial({ color: three.col(PC.data.exteriors[house.exterior].roof), map: walk ? S.mats.paving.map : tex('membrane') });
     }
-    S.meshes = three.buildShell(house, S.world, S.mats, { tier: S.tier }).concat(three.buildInterior(house, S.world, S.mats),
+    var IN = PC.data.indoor, glow = function (o, e) { o.emissive = three.col(e); o.emissiveIntensity = 0; return new THREE.MeshLambertMaterial(o); };
+    S.mats.furniture = glow({ vertexColors: true }, IN.lift.hex);
+    S.mats.interior = glow({ vertexColors: true, map: tex('interior') }, IN.lift.hex);
+    S.mats.lamp = glow({ vertexColors: true }, IN.lamp.hex);
+    S.mats.glazing = glow({ vertexColors: true }, IN.glazing.hex);
+    if (!lite) S.mats.glow = new THREE.MeshBasicMaterial({ color: three.col('#000000'), map: S.mats.blob.map, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    S.meshes = three.buildShell(house, S.world, S.mats, { tier: S.tier }).concat(three.buildInterior(house, S.world, S.mats, { cells: three.atlasCells(S.tier.tex) }),
       three.buildRoof(house, S.world, S.mats), three.buildSite(house, S.world, S.mats, { tier: S.tier }));
+    S.meshes = S.meshes.concat(three.buildGlow(house, S.world, S.mats, { tier: S.tier }));
     var keep = S.house && S.pose && S.house.radius === house.radius && S.house.center[0] === house.center[0] && S.house.center[1] === house.center[1];
     S.house = house; S.builtKey = house.key; S.builds++;
     S.limits = PC.cam.limits(house, aspect());
@@ -5906,6 +6120,15 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     lights(house);
     if (!house.levels.some(function (l) { return l.id === S.level; })) S.level = 'all';
     applyVisibility();
+    precompile();
+  }
+  function precompile() {
+    if (!S.renderer || !S.renderer.compile) return;
+    var gs = [];
+    S.world.traverse(function (o) { if (o.name.indexOf('glow-') === 0) { gs.push([o, o.visible]); o.visible = true; } });
+    if (!gs.length) return;
+    S.renderer.compile(S.scene, S.camera);
+    gs.forEach(function (e) { e[0].visible = e[1]; });
   }
 
   function applyVisibility() {
@@ -5917,6 +6140,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     });
     var cap = S.world.getObjectByName('groundCap');
     if (cap) cap.visible = sel !== 'B';
+    var ext = S.roof && sel === 'all';
+    S.world.children.forEach(function (g) { g.children.forEach(function (m) {
+      if (m.name.indexOf('glow-') === 0) m.count = ext ? m.userData.ranges.all : m.userData.ranges.pools + m.userData.ranges.spill;
+    }); });
     shadowsDirty();
   }
 

@@ -2,11 +2,14 @@
    only (core layer, no 3D library). make(kind, size[, spec, seed]) -> { w, h, data: Uint8Array(w x h x 4) }, RGBA.
    - Colour kinds (grass, paving, tiles, meadow; F6-T1c membrane): neutral grey detail, value = base x (1 + sum of the kind's terms),
      clamped to 0..1, alpha 255. The colour still comes from the look tables (C-3.3); the texture multiplies it.
-   - blob: radial alpha (RGB 0) for the contact-shadow quads (T1b), alpha = (1 - r)^1.5 with r = distance / half.
+   - blob: radial alpha (RGB 255 since F6-T2: the blob material's black colour still gives black; the additive glow
+     pools multiply it by their colour) for the contact-shadow quads (T1b), alpha = (1 - r)^1.5 with r = distance / half.
    - Every term is periodic over the tile, so opposite edges continue (tileable): value noise on a wrapped lattice of
      `cells` x `cells`, joints / rows on grids that divide the tile.
    - Deterministic: mulberry32 seeded by seed (default: FNV-1a of the kind). get(kind, size) caches the pixels per
      page session (C-3.2: generated once); `generated` counts real generations (the restore test reads it).
+   F6-T2 I2: interior = a 2 x 2 atlas (planks, tile, carpet, weave), each cell's content tileable on its own and
+   wrapped into its padding; cells(size) gives the layout the 3D layer maps UVs with (CTO atlas condition).
    Specs are PC.data.textures (Designer-owned, data/textures.js). */
 (function (PC) {
   'use strict';
@@ -91,6 +94,54 @@
     }
   };
 
+  // F6-T2 I2: the interior atlas cells, each a tileable field of `n` x `n` (n = the cell content size).
+  var CELL = {
+    planks: function (S, n, r) {
+      var f = new F32(n * n), bw = n / S.boards, len = n / S.perLen, off = cellRand(S.boards, r), per = cellRand(S.boards * S.perLen, r);
+      var grain = noise(n, 4, r), streak = cellRand(n, r);
+      for (var y = 0; y < n; y++) for (var x = 0; x < n; x++) {
+        var b = floor(x / bw), sy = (y + floor((off[b] + 1) / 2 * len)) % n, seg = floor(sy / len), i = y * n + x;
+        f[i] = per[b * S.perLen + seg] * S.board + streak[x] * grain[(y * 7 % n) * n + x] * S.grain;
+        if (x - b * bw < 1 || sy - seg * len < 1) f[i] += S.seam;
+      }
+      return f;
+    },
+    tile: function (S, n, r) {
+      var f = new F32(n * n), tw = n / S.tiles, per = cellRand(S.tiles * S.tiles, r);
+      addNoise(f, n, S.mottle, r);
+      for (var y = 0; y < n; y++) for (var x = 0; x < n; x++) {
+        var cx = floor(x / tw), cy = floor(y / tw), i = y * n + x;
+        f[i] += per[cy * S.tiles + cx] * S.tile;
+        if (x - cx * tw < S.groutW || y - cy * tw < S.groutW) f[i] += S.grout;
+      }
+      return f;
+    },
+    carpet: function (S, n, r) { var f = new F32(n * n); addNoise(f, n, S.noise, r); return f; },
+    weave: function (S, n, r) {
+      var f = new F32(n * n);
+      for (var y = 0; y < n; y++) for (var x = 0; x < n; x++) f[y * n + x] = ((x + y) % 2 ? S.cross : -S.cross) + (r() * 2 - 1) * S.noise;
+      return f;
+    }
+  };
+  // The atlas layout at `size`: cells row-major from (0, 0), each half the size; content n px centred with pad px of
+  // wrapped padding per side. -> [{ name, x, y, n, pad, u0, v0, u1, v1 }] (u / v of the content, 0..1).
+  function cells(size) {
+    var S = PC.data.textures.interior, half = size / 2, pad = round(half * S.pad), n = half - 2 * pad;
+    return S.cells.map(function (name, i) {
+      var x = (i % 2) * half + pad, y = floor(i / 2) * half + pad;
+      return { name: name, x: x, y: y, n: n, pad: pad, u0: x / size, v0: y / size, u1: (x + n) / size, v1: (y + n) / size };
+    });
+  }
+  function atlas(S, size, r, data) {
+    cells(size).forEach(function (c) {
+      var C = S[c.name], f = CELL[c.name](C, c.n, r);
+      for (var y = -c.pad; y < c.n + c.pad; y++) for (var x = -c.pad; x < c.n + c.pad; x++) {
+        var sx = (x + c.n) % c.n, sy = (y + c.n) % c.n, v = round(min(1, max(0, C.base * (1 + f[sy * c.n + sx]))) * 255), o = ((c.y + y) * size + c.x + x) * 4;
+        data[o] = data[o + 1] = data[o + 2] = v; data[o + 3] = 255;
+      }
+    });
+  }
+
   function make(kind, size, spec, seed) {
     var S = spec || PC.data.textures[kind], data = new U8(size * size * 4), r = rng(seed === undefined ? fnv(kind) : seed), i;
     if (!S) throw new Error('texgen: unknown kind ' + kind);
@@ -98,10 +149,11 @@
       var half = size / 2;
       for (var y = 0; y < size; y++) for (var x = 0; x < size; x++) {
         var d = hypot(x + 0.5 - half, y + 0.5 - half) / half, a = d >= 1 ? 0 : pow(1 - d, S.power);
-        data[(y * size + x) * 4 + 3] = round(a * 255);
+        var o = (y * size + x) * 4; data[o] = data[o + 1] = data[o + 2] = 255; data[o + 3] = round(a * 255);
       }
       return { w: size, h: size, data: data };
     }
+    if (kind === 'interior') { atlas(S, size, r, data); return { w: size, h: size, data: data }; }
     var f = new F32(size * size);
     KINDS[kind](S, size, r, f);
     for (i = 0; i < f.length; i++) {
@@ -113,7 +165,8 @@
 
   var cache = {};
   PC.texgen = {
-    KINDS: ['grass', 'paving', 'tiles', 'meadow', 'membrane', 'blob'],
+    KINDS: ['grass', 'paving', 'tiles', 'meadow', 'membrane', 'blob', 'interior'],
+    cells: cells,
     generated: 0,
     make: make,
     get: function (kind, size) {

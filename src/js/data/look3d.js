@@ -15,6 +15,10 @@
    - indoor (F6-T2 N2-N5, Designer plan 2): emissive hexes and factors (x sky indoor): glazing (lit windows), lift
      (night lift on furniture and floors), lamp (shades), pool (glow colour; poolK per instance group); litShare =
      the share of lit panes per opening kind, seeded per opening.
+   - floors (F6-T2 I2, Designer plan 3, TL F1): the floor kind per room type (hall: planks), the kind hex per
+     style, tint = the share of the room's roomTints hex mixed in (PM fallback: raise it); rugs: lift over the floor,
+     living [share of room w, share of d, max w, max d] centred on the coffee table, bed [w, d] at each bed's foot,
+     dining = the table plus diningPad per side; colour = mix(accent, fabric, accentMix) of the room palette.
    - roomTints: 3D floor tint per room type = the 2D tint of palette2d.room at the same CIELAB hue, L* 8 lower,
      chroma x 1.6 (the 2D pastels would wash out under the noon sun); hall by the same L* step (no extra chroma); stair / lift as in 2D.
    - siteColors: fixed site colours. ground is the build-time plot grass and equals sky.seasons.summer.ground;
@@ -44,9 +48,18 @@
       rooms: { bedroom: { fabric: '#DCD9D2', accent: '#8FA698' }, majlis: { fabric: '#B9A48A', accent: '#6F8A7A' }, dining: { fabric: '#E0DDD6' }, office: { fabric: '#9AA3A8', accent: '#C8A878' } } }
   };
   PC.data.indoor = {
-    glazing: { hex: '#FFB866', k: 0.9 }, lift: { hex: '#FFB070', k: 0.08 }, lamp: { hex: '#FFD9A8', k: 1.4, color: '#F2EBDD' },
+    glazing: { hex: '#FFB866', k: 0.9 }, lift: { hex: '#FFB070', k: 0.08 }, lamp: { hex: '#FFD9A8', k: 1.4, color: '#F2EBDD', gate: 0.25 },
     pool: { hex: '#FFB870', lampK: 0.20, roomK: 0.14, spillK: 0.12, patchK: 0.35, lampD: 2.2, roomD: 0.6, spillW: 2.0, spillD: 1.4, patchOut: 0.01, patchPad: 0.1 },
     litShare: { glazed: 0.75, small: 0.4, slot: 1 }
+  };
+  PC.data.floors = {
+    kind: { living: 'planks', dining: 'planks', bedroom: 'planks', office: 'planks', hall: 'planks', majlis: 'carpet',
+      kitchen: 'tile', bathroom: 'tile', laundry: 'tile', storage: 'tile', maid: 'tile' },
+    modern: { planks: '#8A6E55', tile: '#B9B7B2', carpet: '#6B5A4C' },
+    classic: { planks: '#9A6A44', tile: '#D8CBB4', carpet: '#7A2F2C' },
+    minimal: { planks: '#C9AE86', tile: '#E3E1DC', carpet: '#A89C88' },
+    tint: 0.12,
+    rug: { lift: 0.01, living: [0.55, 0.5, 2.4, 1.7], bed: [1.6, 1.0], diningPad: 0.6, accentMix: 0.5 }
   };
   PC.data.roomTints = {
     bedroom: '#B8CCE7', bathroom: '#A1D8D1', kitchen: '#E5D179', living: '#BFD7A0', dining: '#EBC097',

@@ -21,14 +21,14 @@ test('trunks / canopies / shrubs: one instance per model item, frustumCulled fal
   }
   const info = E.info(), mats = E.mock.created.materials;
   assert.equal(E.world.getObjectByName('trunks').material, E.world.getObjectByName('trunks').material);
-  assert.ok(mats.length === 13, 'batch, ground, groundOuter, paving, ui, sky (F6-T1a), poolWater, trunk, canopy, shrub, groundRing, blob (F6-T1b), deck (F6-T1c)');
+  assert.ok(mats.length === 18, 'batch, ground, groundOuter, paving, ui, sky (F6-T1a), poolWater, trunk, canopy, shrub, groundRing, blob (F6-T1b), deck (F6-T1c), furniture, interior, lamp, glazing, glow (F6-T2)');
   // geometry from the table, not literals: the trunk tapers (F6-T1b), canopies and shrubs are flat-shaded lumps
   const g = (n) => raw(E.world.getObjectByName(n).geometry);
   assert.deepEqual([...g('trunks').params], [V.tree.trunkR * V.tree.taper, V.tree.trunkR, V.tree.trunkH, V.tree.trunkSeg]);
   const verts = (n) => g(n).attrs.position.array.length / 3;
   assert.equal(verts('canopies'), V.tree.lumps.length * 20 * 4 ** det * 3, 'canopy: lumps x icosahedron at the tier detail');
   assert.equal(verts('shrubs'), V.shrub.lumps.length * 20 * 3, 'shrub: lumps x icosahedron, detail 0');
-  assert.ok(info.meshCount === 21);   // F6-T1b: + groundRing, blobs; F6-T1c: + roofDeck
+  assert.ok(info.meshCount === 28);   // F6-T1b: + groundRing, blobs; F6-T1c: + roofDeck; F6-T2: + 7
 });
 
 test('instance matrices: trunks lean at most leanDeg about their base on the ground at the item, scale s; canopies and shrubs unrotated at the item, scale s', () => {
@@ -58,6 +58,6 @@ test('instance matrices: trunks lean at most leanDeg about their base on the gro
 test('no items of a kind -> no mesh of that kind (vegetation 0 %: the F4-T2 12 meshes + the F6-T1a 3 + groundRing + roofDeck); sample has trees and shrubs', () => {
   const E = opened((PC) => sampleApproved(PC, (d) => { d.ans.vegPct = 0; }));
   for (const [name] of KINDS.concat([['blobs']])) assert.equal(E.world.getObjectByName(name), undefined, name);
-  assert.equal(E.info().meshCount, 17);   // F6-T1c: + roofDeck
+  assert.equal(E.info().meshCount, 24);   // F6-T1c: + roofDeck; F6-T2: + glazing, 2 x (textured, lamps, glow)
   assert.equal(E.mock.created.geometries.filter((g) => /Cylinder|Cone/.test(E.mock.raw(g).__kind || '')).length, 0, 'no vegetation geometry made');
 });

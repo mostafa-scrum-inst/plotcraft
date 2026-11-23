@@ -155,7 +155,7 @@
     if (!S.house) return;
     S.limits = PC.cam.limits(S.house, aspect());
     if (S.pose) S.pose = PC.cam.clamp(S.pose, S.limits);
-    if (S.mats) apply(S.house);
+    if (S.mats) { apply(S.house); shadowsDirty(); }   // a re-fit stays an unconditional update (CTO F6-T1)
   }
   function resize(inFrame) {
     var c = S.canvas;
@@ -224,7 +224,12 @@
   function apply(house) {
     var L = PC.sky.compute(S.look.hour, S.look.season, house.northDeg);
     three.applyLook({ scene: S.scene, sun: S.sun, hemi: S.hemi, mats: S.mats, world: S.world, house: house, renderer: S.renderer, limits: S.limits }, L);
-    shadowsDirty();
+    // F6-T2 (TL F4; CTO 4): the shadow map is re-rendered only when what it depends on changed: the sun's direction
+    // (position) and intensity, the shadow-camera bounds, the canopies' visibility. An indoor-only change or the same
+    // look again does not count. Build, restore, the level selector, Roof and a re-fit stay unconditional.
+    var c = S.sun.shadow.camera, p = S.sun.position, can = S.world.getObjectByName('canopies');
+    var sig = [p.x, p.y, p.z, S.sun.intensity, c.left, c.right, c.top, c.bottom, c.near, c.far, can ? can.visible : null].join(',');
+    if (sig !== S.shadowSig) { S.shadowSig = sig; shadowsDirty(); }
   }
   function lights(house) { apply(house); S.looks++; }
   function tex(kind) { var t = three.texture(kind, S.tier.tex, S.renderer); S.textures.push(t); return t; }
@@ -256,8 +261,18 @@
       var walk = house.roof.usable || house.roof.type === 'terrace';
       S.mats.deck = new THREE.MeshLambertMaterial({ color: three.col(PC.data.exteriors[house.exterior].roof), map: walk ? S.mats.paving.map : tex('membrane') });
     }
-    S.meshes = three.buildShell(house, S.world, S.mats, { tier: S.tier }).concat(three.buildInterior(house, S.world, S.mats),
+    // F6-T2 (plan 2-3, CTO 2.3): furniture off the walls' batch material; the interior atlas; the lamp shades. The
+    // emissive colours are set at build with intensity 0, so the shader programs never change with the hour (CTO 1.2).
+    var IN = PC.data.indoor, glow = function (o, e) { o.emissive = three.col(e); o.emissiveIntensity = 0; return new THREE.MeshLambertMaterial(o); };
+    S.mats.furniture = glow({ vertexColors: true }, IN.lift.hex);
+    S.mats.interior = glow({ vertexColors: true, map: tex('interior') }, IN.lift.hex);
+    S.mats.lamp = glow({ vertexColors: true }, IN.lamp.hex);
+    S.mats.glazing = glow({ vertexColors: true }, IN.glazing.hex);
+    // N4 glow pools (full tier only; CTO 1.2d, 1.6): additive, no depth write, the blob map (RGB white, alpha falloff)
+    if (!lite) S.mats.glow = new THREE.MeshBasicMaterial({ color: three.col('#000000'), map: S.mats.blob.map, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    S.meshes = three.buildShell(house, S.world, S.mats, { tier: S.tier }).concat(three.buildInterior(house, S.world, S.mats, { cells: three.atlasCells(S.tier.tex) }),
       three.buildRoof(house, S.world, S.mats), three.buildSite(house, S.world, S.mats, { tier: S.tier }));
+    S.meshes = S.meshes.concat(three.buildGlow(house, S.world, S.mats, { tier: S.tier }));
     var keep = S.house && S.pose && S.house.radius === house.radius && S.house.center[0] === house.center[0] && S.house.center[1] === house.center[1];
     S.house = house; S.builtKey = house.key; S.builds++;
     S.limits = PC.cam.limits(house, aspect());
@@ -266,6 +281,17 @@
     lights(house);
     if (!house.levels.some(function (l) { return l.id === S.level; })) S.level = 'all';
     applyVisibility();
+    precompile();
+  }
+  // F6-T2 (CTO 1.2, TL): the glow meshes are hidden by day, and r128 builds a program only for what it draws; compile
+  // them once at build (shown for the call, then put back) so dusk switches nothing and stalls nothing.
+  function precompile() {
+    if (!S.renderer || !S.renderer.compile) return;
+    var gs = [];
+    S.world.traverse(function (o) { if (o.name.indexOf('glow-') === 0) { gs.push([o, o.visible]); o.visible = true; } });
+    if (!gs.length) return;
+    S.renderer.compile(S.scene, S.camera);
+    gs.forEach(function (e) { e[0].visible = e[1]; });
   }
 
   function applyVisibility() {
@@ -277,6 +303,12 @@
     });
     var cap = S.world.getObjectByName('groundCap');
     if (cap) cap.visible = sel !== 'B';
+    // F6-T2 N4 (TL ruling 3): exterior mode (Roof on, All) draws every glow instance; the dollhouse only the pools
+    // and the ground spill (the window patches would float over the 1.2 m cut walls)
+    var ext = S.roof && sel === 'all';
+    S.world.children.forEach(function (g) { g.children.forEach(function (m) {
+      if (m.name.indexOf('glow-') === 0) m.count = ext ? m.userData.ranges.all : m.userData.ranges.pools + m.userData.ranges.spill;
+    }); });
     shadowsDirty();
   }
 

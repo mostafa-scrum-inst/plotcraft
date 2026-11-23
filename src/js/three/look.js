@@ -14,7 +14,9 @@
    dome's colour attribute repainted in place (PC.three.skyPaint); the fog (full tier) gets the raw horizon hex (r128
    mixes fog into the encoded output, A-10 second exception) and near = limits.rMax + R, far = min(near + fogSpanK x R,
    0.9 x outerK x R / 2); the lite groundOuter skirt's outer vertices fade to the horizon (colour / meadow colour,
-   clamped). Still nothing created or disposed. */
+   clamped). Still nothing created or disposed.
+   F6-T2: the indoor terms (L.indoor): emissive intensities of glazing / furniture / interior / lamp, the glow colour
+   and the glow meshes' visibility; uniforms and visibility only, so no program changes. */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
@@ -84,6 +86,15 @@
       var near = ctx.limits.rMax + R, far = Math.max(near + 1, Math.min(near + V.fogSpanK * R, 0.9 * PC.C.HOUSE.outerK * R / 2));
       fog.color = new THREE.Color(L.skyHorizon); fog.near = near; fog.far = far;
     }
+    // F6-T2 N2-N5 (plan 3; CTO 1.2): indoor light as uniforms only. Every emissive intensity = its factor x indoor (0
+    // by day), the glow colour = indoor (instances carry pool hex x K), glow shown only when indoor > 0.
+    var IN = PC.data.indoor, k = L.indoor || 0, M = ctx.mats;
+    if (M.glazing) M.glazing.emissiveIntensity = IN.glazing.k * k;
+    if (M.furniture) M.furniture.emissiveIntensity = IN.lift.k * k;
+    if (M.interior) M.interior.emissiveIntensity = IN.lift.k * k;
+    if (M.lamp) M.lamp.emissiveIntensity = IN.lamp.k * k;
+    if (M.glow) { M.glow.color.r = k; M.glow.color.g = k; M.glow.color.b = k; }
+    ctx.world.children.forEach(function (g) { g.children.forEach(function (m) { if (m.name.indexOf('glow-') === 0) m.visible = k > 0; }); });
     var outer = ctx.world.getObjectByName('groundOuter'), sk = outer && outer.userData.skirt;
     if (sk) {
       var h = col(L.skyHorizon), m = col(L.meadowColor || PC.data.siteColors.groundOuter), a = sk.colors.array;
