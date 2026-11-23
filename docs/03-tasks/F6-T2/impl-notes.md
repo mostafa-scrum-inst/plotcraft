@@ -243,3 +243,15 @@ These run in view3d-real, in the 1280x800 max-house scene.
   - Release, one at a time: rows **225.8 s**, stream **205.2 s**, rows3 **219.6 s**, all within 260 s. Release wall time 650.6 s.
 - durations.json (33fe4c0) and durations-full.json (0c5371f) are re-timed.
 - QA's three QA_FULL runs for sign-off are still outstanding (CTO §6.2).
+
+### QA sign-off runs (QA, on 5ccfd2b, QA_RELEASE=1, RELEASE_JOBS=1)
+
+QA ran three QA_FULL runs: all green, no flake, and both smoke mutations caught.
+
+| run | QA_FULL part | total | release wall | C-4.8 solo |
+|---|---|---|---|---|
+| 1 | 476.5 s | 1091.8 s | 615.3 s | 71 ms |
+| 2 | **496.1 s** | 1141.0 s | 644.9 s | 59 ms |
+| 3 | 478.4 s | 1144.9 s | 666.5 s | 58 ms |
+
+Run 2's QA_FULL part is over the 480 s limit. My own run was 467.5 s. QA put three options to the TL: accept it, re-run on a quiet machine, or cut QA_FULL duplicates. That decision is open.
