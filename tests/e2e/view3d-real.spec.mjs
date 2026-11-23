@@ -504,6 +504,9 @@ async function indoorReal(page, tag) {
   console.log(`  [record] ${tag} F6-T2 first Roof-off ${f.first.toFixed(0)} ms, steady ${f.steady.toFixed(0)} ms, memory ${f.mem0.join(' / ')} -> ${f.mem1.join(' / ')}`);
   T.ok(f.first <= 2 * f.steady, `${tag} F6-T2 first Roof-off frame after an exterior build ${f.first.toFixed(0)} ms <= 2 x steady ${f.steady.toFixed(0)} ms (interior uploaded at build)`);
   T.eq(f.mem1, f.mem0, `${tag} F6-T2 first Roof-off frame uploads no geometry / texture (renderer memory ${f.mem0.join(' / ')})`);
+  // (a)-(e) run with QA_FULL=1 only (TL F6-T2 gate ruling: T2 checks win back their own time; QA_FULL runs at every
+  // implementation-review gate); (f) above stays in the default run
+  if (!FULL) { console.log(`  note ${tag} F6-T2 lit panes, highlight, atlas seams and the 12 / 22 h budget record run with QA_FULL=1 only (TL F6-T2 gate ruling)`); return; }
   // (a) + (b) + (e): exterior at Reset, noon then 22 h
   const r = await page.evaluate((HELP) => {
     const E = (0, eval)(HELP), { i, w, h, V, first, scr, rgb, luma, hue, sum, W, H } = E;
