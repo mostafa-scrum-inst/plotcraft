@@ -151,6 +151,12 @@ A new key field `indoor` (0–1), blended like the others (A-13). I recommend th
   The 2D room colour stays as a 12 % tint mix (`floorTint 0.12`), so rooms keep a hint of their plan colour. The finder caption and highlight do the identifying in 3D.
 
 - **Rugs:** a carpet-cell quad 0.004 m above the floor, centred under the living coffee table (0.55 w × 0.5 d of the room, clamped to 2.4 × 1.7 m), at the foot of each bedroom bed (1.6 × 1.0 m), and under the dining table (table + 0.6 m each side). Colour = the room's I3 accent mixed 50 % with its fabric. Rugs are floor decoration, not A-11 pieces, so placement does not change.
+- **CTO condition (atlas tiling, a53e7c8c7a110e595):** RepeatWrapping cannot tile one cell and a ShaderMaterial is not allowed, so tiling comes from geometry.
+  - Every floor and rug is split into tile-sized sub-quads (`tileM` of its cell), each mapped onto its cell with a half-texel inset.
+  - Each furniture face maps onto its cell once, with the same inset.
+  - The 8 px padding stays. Mip bleed beyond level 3, at far zoom, is accepted.
+  - A real-r128 check at the Reset pose confirms that no seam colour from a neighbouring cell shows; the TL defines the pixel test.
+  - Separate tiling textures per floor kind are the CTO-allowed fallback, at up to +8 meshes; the TL decides.
 - **Furniture tex parts:** on the same mesh, each face maps the whole `weave` or `planks` cell once (stretched, no repeat, no subdivision). At 256 px over a 2.2 m sofa that is under 1 cm per texel, more than enough from the dollhouse.
 - **Material:** Lambert or Standard (roughness 0.9) with `map` = atlas, vertex colours (tints and parts), emissive N3. Casts and receives.
 - **Colours** are targets under ACES at noon; I retune them with `retune.mjs` in T2a and regenerate any generated literals through their generators.
