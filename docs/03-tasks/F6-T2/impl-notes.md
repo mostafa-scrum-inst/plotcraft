@@ -109,3 +109,71 @@ These run in view3d-real, in the 1280x800 max-house scene.
 - **PM Q4:** approved at tint 0.2. The hall moves off planks: `PC.data.floors.kind.hall = 'tile'`. The Designer picked tile with no hex change, and the hall keeps its neutral #D9D6CE tint against the kitchen's yellow.
   - build-interior now follows `FL.kind.hall`. The detail test asserts that the hall is not planks and that its UVs sit in that kind's cell.
   - This replaces TL F1 ("the hall gets planks") by the PM's decision.
+
+## Gate status at 6400c73: NOT met. All steps are green, but the default run is over time.
+
+**Commits since S4:**
+- 0e43802: the glow shares the blobs' plane, a fix for the geometries 26 -> 28 that QA F4-T3 A found.
+- 6400c73: QA's contract rows, picked from main 1da90e0 (tests/qa only).
+
+**Default runs:**
+
+| run | build | wall | three step | result |
+|---|---|---|---|---|
+| 1 | 6400c73 | **485.5 s** | 25.5 s | green |
+| 2, with `--write-durations` | 6400c73 | 479.5 s | 26.4 s | red: the view3d-real 1200 ms load guard read 1271 ms best-of-3, under load; ~880–955 ms solo, base ~820–870 ms |
+
+- Run 2 failed, so durations.json was not rewritten and the pool still packs on the T1c estimates.
+- The limits are a median of 420 s and no run over 440 s. Main was at 406.5 s.
+
+**Where the time went** (pool-step sum against durations.json):
+- The sum went from 1118.7 s to 1346.4 s.
+- Most of it is in the 3D suites:
+
+  | suite | estimate | measured | change |
+  |---|---|---|---|
+  | f6-t1 | 45.5 s | 88.1 s | +42.6 s |
+  | f5-t1 | 47.1 s | 81.5 s | +34.4 s |
+  | view3d-real | 39.1 s | 66.5 s | +27.4 s |
+  | f4-t3 | 43.8 s | 64.1 s | +20.3 s |
+  | f4-t1 | 58.7 s | 77.6 s | +18.9 s |
+
+- Solo, main against f6t2:
+
+  | suite | main | f6t2 | change |
+  |---|---|---|---|
+  | f6-t1 | 41.4 s | 48.4 s | +7 s |
+  | f5-t1 | 33.1 s | 42.9 s | +10 s |
+  | f4-t3 | 33.4 s | 38.3 s | +5 s |
+  | view3d-real | 32.8 s | ~40 s | +7 s |
+
+  These roughly double in the 3-job pool on this 4-core machine.
+
+**Cause: the real-r128 frame cost.** Max house, 1280x800, SwiftShader:
+
+| measure | main | f6t2 |
+|---|---|---|
+| Reset noon frame | 160 ms | 206 ms |
+| 22 h frame | 137 ms | 193 ms |
+| vertex-bound 8 x 8 canvas | 24 ms | 45 ms |
+| triangles | 15.2k | 24.3k |
+
+- The vertex-bound frame returns to 24 ms when furniture and textured-* are hidden.
+- Furniture parts are 9.6k triangles (2.6k before). The textured floors, rugs and parts are 11.2k.
+- These meshes are drawn in exterior mode although the full walls, the opaque glazing and the roof enclose them.
+
+**Proposed fix, not committed** (`proposed-exterior-hide.patch`): hide `furniture` and `textured-*` in exterior mode (Roof on, All).
+- Max house frames go back to main's: noon 159 ms, night 135 ms. Real calls / triangles at Reset: 28 / 19.8k at 12 h, 32 / 20.0k at 22 h.
+- Pixel check: hiding them changes 2–850 px per exterior pose (out of 883k), through shadow-map edge terms at the walls. No interior shows.
+- One default run with it: **458.4 s**, still on stale packing.
+- Two QA rows would need updating:
+  - f4-t1 A: the level-matrix visible flags in "all".
+  - f5-t1 A: the renderer geometry count after a dollhouse visit, because the furniture and floors upload on the first dollhouse frame.
+- node 558/0, plus a mock test and a mutation for the hide.
+
+**Decision needed (TL):**
+- whether to take the exterior hide;
+- whether to re-baseline the default gate for the richer scene;
+- or to move more 3D rows to the release step.
+
+**QA_FULL and release-step runs:** not run, since the default gate is unresolved. QA measured the leak-max stream side at **274 s**, over the 260 s NOTE line and under 300 s.
