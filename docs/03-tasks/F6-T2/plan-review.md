@@ -53,3 +53,15 @@ The plan covers every item from the Designer-plan review and CTO §8. That inclu
 S1 → S2 → S3 → S4 as in §0. Each step lands as its own commit, with node tests green and its mutations listed. The Designer retunes after S3. The impl review comes after the S4 gate.
 
 VERDICT: APPROVED
+
+## Addendum: T2 gate ruling (TL, after S4, 7c21e24)
+- **Result:** default 485.5 s. Frame cost rose with the interiors: 160 → 206 ms, triangles 15.2 k → 24.3 k.
+- **Ruling: a mix of options 1 and 3, no re-baseline.** The median stays ≤ 420 s, and no run may exceed 440 s.
+  1. **Exterior hide:** furniture and textured-* are hidden in exterior mode. This is a product change. Conditions:
+     - GPU upload at build through the post-build `renderer.compile`;
+     - a mock level × Roof matrix;
+     - a mutation, "furniture hidden in dollhouse";
+     - before and after pixel numbers;
+     - QA updates f4-t1 A, and f5-t1 A if needed.
+  2. **If still over 420 s:** a third release process under CTO §6.2 a–e. QA picks the dollhouse-heavy duplicate rows, and the stream side (274 s) is rebalanced too.
+  3. **Loaded-build guard:** 1200 → 1500 ms, provided C-4.8 solo is ≤ 250 ms (CTO T2 budget). The CTO is informed.
