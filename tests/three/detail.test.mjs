@@ -218,11 +218,11 @@ test('F6-T1c R1: coping on every parapet ring (4 boxes) and head (1 box each), c
   assert.ok(!it.some((x) => sameRgb(x.side, rgbOf(P.PC, P.PC.data.exteriors[P.house.exterior].coping))) && P.mesh('roofDeck') === null && !it.some((x) => x.kind === 'deckBand'), 'pitched: no coping, deck or band');
 });
 
-test('F6-T1c R3: deckBand strips 0.005 m over the slab top, deckW inside the parapet x deckK -> x 1; headW around each head x headK -> x 1, clipped to the deck', () => {
+test('F6-T1c R3: deckBand strips bandLift over the deck (deckLift + bandLift over the slab top), deckW inside the parapet x deckK -> x 1; headW around each head x headK -> x 1, clipped to the deck', () => {
   const corner = (pos) => (PC) => { const st = maxHouse(PC, { stairPos: pos }); st.ans.roofType = 'flat'; st.ans.usableRoof = true; return st; };   // heads flush with a footprint corner: their bands clip to the deck
   for (const [name, E] of [['flat', roofCase(null)], ['usable', roofCase((d) => { d.ans.usableRoof = true; })], ['max fl', opened(corner('fl'))], ['max br', opened(corner('br'))]]) {
     const PC = E.PC, R = PC.C.ROOF, C = PC.C.CONTACT, h = E.house, fp = h.footprint, X = PC.data.exteriors[h.exterior], m = E.mesh('roofBatch');
-    const bands = itemsOf(E.mock, m).filter((x) => x.kind === 'deckBand'), y = h.roof.baseY + R.slab + 0.005, roofC = rgbOf(PC, X.roof);
+    const bands = itemsOf(E.mock, m).filter((x) => x.kind === 'deckBand'), y = h.roof.baseY + R.slab + R.deckLift + C.bandLift, roofC = rgbOf(PC, X.roof);
     const heads = [h.roof.stairHead, h.roof.liftHead].filter(Boolean);
     assert.ok(bands.length >= 4 && bands.length <= 4 + 4 * heads.length, `${name}: ${bands.length} strips`);
     const D = [E.X(fp.u + R.parapetT), E.X(fp.u + fp.w - R.parapetT), E.Z(fp.v + fp.d - R.parapetT), E.Z(fp.v + R.parapetT)];
