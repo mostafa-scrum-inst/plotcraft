@@ -383,6 +383,15 @@ Not used: anything under `examples/js`, `BufferGeometryUtils`, `CapsuleGeometry`
   4. Scale search: for `s` = 1.00, 0.95, …, 0.60, the footprint is `(w s, d s)` and the offset `(a s, b s)`; `h` and `y0` are never scaled. The first `s` at which the footprint lies inside the inner rectangle (1e-9) and overlaps no already placed piece by more than 0.01 m on both axes wins (touching is allowed). Both tolerances are compared with 1e-9 slack: inside = `>= lo - 1e-9` / `<= hi + 1e-9`, overlap = `min(hi) - max(lo) > 0.01 + 1e-9` on each axis, so an overlap of exactly 0.01 m in doubles (e.g. 2.86 − 2.85 = 0.0100000000000002) counts as allowed (TL, F3-T3 outcome review; QA F3-T3 obs 2). If none does, the piece is dropped.
   5. The result is converted to L by the footprint origin (`u = fp.u + x`, `v = fp.v + y`) for the house model.
 - **F6-T1 plan review (TL; CTO informed):** at most 2 transparent meshes, named `poolWater` (post-MVP F1) and `blobs`; glazing is opaque in both tiers (a later transparent glazing mesh replaces one of them). The mesh assertion is <= 64 (G6 stays 150), draw calls <= 160 and triangles <= 300 000 on the maximum house (C-4). Shadow casting: walls, roof, furniture, vegetation and site structures cast; ground, slab, paving, water and glazing receive only; `sky`, `blobs`, `northNeedle` and `highlight` do neither.
+- **F6-T2 Designer-plan review (TL; CTO F6-T2 §1–2):**
+  - **Furniture parts:** the table schema gains an optional `parts: [{ x, z, y0, w, d, h, color, mat }]`, relative to the piece and scaled with it.
+    - Every part lies inside the piece's `w × d × h` envelope; this is unit-tested for all types at S, M and L and at the 1.5 m minimum room.
+    - Placement still runs on the envelope `w × d` only.
+    - `mat` is `plain`, `tex` (an atlas cell) or `lamp`.
+    - The height cap stays 1.1 m. The new envelope heights (bed 1.0, tvUnit 1.1, majlis seats 0.7, side tables 0.95) are approved.
+  - **Meshes:** at most 3 furniture materials per level (plain, `textured-<level>`, `lamps-<level>`), plus `glow-<level>` (additive) and one `glazing` mesh. The maximum house has 40 meshes or fewer.
+  - **Additive meshes:** `glow-*` meshes are additive and sit outside the 2-transparent cap; the mock asserts this by name.
+  - **No lights:** there is no light other than `hemi` and `sun`.
 
 ## A-12. Camera controller
 
