@@ -15,7 +15,7 @@ const only = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7).
 // Default-run trim (TL, F6-T1 margin ruling, docs/03-tasks/F6-T1/qa-default-trim.md rows 1 and 6): the 1280x800 twins of
 // A, D, E, G, H/I, J, K and L run in the release step only (QA_RELEASE=1; f6-t1-leak.mjs --max-only runs this file with
 // --release-only, which runs just those twins). The 360x640 pass stays in the default run; B, C, F, M and N are unchanged.
-const REL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only'), REL_SECS = ['A', 'D', 'E', 'G', 'H', 'J', 'K', 'L'];
+const REL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only'), REL_SECS = ['A', 'B', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M'];
 const want = (sec) => (!only.length || only.includes(sec)) && (!RELONLY || REL_SECS.includes(sec));
 const R = collector('F2-T3 site and rooms');
 // Open minor bugs (docs/03-tasks/F2-T3/qa-report.md): listed as KNOWN, do not fail the run. Remove an entry when fixed.
@@ -29,7 +29,9 @@ const PHONE = VP['360x640'], LAND = VP['640x360'], TAB = VP['768x1024'], DESK = 
 // every listed viewport with QA_FULL=1 (standing condition: run QA_FULL=1 before each feature review and whenever the
 // code these sweeps guard changes).
 const PD = () => (RELONLY ? [DESK] : REL ? [PHONE, DESK] : [PHONE]);   // phone by default, the desktop twin in the release step
-const FULL = (...vps) => (process.env.QA_FULL ? vps : vps.filter((v) => v === PHONE || v === DESK));
+// QA_FULL trim (TL, before the F6-T1c gate): the extra viewports of B, F and M (640x360, 768x1024) moved from QA_FULL=1
+// into the release step (QA_RELEASE=1; --release-only runs just them).
+const FULL = (...vps) => { const pd = vps.filter((v) => v === PHONE || v === DESK); return RELONLY ? vps.filter((v) => !pd.includes(v)) : REL ? vps : pd; };
 const rect = (w, h) => [[0, 0], [w, 0], [w, h], [0, h]];
 const SAMPLE = [[0, 0], [20, 0], [20, 30], [8, 30], [0, 26]];
 const COMB = [[0, 0], [50, 0], [50, 40], [40, 40], [40, 12], [30, 12], [30, 40], [20, 40], [20, 12], [10, 12], [10, 40], [0, 40]];   // 12 vertices
@@ -548,6 +550,6 @@ try {
     }
   }
 } finally { await browser.close(); }
-if (!REL) R.note('the 1280x800 passes of A, D, E, G, H/I, J, K and L run in the release step only (QA_RELEASE=1, f6-t1-leak.mjs --max-only; TL default-run trim)');
+if (!REL) R.note('B, F and M at 640x360 / 768x1024 and the 1280x800 passes of A, D, E, G, H/I, J, K and L run in the release step only (QA_RELEASE=1, f6-t1-leak.mjs --max-only; TL default-run trim)');
 R.note(`runtime ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 process.exit(R.done() ? 0 : 1);
