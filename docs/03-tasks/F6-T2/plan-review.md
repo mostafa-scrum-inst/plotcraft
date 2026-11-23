@@ -65,3 +65,13 @@ VERDICT: APPROVED
      - QA updates f4-t1 A, and f5-t1 A if needed.
   2. **If still over 420 s:** a third release process under CTO §6.2 a–e. QA picks the dollhouse-heavy duplicate rows, and the stream side (274 s) is rebalanced too.
   3. **Loaded-build guard:** 1200 → 1500 ms, provided C-4.8 solo is ≤ 250 ms (CTO T2 budget). The CTO is informed.
+
+**CTO conditions on the gate ruling (binding, sent to FS):**
+- **Hide trigger:** the hide follows the roof's actual visibility (Roof on and the selector at All). Only furniture and textured-* hide; glazing and glow stay.
+- **First Roof-off without a stall:**
+  - at build, `renderer.initTexture(atlas)` plus one warm render with the interior visible behind the overlay, then the hide;
+  - `initTexture` is added to the mock whitelist with a conformance row (TL approved);
+  - test: the first Roof-off frame is ≤ 2× the steady frame (real r128).
+- **Shadows:** hiding casters triggers a shadow update (mock assert).
+- **Third release process and guard:** the third process under §6.2 a–e; the guard at 1500 ms with solo ≤ 250 ms reported in every QA_FULL report.
+- **Phone check (CD-7):** the 22 h look includes Roof off. lite stays the data-only fallback.

@@ -60,7 +60,10 @@ test('glow-<level> (TL ruling 3): additive instances [pools][spill][patches]; sp
     assert.equal(g.count, r.all, 'exterior (Roof on, All): every instance');
     assert.equal(g.geometry, E.world.getObjectByName('blobs').geometry, 'the blobs\' plane (no renderer geometry created by the first night frame)');
   }
+  const inner = () => h.levels.map((lv) => { const L = E.world.getObjectByName('level-' + lv.id); return [E.mesh('furniture', L), E.mesh('textured-' + lv.id, L)].map((m) => m.visible); });
+  assert.deepEqual(inner(), h.levels.map(() => [false, false]), 'exterior: furniture and textured floors not drawn (enclosed; gate time)');
   V.setRoof(false);
+  assert.deepEqual(inner(), h.levels.map(() => [true, true]), 'dollhouse: drawn');
   for (const lv of h.levels) { const g = E.world.getObjectByName('glow-' + lv.id); assert.equal(g.count, g.userData.ranges.pools + g.userData.ranges.spill, lv.id + ' dollhouse: no window patches'); }
   V.setRoof(true); V.setLevel('G');
   for (const lv of h.levels) { const g = E.world.getObjectByName('glow-' + lv.id); assert.equal(g.count, g.userData.ranges.pools + g.userData.ranges.spill, 'a level selected: dollhouse'); }

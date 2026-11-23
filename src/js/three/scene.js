@@ -309,6 +309,9 @@
     var ext = S.roof && sel === 'all';
     S.world.children.forEach(function (g) { g.children.forEach(function (m) {
       if (m.name.indexOf('glow-') === 0) m.count = ext ? m.userData.ranges.all : m.userData.ranges.pools + m.userData.ranges.spill;
+      // F6-T2 (gate time): the furniture and the textured floors / parts are enclosed by the full walls, the opaque
+      // glazing and the roof in exterior mode, so they are not drawn there (vertex and shadow-pass cost only)
+      if (m.name === 'furniture' || m.name.indexOf('textured-') === 0) m.visible = !ext;
     }); });
     shadowsDirty();
   }
