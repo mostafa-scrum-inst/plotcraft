@@ -330,3 +330,4 @@
 - [TL] F6-T2 CTO conditions recorded + sent to FS: hide on actual roof visibility; initTexture + warm render (first Roof-off ≤ 2× steady); CD-7 22 h check incl. Roof off.
 - [TL] F6-T2 QA rows 175d20d accepted (exterior-hide rows, third release process 129.5 s, stream 181 s); condition: 10-op sample real-r128 leak smoke stays in default run.
 - [TL] F6-T2 default leak smoke in (QA b2477cb, 10 ops, 4.9–6.7 s); condition met.
+- [QA] F6-T2 default trim 2: f4-t1 A2 (Q10 rebuilds + Q14 3D) and D loop desk, f4-t2-view A roof desk to rows3; f4-t2-s0-ui 1280x800 to rows side; f4-t1 release row moved rows -> rows3. About 46 s solo out of default; rows3 208 s, rows 225 s solo.
