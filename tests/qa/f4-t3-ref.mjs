@@ -57,6 +57,8 @@ export const R6_NOON = { sunColor: '#FFF7E8', sunIntensity: 0.85, hemiSky: '#D6E
 export const R6_SITE = { ground: '#668748', groundOuter: '#727E58', paving: '#C1B4A1', poolWater: '#398BB5', poolRim: '#F1E3C1', boundaryWall: '#B5A990', carCanopy: '#838D93', seating: '#7E664C', asphalt: '#5D6063' };
 // F6-T1b Designer retune (f6t1 c540c49, hand table): keys 12 / 16 / 17 / 18 change again; 6 / 7.5 h, the season
 // materials and the site colours as R6. Detected by keys 17 (sunI 0.99, hemiI 0.44) and 18 (0.89, 0.40).
+// F6-T1c G1 + G2 (Designer 66c5d87, entered by hand): meadow per season; summer = siteColors.groundOuter
+export const G1_MEADOW = { spring: '#6F8A58', summer: '#6A8550', autumn: '#857D55', winter: '#E4E8EA' };
 export const R7_KEYS = { 17: [0.99, 0.44], 18: [0.89, 0.40] };
 export const R7_KEY_EDITS = { ...R6_KEY_EDITS,
   12: { background: '#B9D6EE', sunI: 1.0, hemiI: 0.40, hemiGround: '#C9BFA6', exposure: 1.05 }, 16: { background: '#BED6EA', sunI: 0.93, hemiI: 0.40, hemiGround: '#C2B79C', exposure: 1.05 },

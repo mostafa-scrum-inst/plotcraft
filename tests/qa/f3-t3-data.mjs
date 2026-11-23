@@ -22,7 +22,10 @@ const AREA = { bedroom: [12, 16, 24], bathroom: [4, 6, 9], kitchen: [9, 14, 20],
 const EXT = ['sand', 'white', 'terracotta', 'grey'], STY = ['modern', 'classic', 'minimal'], SEAS = ['spring', 'summer', 'autumn', 'winter'];
 // F6-T1b (impl-notes T1b data keys): exteriors gain frame / door, siteColors glassTop / glassBottom; marker PC.C.CONTACT
 const T1B = (() => { try { return /\bCONTACT\s*:/.test(readFileSync(join(SRC, 'js/core/const.js'), 'utf8')); } catch (e) { return false; } })();
-const EXT_K = ['wall', 'wallInner', 'slab', 'roof', 'trim', 'parapet', ...(T1B ? ['frame', 'door'] : [])], INT_K = ['fabric', 'wood', 'accent', 'white', 'metal', 'dark', 'floorMix'];
+// F6-T1c R1 (plan §1, Designer table entered by hand): exteriors gain coping; marker PC.C.ROOF copingT in const.js
+const T1C = (() => { try { return /\bcopingT\s*:/.test(readFileSync(join(SRC, 'js/core/const.js'), 'utf8')); } catch (e) { return false; } })();
+const COPING = { sand: '#E6DAC4', white: '#F4F2EA', terracotta: '#D9CBB8', grey: '#B9BEC1' };
+const EXT_K = ['wall', 'wallInner', 'slab', 'roof', 'trim', 'parapet', ...(T1B ? ['frame', 'door'] : []), ...(T1C ? ['coping'] : [])], INT_K = ['fabric', 'wood', 'accent', 'white', 'metal', 'dark', 'floorMix'];
 // F6-T1a (impl-notes §6, plan §4.4 / §4.1): siteColors gains asphalt (street), each sky key gains skyMid / skyZenith (hex)
 // and exposure (number). Version-aware on the F6 core module src/js/core/texgen.js.
 const F6 = existsSync(join(SRC, 'js/core/texgen.js'));
@@ -31,8 +34,8 @@ const SKY_KK = ['h', 'background', 'sunColor', 'sunI', 'hemiSky', 'hemiGround', 
 const ANCH = ['back', 'front', 'left', 'right', 'bl', 'br', 'fl', 'fr', 'center'], CKEYS = ['fabric', 'wood', 'accent', 'white', 'metal', 'dark'];
 
 // ---------------- 1. schema ----------------
-R.check(`1 exteriors: sand, white, terracotta, grey, each exactly the ${EXT_K.length === 6 ? 'six A-10 roles' : 'six A-10 roles + frame / door (F6-T1b)'}, #RRGGBB upper case`,
-  [...eqKeys(D.exteriors, EXT), ...EXT.flatMap((e) => [...eqKeys(D.exteriors[e], EXT_K), ...EXT_K.filter((k) => !HEX.test(D.exteriors[e][k])).map((k) => `${e}.${k}`)])]);
+R.check(`1 exteriors: sand, white, terracotta, grey, each exactly the ${EXT_K.length === 6 ? 'six A-10 roles' : `six A-10 roles + frame / door (F6-T1b)${T1C ? ' + coping (F6-T1c)' : ''}`}, #RRGGBB upper case`,
+  [...eqKeys(D.exteriors, EXT), ...EXT.flatMap((e) => [...eqKeys(D.exteriors[e], EXT_K), ...EXT_K.filter((k) => !HEX.test(D.exteriors[e][k])).map((k) => `${e}.${k}`), ...(T1C && D.exteriors[e] && D.exteriors[e].coping !== COPING[e] ? [`${e}.coping ${D.exteriors[e].coping}, Designer table ${COPING[e]}`] : [])])]);
 R.check('1 interiors: modern, classic, minimal, exactly fabric..dark + floorMix in [0, 0.3]',
   [...eqKeys(D.interiors, STY), ...STY.flatMap((s) => [...eqKeys(D.interiors[s], INT_K), ...CKEYS.filter((k) => !HEX.test(D.interiors[s][k])).map((k) => `${s}.${k}`), ...(typeof D.interiors[s].floorMix === 'number' && D.interiors[s].floorMix >= 0 && D.interiors[s].floorMix <= 0.3 ? [] : [s + ' floorMix'])])]);
 R.check('1 roomTints: the 10 types + hall, stair, lift, all hex', [...eqKeys(D.roomTints, [...TYPES, 'hall', 'stair', 'lift']), ...Object.entries(D.roomTints).filter(([, v]) => !HEX.test(v)).map(([k]) => k)]);

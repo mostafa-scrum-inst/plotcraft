@@ -19,6 +19,7 @@ import * as H from './f4-t1-ref.mjs';
 import * as V from './f6-t1-ref.mjs';
 import { MAXMUT } from './f5-t3-ref.mjs';
 import { roofTo } from './v3kit.mjs';
+import { loadTables } from './f3-t3-ref.mjs';
 
 const R = collector('F6-T1 view');
 const noShots = process.argv.includes('--no-shots'), shots = join(ROOT, 'tests/qa/shots/F6-T1'), FORCE = process.argv.includes('--force');
@@ -125,6 +126,44 @@ await guard('S K H sample', async () => {
       R.check(`H ${T}: the highlight of a picked ground-floor room at 22 h winter reads ${V.HIGHLIGHT} +- ${V.HL_TOL} (median of ${m.n} highlight pixels ${m.med})`, f);
       await S.shot('H-highlight-night');
     }
+    await S.end(T);
+  } finally { await browser.close(); }
+});
+
+// ================= D. F6-T1c roofDeck on real r128 (plan §2; marker PC.C.ROOF.copingT) =================
+// flat sample: one roofDeck in the roof group, MeshLambertMaterial, no vertex colours, colour = exteriors.roof, its own map
+// (membrane, a 5th scene texture); usable terrace: the map is the paving mesh's texture object (no second upload), 4 scene
+// textures; pitched: no deck. Receives, does not cast. Sample 21 meshes, maximum house 27.
+const T1C = !!(PC.C.ROOF && PC.C.ROOF.copingT !== undefined);
+if (T1C) await guard('D deck', async () => {
+  const browser = await launch();
+  try {
+    const S = await session(browser, { tag: '1280x800', w: 1280, h: 800, touch: false }, { three: 'real' }), T = 'D 1280x800 real roofDeck', f = [];
+    const T3 = loadTables();
+    const probe = () => S.page.evaluate(() => { const i = PC.debug.scene(), tex = new Set(); let meshes = 0, deck = [], pavMap = null;
+      i.scene.traverse((o) => { if (!o.isMesh) return; meshes++; for (const m of [].concat(o.material || [])) for (const k of ['map', 'alphaMap', 'bumpMap', 'normalMap', 'roughnessMap', 'aoMap', 'emissiveMap', 'lightMap']) if (m[k]) tex.add(m[k]);
+        if (o.name === 'paving') pavMap = o.material.map || null;
+        if (o.name === 'roofDeck') deck.push({ parent: o.parent && o.parent.name, type: o.material.type, vc: !!o.material.vertexColors, col: o.material.color.toArray(), hasMap: !!o.material.map, samePaving: false, cast: o.castShadow, recv: o.receiveShadow, map: o.material.map }); });
+      deck = deck.map((d) => ({ ...d, samePaving: !!pavMap && d.map === pavMap, map: undefined }));
+      return { meshes, sceneTex: tex.size, deck, roof: i.house && i.house.roof && i.house.roof.type, ext: i.house && i.house.exterior }; });
+    const near3 = (a, b) => a && b && a.every((x, k) => Math.abs(x - b[k]) < 2e-4);
+    for (const [name, mut, deckWant, mapWant, texWant, meshWant] of [
+      ['flat sample', "s.ans.roofType = 'flat'; s.ans.usableRoof = false;", 1, 'own', 5, 21],
+      ['usable terrace sample', "s.ans.roofType = 'terrace'; s.ans.usableRoof = true;", 1, 'paving', 4, null],
+      ['pitched sample', "s.ans.roofType = 'pitched'; s.ans.usableRoof = false;", 0, null, null, null],
+      ['maximum house', MAXMUT, 1, 'paving', null, 27]]) {
+      if (!(await to5(S, mut))) { f.push(`${name}: not ready`); continue; }
+      const r = await probe(), st = await S.page.evaluate(() => PC.store.get().ans.exterior), E = T3.exteriors[st || 'sand'];
+      if (r.deck.length !== deckWant) { f.push(`${name}: ${r.deck.length} roofDeck meshes (${deckWant})`); continue; }
+      if (meshWant !== null && r.meshes !== meshWant) f.push(`${name}: ${r.meshes} meshes (${meshWant})`);
+      if (texWant !== null && r.sceneTex !== texWant) f.push(`${name}: ${r.sceneTex} scene textures (${texWant})`);
+      for (const d of r.deck) {
+        if (d.parent !== 'roof' || d.type !== 'MeshLambertMaterial' || d.vc || !near3(d.col, H.lin(E.roof))) f.push(`${name}: roofDeck ${JSON.stringify({ parent: d.parent, type: d.type, vc: d.vc, col: d.col.map((x) => +x.toFixed(4)) })} (roof group, Lambert, no vertex colours, exteriors.roof ${E.roof})`);
+        if (d.cast || !d.recv) f.push(`${name}: roofDeck cast ${d.cast} / receive ${d.recv}`);
+        if (!d.hasMap || (mapWant === 'paving') !== d.samePaving) f.push(`${name}: roofDeck map ${d.hasMap ? (d.samePaving ? 'the paving texture object' : 'its own texture') : 'none'} (${mapWant === 'paving' ? 'the paving texture object' : 'its own membrane texture'})`);
+      }
+    }
+    R.check(`${T}: flat sample one roofDeck (Lambert, exteriors.roof, own membrane map, 5 scene textures, 21 meshes), usable terrace on the paving texture object (4 textures), pitched none, maximum house 27 meshes; receives, does not cast`, f);
     await S.end(T);
   } finally { await browser.close(); }
 });
