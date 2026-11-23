@@ -48,9 +48,9 @@
       if (!lv.rooms.length) return;
       var g = world.getObjectByName('level-' + lv.id), floorY = lv.baseY + H.slab, y0 = floorY + H.tintLift;
       var plain = new three.BoxBatch(), tex = new three.BoxBatch({ uv: true }), lamps = new three.BoxBatch();
-      // hall floor: the whole footprint, planks, flat colour
-      var hall = tex.color(floorHex('hall'));
-      tiles(tex, X, Z, fp.u, fp.u + fp.w, fp.v, fp.v + fp.d, y0, T.planks.tileM, cells.planks, function () { return hall; }, [], [], 'hallFloor');
+      // hall floor: the whole footprint, FL.kind.hall (PM Q4: a neutral non-plank kind), flat colour
+      var hall = tex.color(floorHex('hall')), hk = FL.kind.hall;
+      tiles(tex, X, Z, fp.u, fp.u + fp.w, fp.v, fp.v + fp.d, y0, T[hk].tileM, cells[hk], function () { return hall; }, [], [], 'hallFloor');
       // room floors with the ring darkening as vertex colours
       lv.rooms.forEach(function (r) {
         var kind = FL.kind[r.type], hex = floorHex(r.type), k = Math.min(C.ringW, Math.min(r.w, r.d) / 2 - 0.01), u1 = r.u + r.w, v1 = r.v + r.d;

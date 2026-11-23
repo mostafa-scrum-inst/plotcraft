@@ -15,7 +15,7 @@
    - indoor (F6-T2 N2-N5, Designer plan 2): emissive hexes and factors (x sky indoor): glazing (lit windows), lift
      (night lift on furniture and floors), lamp (shades), pool (glow colour; poolK per instance group); litShare =
      the share of lit panes per opening kind, seeded per opening.
-   - floors (F6-T2 I2, Designer plan 3, TL F1): the floor kind per room type (hall: planks), the kind hex per
+   - floors (F6-T2 I2, Designer plan 3, TL F1): the floor kind per room type (hall: tile, PM Q4), the kind hex per
      style, tint = the share of the room's roomTints hex mixed in (PM fallback: raise it); rugs: lift over the floor,
      living [share of room w, share of d, max w, max d] centred on the coffee table, bed [w, d] at each bed's foot,
      dining = the table plus diningPad per side; colour = mix(accent, fabric, accentMix) of the room palette.
@@ -53,7 +53,7 @@
     litShare: { glazed: 0.75, small: 0.4, slot: 1 }
   };
   PC.data.floors = {
-    kind: { living: 'planks', dining: 'planks', bedroom: 'planks', office: 'planks', hall: 'planks', majlis: 'carpet',
+    kind: { living: 'planks', dining: 'planks', bedroom: 'planks', office: 'planks', hall: 'tile', majlis: 'carpet',
       kitchen: 'tile', bathroom: 'tile', laundry: 'tile', storage: 'tile', maid: 'tile' },
     modern: { planks: '#8A6E55', tile: '#B9B7B2', carpet: '#6B5A4C' },
     classic: { planks: '#9A6A44', tile: '#D8CBB4', carpet: '#7A2F2C' },

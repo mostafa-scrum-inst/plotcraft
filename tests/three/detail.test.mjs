@@ -101,7 +101,7 @@ test('skirts: ground level only, the slab edge and the wall base on all 4 sides 
   }
 });
 
-test('F6-T2 I2 floors in textured-<level>: the hall planks over the footprint, each room tiled on its cell grid (areas add up, UVs inside the cell minus half a texel), the T1b ring as vertex colour (x ringK at the walls -> x 1 at ringW); footprint ring: groundRing x footK at the house -> x 1 at w, unshadowing, the ground map', () => {
+test('F6-T2 I2 floors in textured-<level>: the hall (FL.kind.hall, tile after PM Q4) over the footprint, each room tiled on its cell grid (areas add up, UVs inside the cell minus half a texel), the T1b ring as vertex colour (x ringK at the walls -> x 1 at ringW); footprint ring: groundRing x footK at the house -> x 1 at w, unshadowing, the ground map', () => {
   const E = opened(), h = E.house, PC = E.PC, C = PC.C.CONTACT, H = PC.C.HOUSE, FL = PC.data.floors, RT = PC.data.roomTints, FS = FL[h.interior.style];
   const e = 0.5 / 512, cells = {};   // the texgen layout inset by half a texel, computed here (not through atlasCells)
   PC.texgen.cells(512).forEach((c) => { cells[c.name] = { u0: c.u0 + e, v0: c.v0 + e, u1: c.u1 - e, v1: c.v1 - e }; });
@@ -111,6 +111,9 @@ test('F6-T2 I2 floors in textured-<level>: the hall planks over the footprint, e
     const hall = it.filter((x) => x.kind === 'hallFloor'), fl = it.filter((x) => x.kind === 'floor');
     assert.ok(close(hall.reduce((a, q) => a + area(q), 0), h.footprint.w * h.footprint.d, 1e-6), lv.id + ' hall covers the footprint');
     assert.ok(hall.every((q) => close(q.y0, y)) && fl.every((q) => close(q.y0, y + 0.01)), 'floor heights');
+    const hc = cells[FL.kind.hall];   // PM Q4: the hall takes a neutral non-plank kind
+    assert.notEqual(FL.kind.hall, 'planks', 'hall not planks (PM Q4)');
+    for (const q of hall) for (let i = q.first; i < q.first + 4; i++) { const u = uv[2 * i], w = uv[2 * i + 1]; assert.ok(u >= hc.u0 - 1e-9 && u <= hc.u1 + 1e-9 && w >= hc.v0 - 1e-9 && w <= hc.v1 + 1e-9, lv.id + ' hall uv in its kind cell'); }
     lv.rooms.forEach((r) => {
       const kind = FL.kind[r.type], c = cells[kind], hex = rgbOf(PC, PC.three.mixHex(FS[kind], RT[r.type], FL.tint));
       const x0 = E.X(r.u), x1 = E.X(r.u + r.w), z0 = E.Z(r.v + r.d), z1 = E.Z(r.v), k = Math.min(C.ringW, Math.min(r.w, r.d) / 2 - 0.01);
