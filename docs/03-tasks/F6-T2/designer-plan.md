@@ -137,7 +137,7 @@ A new key field `indoor` (0–1), blended like the others (A-13). I recommend th
 |---|---|---|
 | `planks` | boards 0.15 m wide (8 per tile), staggered ends seeded per board, seam −0.25 (1 px), per-board ±0.06, lengthwise grain noise ±0.04 | 1.2 m |
 | `tile` | 2 × 2 tiles of 0.6 m, grout −0.30 (2 px), per-tile ±0.03, soft mottle [[3, 0.04]] (marble / concrete) | 1.2 m |
-| `carpet` | tufted noise [[16, 0.05], [64, 0.06]], base 0.85 | 0.5 m |
+| `carpet` | tufted noise [[16, 0.05], [64, 0.06]], base 0.88 | 0.5 m |
 | `weave` | fabric crosshatch ±0.05 at a 2 px period, noise 0.03 | mapped once per face (stretched; see below) |
 
 - **Floors move** from the slab batch's tint quads into `textured-<level>`, split at tile boundaries so UVs stay inside one cell, and keep the T1b ring darkening as vertex colours. Floor kind and colour per room type:
