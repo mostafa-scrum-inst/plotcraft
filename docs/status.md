@@ -315,3 +315,4 @@
 - [TL] F6-T1c impl review — APPROVED conditional on two quiet default runs ≤ 420 s after QA move (D + max-house B, then duplicates); CD-8 complete for MVP; evening far haze is PM/client judgement.
 - [TL] F6-T1c QA trim 341d187 accepted (411.7 s, release rows 235 s / stream 162 s); awaiting FS two confirm runs.
 - [TL] F6-T1c impl review final — APPROVED for merge/publish; default run median ~429 s recorded as debt: QA ~45 s more moves + FS release rebalance before next feature gate; new gate = median of 3 quiet runs ≤ 420 s, none > 440 s.
+- [FS] F6-T1c delivered (7c57f6d, merged and v9 published): W1 hall panes (house v 3), R1 coping and drip edge, R2 roofDeck plus membrane, R3 deck bands, lint DIST_BUDGET_BYTES, release step in 2 parallel processes. QA_FULL 464.0 s, release 159/189 s, C-4.8 148 ms, loaded build ≤ 905 ms (guard 1200 ms), dist ~22.4 kB under budget. Pending: run-all labels for QA's STREAM_ROWS, then check each release process ≤ 260 s.
