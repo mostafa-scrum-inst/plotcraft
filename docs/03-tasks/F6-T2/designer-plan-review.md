@@ -82,3 +82,4 @@ Shots read: `q4-floors-sample-G-labelled.jpg` and the sample Ground-only views a
 - **Living vs dining (and bedroom / office), all planks: accepted.** They sit behind walls, carry clearly different furniture (sofa vs table vs bed vs desk), keep a 0.2 type tint, and are named by "Go to room" and the tour caption. Raising them to 0.35 would bring back the pastel look the client called "too far from realistic" (CD-8).
 - **Story:** F4-S1 is reworded from "floor tint and/or a label" to "floor material and tint, furniture and/or a label" (goals-and-stories round 17).
 - **Release notes:** the floor-colour line is reworded.
+- **Re-shot check (2026-11-23, FS f96aa2e): closed.** With the hall on neutral tile, the hall reads as a pale corridor clearly apart from the living and dining boards, and not like the kitchen. No further PM look is needed.
