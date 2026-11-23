@@ -335,3 +335,4 @@
 - [TL] F6-T2 impl review final — APPROVED (QA 3 flake-free QA_FULL runs; QA_FULL median 478.4 s, new QA_FULL measure median ≤ 480 / none > 500); QA cuts ≥ 20 s QA_FULL duplicates on main before next gate.
 - [TL] QA_FULL cut accepted (main 01ebac4): QA_FULL median 478.4 → 457.9 s; release wall 724–743 s (< 800 cap; stream ~254 s, next moves → rows3). questions.spec north-reset flake (1/3) → FS to diagnose (app vs test race) before next gate.
 - [TL] questions.spec north-reset flake: harness cause (Chrome drops synthesized click after injected drag); FS fix 4a032c2 (settle waits via inert tap probe) approved for main.
+- [QA] Touch-settle fix (8d89b2c) verified: 5/5 QA_FULL=1 run-all on main all green; e2e/questions 432/432 (incl. 768x1024 north reset) and f4-t1-view 106/106 every run; QA_FULL walls 474.6/470.8/477.5/465.7/456.8 s (median 470.8, ≤ 480, none > 500).
