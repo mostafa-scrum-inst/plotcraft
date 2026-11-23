@@ -214,7 +214,8 @@
   function dispose() {
     stopAnim('build');
     clearSelection();
-    S.meshes.forEach(function (m) { m.geometry.dispose(); });
+    var seen = [];   // F6-T2: the glow meshes share the blobs' plane; each geometry is disposed once
+    S.meshes.forEach(function (m) { if (seen.indexOf(m.geometry) < 0) { seen.push(m.geometry); m.geometry.dispose(); } });
     Object.keys(S.mats || {}).forEach(function (k) { S.mats[k].dispose(); });
     S.textures.forEach(function (t) { t.dispose(); });
     S.world.children.slice().forEach(function (c) { S.world.remove(c); });

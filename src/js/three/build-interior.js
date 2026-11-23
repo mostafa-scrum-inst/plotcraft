@@ -125,6 +125,10 @@
     var H = PC.C.HOUSE, P = PC.data.indoor.pool, cu = house.center[0], cv = house.center[1], made = [];
     var X = function (u) { return u - cu; }, Z = function (v) { return -(v - cv); };
     var gm = world.getObjectByName('glazing'), panes = gm ? gm.userData.panes : [];
+    // one unit plane for every level, the blobs' own when they exist: its buffers are on the GPU from the first frame,
+    // so the first night frame uploads only the instance buffers and creates no renderer geometry (CTO 4; QA F4-T3 A)
+    var bl = world.getObjectByName('blobs'), geo = null;
+    var plane = function () { return geo || (geo = bl ? bl.geometry : new THREE.PlaneGeometry(1, 1)); };
     var up = new THREE.Quaternion(); up.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
     var face = { x: new THREE.Quaternion(), z: new THREE.Quaternion() };
     house.levels.forEach(function (lv) {
@@ -148,7 +152,7 @@
       });
       var all = pools.concat(spill, patch);
       if (!all.length) return;
-      var m = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), mats.glow, all.length), mm = new THREE.Matrix4(), base = three.col(P.hex);
+      var m = new THREE.InstancedMesh(plane(), mats.glow, all.length), mm = new THREE.Matrix4(), base = three.col(P.hex);
       all.forEach(function (e, i) {
         var sx = e[3], sz = e[4];
         if (e[6] === up) { mm.compose(new THREE.Vector3(e[0], e[1], e[2]), up, new THREE.Vector3(sx, sz, 1)); }

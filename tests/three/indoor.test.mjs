@@ -58,6 +58,7 @@ test('glow-<level> (TL ruling 3): additive instances [pools][spill][patches]; sp
     const mt = E.mock.raw(g.material);
     assert.deepEqual([mt.blending, mt.transparent, mt.depthWrite, g.castShadow, g.receiveShadow, mt.map === E.mock.raw(E.world.getObjectByName('blobs').material).map], [2, true, false, false, false, true], 'additive, the blob map');
     assert.equal(g.count, r.all, 'exterior (Roof on, All): every instance');
+    assert.equal(g.geometry, E.world.getObjectByName('blobs').geometry, 'the blobs\' plane (no renderer geometry created by the first night frame)');
   }
   V.setRoof(false);
   for (const lv of h.levels) { const g = E.world.getObjectByName('glow-' + lv.id); assert.equal(g.count, g.userData.ranges.pools + g.userData.ranges.spill, lv.id + ' dollhouse: no window patches'); }

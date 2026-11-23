@@ -197,7 +197,7 @@ test('context loss: preventDefault, no frames; restore rebuilds (old resources d
   const renders = E.R().renders;
   E.canvas.dispatch('webglcontextrestored');
   assert.deepEqual([E.info().lost, E.info().builds, E.info().restores], [false, 2, 1]);
-  assert.equal(geos.length, 28);
+  assert.equal(geos.length, 26);   // F6-T2: the glow meshes share the blobs' plane
   assert.ok(geos.every((g) => g.disposed === 1), 'every first-build geometry disposed exactly once');
   assert.ok(mats.length === 18 && mats.every((m) => m.disposed === 1), 'and every material (F4-T2: + poolWater; F4-T3: + trunk, canopy, shrub; F6-T1a: + paving, ui, sky; F6-T1b: + groundRing, blob; F6-T1c: + deck; F6-T2: + furniture, interior, lamp, glazing, glow)');
   // F6-T1a (CTO C-5.2): the textures are disposed once and re-created from the cached pixels (no regeneration)
