@@ -17,7 +17,8 @@
     'updateMatrix', 'matrix'];
   var GEO = ['setAttribute', 'setIndex', 'computeVertexNormals', 'dispose'];
   var MAT = ['color', 'vertexColors', 'transparent', 'opacity', 'side', 'dispose', 'map', 'toneMapped', 'fog', 'depthWrite',   // F6-T1a: map .. depthWrite
-    'emissive', 'emissiveIntensity', 'blending'];   // F6-T2 (CTO 1.2): emissive colour + intensity (never an emissiveMap), additive glow
+    'blending'];   // F6-T2 (CTO 1.2d): additive glow
+  var LAMBERT = MAT.concat(['emissive', 'emissiveIntensity']);   // F6-T2 (CTO 1.2): emissive colour + intensity (never an emissiveMap)
   var TEX = ['wrapS', 'wrapT', 'repeat', 'encoding', 'magFilter', 'minFilter', 'generateMipmaps', 'anisotropy', 'needsUpdate', 'dispose'];
   var WHITELIST = {
     THREE: ['REVISION', 'WebGLRenderer', 'Scene', 'Group', 'Object3D', 'Mesh', 'InstancedMesh', 'PerspectiveCamera',
@@ -54,7 +55,7 @@
     Float32BufferAttribute: ['array', 'needsUpdate'],
     Shape: ['moveTo', 'lineTo', 'closePath', 'holes'],
     Path: ['moveTo', 'lineTo', 'closePath'],
-    MeshLambertMaterial: MAT, MeshBasicMaterial: MAT,
+    MeshLambertMaterial: LAMBERT, MeshBasicMaterial: MAT,
     Vector2: ['x', 'y', 'set'],
     Vector3: ['x', 'y', 'z', 'set', 'copy', 'clone', 'add', 'sub', 'multiplyScalar', 'normalize', 'length', 'distanceTo', 'lerp'],
     Euler: ['x', 'y', 'z'],

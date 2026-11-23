@@ -51,6 +51,28 @@ async function looks(page, tag) {
   const L = {};
   for (const [k, h] of [['noon', 12], ['evening', 17.5], ['night', 22]]) { await set(h, 'summer'); L[k] = (await frame(page)).luma; }
   T.ok(L.noon > L.evening && L.evening > L.night, `${tag} mean luma noon ${L.noon.toFixed(1)} > evening ${L.evening.toFixed(1)} > night ${L.night.toFixed(1)}`);
+  // F6-T2 (TL ruling 7): night is the darkest on the outdoor ground (lit windows add frame luma), read outside the plot
+  const G = {}; let gp = null;
+  for (const [k, h] of [['noon', 12], ['evening', 17.5], ['night', 22]]) {
+    await set(h, 'summer');
+    G[k] = await page.evaluate((gp) => {
+      const i = PC.debug.scene(), gl = i.renderer.getContext(), W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, px = new Uint8Array(4);
+      if (!gp) {   // the ground points: the first visible hit is the outer ground (the camera does not move between hours)
+        const rc = new THREE.Raycaster(), shown = (o) => { for (let n = o; n; n = n.parent) if (!n.visible) return false; return true; };
+        gp = [];
+        for (let gy = 1; gy < 8; gy++) for (let gx = 1; gx < 12; gx++) {
+          rc.setFromCamera({ x: gx / 6 - 1, y: gy / 4 - 1 }, i.camera);
+          const x = rc.intersectObjects(i.world.children, true).find((q) => shown(q.object) && !/^(sky|blobs|glow-)/.test(q.object.name));
+          if (x && x.object.name === 'groundOuter') gp.push([Math.round(gx / 12 * W), Math.round(gy / 8 * H)]);
+        }
+      }
+      i.renderNow(); let s = 0;
+      for (const [X, Y] of gp) { gl.readPixels(X, Y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); s += 0.2126 * px[0] + 0.7152 * px[1] + 0.0722 * px[2]; }
+      return { l: s / (gp.length || 1), n: gp.length, gp };
+    }, gp);
+    gp = G[k].gp;
+  }
+  T.ok(G.night.n >= 10 && G.noon.l > G.evening.l && G.evening.l > G.night.l, `${tag} F6-T2 outdoor ground luma noon ${G.noon.l.toFixed(1)} > evening ${G.evening.l.toFixed(1)} > night ${G.night.l.toFixed(1)} (${G.night.n} points outside the plot; TL ruling 7)`);
   // vegetation shadows at 17.5 h: casting trunks / canopies / shrubs darken the frame
   await set(17.5, 'summer');
   // (F6-T1a: the shadow map is drawn on demand, so this test-side caster change asks for one update itself)
@@ -246,7 +268,7 @@ async function scene(vp, dpr) {
       t.value = '12'; t.dispatchEvent(new Event('input', { bubbles: true })); se.value = 'summer'; se.dispatchEvent(new Event('change', { bubbles: true }));
     });
   }
-  if (vp.w > 900) { await basement(page, tag); await maxBudget(page, tag); }
+  if (vp.w > 900) { await basement(page, tag); await maxBudget(page, tag); await indoorReal(page, tag); }
   T.none(problems(), `${tag} no page errors, console errors or THREE. warnings`);
   await o.ctx.close();
 }
@@ -374,7 +396,7 @@ async function detailReal(page, tag) {
     for (const o of h.openings) {
       if (o.kind !== 'glazed') continue;
       const lv = h.levels.find((l) => l.id === o.level), y0 = lv.baseY + 0.2, y = y0 + o.sill + (o.head - o.sill) * 0.35;
-      const g = look(at(o, o.a + (o.b - o.a) * 0.25, y), /^roofBatch$/);   // a quarter in: clear of a centre mullion
+      const g = look(at(o, o.a + (o.b - o.a) * 0.25, y), /^glazing$/);   // a quarter in: clear of a centre mullion; F6-T2: the glass is in glazing
       const wl = [look(at(o, o.a - D.frame - 0.25, y), /^(walls|roofBatch)$/), look(at(o, o.b + D.frame + 0.25, y), /^(walls|roofBatch)$/)].filter((x) => x != null);
       if (g == null || !wl.length) continue;
       pairs++; if (g < Math.max(...wl) - 10) ok++;
@@ -445,6 +467,85 @@ async function maxBudget(page, tag) {
   console.log(`  [record] ${tag} max house: calls ${r.on[0]} / ${r.off[0]}, triangles ${r.on[1]} / ${r.off[1]}, build best ${best.toFixed(0)} ms (loaded), meshes ${r.meshes}`);
 }
 
+// F6-T2 on real r128, maximum house at 1280x800 (CTO 1.5 / 8, plan 4, TL F3): (a) the program count is the same
+// after a 12 h and a 22 h frame (the night-only glow was precompiled at build); (b) lit panes, where the glazing is the
+// first hit, read brighter at 22 h than at 12 h; (c) the highlight (dollhouse, 22 h) keeps its hue and stays apart
+// from the lit panes (hue >= 15 degrees, luma >= 0.15 apart); (d) the atlas seams: dollhouse, Ground, noon, across the
+// floor tile boundaries the boundary column's mean luma is within 4 levels of its neighbours' and within 1.5 x the
+// same measure on in-cell columns; (e) budgets at 12 and 22 h recorded.
+async function indoorReal(page, tag) {
+  const HELP = `(() => {
+    const i = PC.debug.scene(), gl = i.renderer.getContext(), W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, w = i.world, px = new Uint8Array(4);
+    const shown = (o) => { for (let n = o; n; n = n.parent) if (!n.visible) return false; return true; };
+    const rc = new THREE.Raycaster(), cam = i.camera;
+    const first = (p) => { const d = p.clone().sub(cam.position), L = d.length(); rc.set(cam.position, d.normalize()); const x = rc.intersectObjects(w.children, true).find((q) => shown(q.object) && !/^(sky|blobs|glow-)/.test(q.object.name)); return x && Math.abs(x.distance - L) < 0.05 ? x.object.name : null; };
+    const scr = (p) => { const n = p.clone().project(cam); return [(n.x + 1) / 2 * W, (n.y + 1) / 2 * H]; };
+    const rgb = (X, Y) => { gl.readPixels(Math.round(X), Math.round(Y), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); return [px[0], px[1], px[2]]; };
+    const luma = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    const hue = (c) => { const [r, g, b] = c, mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn || 1; const x = mx === r ? (g - b) / d : mx === g ? 2 + (b - r) / d : 4 + (r - g) / d; return (x * 60 + 360) % 360; };
+    const sum = (a) => a.reduce((s, c) => [s[0] + c[0], s[1] + c[1], s[2] + c[2]], [0, 0, 0]);
+    const mean = (a) => a.reduce((s, x) => s + x, 0) / (a.length || 1);
+    return { i, gl, W, H, w, first, scr, rgb, luma, hue, sum, mean, h: i.house, V: PC.view3d };
+  })()`;
+  // (a) + (b) + (e): exterior at Reset, noon then 22 h
+  const r = await page.evaluate((HELP) => {
+    const E = (0, eval)(HELP), { i, w, h, V, first, scr, rgb, luma, hue, sum, W, H } = E;
+    V.select(null); V.setRoof(true); V.setLevel('all'); V.resetView();
+    const panes = w.getObjectByName('glazing').userData.panes.filter((p) => PC.three.litPane(h, p));
+    const paneRgb = () => { i.renderNow(); const v = []; panes.forEach((p) => { for (const f of [-0.25, 0.25]) { const c = new THREE.Vector3(p.x + (p.ax === 2 ? f * p.w : 0), p.y, p.z + (p.ax === 0 ? f * p.w : 0)); if (first(c) !== 'glazing') continue; const [X, Y] = scr(c); if (X < 2 || Y < 2 || X > W - 2 || Y > H - 2) continue; v.push(rgb(X, Y)); } }); return v; };
+    const at = (hour) => { V.setLook({ hour, season: 'summer' }); i.renderer.shadowMap.needsUpdate = true; i.renderNow(); i.renderNow(); return [i.renderer.info.programs.length, [i.renderer.info.render.calls, i.renderer.info.render.triangles], paneRgb()]; };
+    const [p12, b12, day] = at(12), [p22, b22, night] = at(22), m = (a) => a.reduce((s, c) => s + luma(c), 0) / (a.length || 1);
+    return { p12, p22, b12, b22, n: night.length, day: m(day), night: m(night), paneHue: hue(sum(night)), paneLuma: m(night) / 255 };
+  }, HELP);
+  // (c) + (d): a finder pick on the largest planks room of Ground (flight to its close pose, Roof off, level G)
+  const id = await page.evaluate(() => { const g = PC.debug.house().levels.find((l) => l.id === 'G'); return g.rooms.filter((r) => PC.data.floors.kind[r.type] === 'planks').sort((a, b) => b.w * b.d - a.w * a.d)[0].id; });
+  // the finder's goTo steps with a 1 ms flight (finder.test covers goTo itself)
+  await page.evaluate((id) => { const V = PC.view3d, h = V.house(), f = PC.cam.roomOf(h, id); V.setRoof(false); V.setLevel(f.level.id); V.select(id); V.flyTo(PC.cam.forRoom(h, id, V.pose(), V.limits()), 1); }, id);
+  await page.waitForFunction(() => !PC.view3d.flying() && !PC.debug.scene().frame, null, { timeout: 15000 });
+  const q = await page.evaluate(([HELP, id]) => {
+    const E = (0, eval)(HELP), { i, gl, W, H, w, h, V, first, scr, luma, hue, sum, mean } = E;
+    const hl = w.getObjectByName('highlight'), on = new Uint8Array(W * H * 4), off = new Uint8Array(W * H * 4);
+    i.renderNow(); gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, on); hl.visible = false; i.renderNow(); gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, off); hl.visible = true;
+    const hp = []; for (let j = 0; j < on.length; j += 4) if (Math.abs(on[j] - off[j]) + Math.abs(on[j + 1] - off[j + 1]) + Math.abs(on[j + 2] - off[j + 2]) > 30) hp.push([on[j], on[j + 1], on[j + 2]]);
+    const out = { hlN: hp.length, hlHue: hue(sum(hp)), hlLuma: hp.reduce((s, c) => s + luma(c), 0) / (hp.length || 1) / 255 };
+    // atlas seams at noon, the highlight hidden, same pose
+    V.setLook({ hour: 12, season: 'summer' }); hl.visible = false; i.renderer.shadowMap.needsUpdate = true; i.renderNow();
+    const all = new Uint8Array(W * H * 4); gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, all); hl.visible = true;
+    const L = (X, Y) => { const k = (Math.round(Y) * W + Math.round(X)) * 4; return 0.2126 * all[k] + 0.7152 * all[k + 1] + 0.0722 * all[k + 2]; };
+    const g = h.levels.find((l) => l.id === 'G'), T = PC.data.textures.interior, FL = PC.data.floors, y = g.baseY + 0.2 + PC.C.HOUSE.tintLift + 0.01, cu = h.center[0], cv = h.center[1];
+    const meas = (r, axis, at) => {   // |mean luma on the line - mean of +-1 and +-2 px off it|, over its visible floor points
+      let a1 = 0, nb = 0, n = 0;
+      for (let t = 0.45; t < (axis === 'u' ? r.d : r.w) - 0.45; t += 0.15) {
+        const P = axis === 'u' ? new THREE.Vector3(at - cu, y, -(r.v + t - cv)) : new THREE.Vector3(r.u + t - cu, y, -(at - cv));
+        if (first(P) !== 'textured-G') continue;
+        const Q = P.clone(); if (axis === 'u') Q.x += 0.05; else Q.z -= 0.05;
+        const a = scr(P), b = scr(Q), d = Math.hypot(b[0] - a[0], b[1] - a[1]); if (d < 0.5) continue;
+        const ux = (b[0] - a[0]) / d, uy = (b[1] - a[1]) / d;
+        a1 += L(a[0], a[1]); nb += (L(a[0] + ux, a[1] + uy) + L(a[0] - ux, a[1] - uy) + L(a[0] + 2 * ux, a[1] + 2 * uy) + L(a[0] - 2 * ux, a[1] - 2 * uy)) / 4; n++;
+      }
+      return n >= 3 ? Math.abs(a1 - nb) / n : null;
+    };
+    const r = g.rooms.find((x) => x.id === id), tm = T[FL.kind[r.type]].tileM, k = 0.35, seams = [], inside = [];
+    for (const axis of ['u', 'v']) {
+      const a0 = axis === 'u' ? r.u : r.v, a1 = a0 + (axis === 'u' ? r.w : r.d);
+      for (let j = Math.ceil((a0 + k) / tm); j * tm < a1 - k; j++) {
+        const s0 = meas(r, axis, j * tm); if (s0 != null) seams.push(s0);
+        for (const f of [0.25, 0.5, 0.75]) { const at = j * tm - f * tm; if (at > a0 + k) { const s1 = meas(r, axis, at); if (s1 != null) inside.push(s1); } }
+      }
+    }
+    Object.assign(out, { seam: mean(seams), seamN: seams.length, spread: Math.max(...inside, 0), spreadMean: mean(inside), inN: inside.length, room: r.type });
+    PC.three.finder.clear(); V.setLevel('all'); V.setRoof(true); V.resetView();
+    return out;
+  }, [HELP, id]);
+  Object.assign(r, q);
+  T.eq([r.p22], [r.p12], `${tag} F6-T2 program count unchanged noon -> 22 h (${r.p12} -> ${r.p22}; CTO 1.2, glow precompiled)`);
+  T.ok(r.n >= 6 && r.night > r.day + 20, `${tag} F6-T2 lit panes brighter at 22 h: mean luma ${r.night.toFixed(1)} vs ${r.day.toFixed(1)} at noon over ${r.n} pane points`);
+  const dh = Math.min(Math.abs(r.hlHue - r.paneHue), 360 - Math.abs(r.hlHue - r.paneHue));
+  T.ok(r.hlN >= 40 && Math.abs(r.hlHue - 17.5) <= 15 && dh >= 15 && Math.abs(r.paneLuma - r.hlLuma) >= 0.15, `${tag} F6-T2 highlight at 22 h hue ${r.hlHue.toFixed(1)} (#C2410C 17.5) luma ${r.hlLuma.toFixed(2)} vs lit panes hue ${r.paneHue.toFixed(1)} luma ${r.paneLuma.toFixed(2)} (${r.hlN} px)`);
+  T.ok(r.seamN >= 4 && r.seam <= 4 && r.seam <= 1.5 * r.spread, `${tag} F6-T2 atlas seams (TL F3), ${r.room}: boundary ${r.seam.toFixed(2)} levels over ${r.seamN} lines <= 4 and <= 1.5 x in-cell max ${r.spread.toFixed(2)} (mean ${r.spreadMean.toFixed(2)}, ${r.inN} lines)`);
+  console.log(`  [record] ${tag} F6-T2 max house Reset: calls / triangles 12 h ${r.b12.join(' / ')}, 22 h ${r.b22.join(' / ')}; programs ${r.p12}; seams ${r.seam.toFixed(2)} over ${r.seamN} vs in-cell max ${r.spread.toFixed(2)}; pane points ${r.n}, highlight ${r.hlN} px`);
+}
+
 // Lite tier smoke (CTO C-4.7): a fresh page with the tier switched by data before stage 5 opens renders a frame.
 async function liteSmoke(vp) {
   const tag = `${vp.tag}@2 lite`, o = await open(browser, vp, { three: 'real', dpr: 2 }), { page, act, problems } = o;
@@ -452,9 +553,11 @@ async function liteSmoke(vp) {
   await act('btn-sample'); await act('btn-skip3d');
   await ready(page);
   const r = await page.evaluate(() => { const i = PC.debug.scene(), sun = i.scene.getObjectByName('sun'); return [i.tier.name, i.scene.fog, sun.shadow.mapSize.x, i.renderer.getPixelRatio(), i.textures.map((t) => t.image.width)]; });
-  T.eq(r, ['lite', null, 1024, 1.5, [256, 256, 256, 64, 256]], `${tag}: tier lite, no fog, map 1024, pixel ratio 1.5, colour textures 256 (+ the 64 px blob, F6-T1b; + membrane on the flat sample, F6-T1c)`);
+  T.eq(r, ['lite', null, 1024, 1.5, [256, 256, 256, 64, 256, 256]], `${tag}: tier lite, no fog, map 1024, pixel ratio 1.5, colour textures 256 (+ the 64 px blob, F6-T1b; + membrane on the flat sample, F6-T1c; + the interior atlas, F6-T2)`);
   const s = await sample(page);
   notBlank(s, s.sky, `${tag} not blank`);
+  const pg = await page.evaluate(() => { const i = PC.debug.scene(), at = (hour) => { PC.view3d.setLook({ hour, season: 'summer' }); i.renderNow(); return i.renderer.info.programs.length; }; return [at(12), at(22)]; });
+  T.eq([pg[1]], [pg[0]], `${tag}: F6-T2 program count unchanged noon -> 22 h (${pg[0]} -> ${pg[1]}; no glow in lite)`);
   T.none(problems(), `${tag} no page errors, console errors or THREE. warnings`);
   await o.ctx.close();
 }
