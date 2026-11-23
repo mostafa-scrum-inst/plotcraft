@@ -130,7 +130,32 @@ function runRow(f, a) { return new Promise((res) => { const t = Date.now(), out 
 // processes: --max-only --stream-only (the stream, no rows) and --max-only --rows-only (the row spawns, no browser here).
 const rowsChain = async (list) => { const r = []; for (const [f, ...a] of list) r.push(await runRow(f, a)); return r; };
 const SAMPLE = MAXONLY ? ROWS3_ONLY || (!STREAM_ONLY && !ROWS_ONLY) : process.argv.includes('--sample');   // default run: moved (--sample runs it by hand)
-const browser = (ROWS_ONLY && MAXONLY) || (!MAXONLY && !SAMPLE) ? null : await launch();
+// TL condition on 175d20d: the default run keeps a short real-r128 smoke (about 5 s): 10 fixed operations on the sample with
+// one 22 h look (the night preset) and one Roof off / on; GPU geometries / textures never exceed the scene's (nothing
+// undisposed), no renders while idle, and back at the starting view (Roof on, All, noon) both counts equal the first ones.
+const SMOKE_OPS = [['preset', 0.99, 0], ['roof', 0, 0], ['level', 0.6, 0], ['pick', 0.3, 0], ['reset', 0, 0], ['season', 0.6, 0], ['level', 0, 0], ['roof', 0, 0], ['preset', 0.3, 0], ['reset', 0, 0]];
+async function smokeRun(browser) {
+  const S = await session(browser, VP_DEF, { three: 'real' }), f = [], names = [];
+  await to5(S, ''); if (!(await S.until(() => S.page.evaluate(READY), 15000))) f.push('not ready after the first open');
+  const p0 = await S.page.evaluate(PROBE), state = () => S.page.evaluate(() => { const i = PC.debug.scene(); return { roof: !!i.roof, level: i.level, h: PC.store.get().ans.view3d ? PC.store.get().ans.view3d.hour : null }; });
+  const s0 = await state();
+  for (const op of SMOKE_OPS) {
+    const name = await S.page.evaluate(OP, op); names.push(name);
+    if (!(await S.until(() => S.page.evaluate(READY), 12000))) { f.push(`${name}: not ready after 12 s`); continue; }
+    const p = await S.page.evaluate(PROBE); await S.page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))); const p2 = await S.page.evaluate(PROBE);
+    if (p.lost) f.push(`${name}: context left lost`);
+    if (p2.renders !== p.renders || p2.frame) f.push(`${name}: ${p2.renders - p.renders} renders while idle`);
+    if (p.memGeo > p.sceneGeo) f.push(`${name}: GPU geometries ${p.memGeo} > ${p.sceneGeo} in the scene (undisposed)`);
+    if (p.memTex > p.sceneTex + p.shadowLights) f.push(`${name}: GPU textures ${p.memTex} > ${p.sceneTex} in the scene + ${p.shadowLights} shadow map`);
+  }
+  const p1 = await S.page.evaluate(PROBE), s1 = await state();
+  if (s1.roof !== s0.roof || s1.level !== s0.level) f.push(`end view roof ${s1.roof} level ${s1.level}, start ${s0.roof} / ${s0.level} (smoke script)`);
+  else if (p1.sceneGeo !== p0.sceneGeo || p1.sceneTex !== p0.sceneTex || p1.memGeo !== p0.memGeo || p1.memTex !== p0.memTex) f.push(`back at the start view: scene ${p1.sceneGeo} / ${p1.sceneTex}, GPU ${p1.memGeo} / ${p1.memTex}; start ${p0.sceneGeo} / ${p0.sceneTex}, GPU ${p0.memGeo} / ${p0.memTex} (geometries / textures)`);
+  if (!names.some((n) => n === 'preset night') || names.filter((n) => n === 'roof').length !== 2) f.push(`script ran ${names.join(', ')} (want preset night and Roof off / on)`);
+  R.check(`960x600 real sample smoke (default run, TL condition): ${names.join(', ')}: GPU geometries / textures <= the scene's after each, no idle renders, never lost; back at the start view the counts equal the first (${p0.memGeo} / ${p0.memTex})`, cut(f));
+  await S.end('smoke');
+}
+const browser = (ROWS_ONLY && MAXONLY) || (!MAXONLY && !SAMPLE && process.argv.includes('--no-smoke')) ? null : await launch();
 try {
   let t = Date.now();
   if (MAXONLY && !ROWS_ONLY && !ROWS3_ONLY) { t = Date.now(); await probeRun(browser, '1280x800 real maximum house (release step)', MAXMUT, 200, SEED + 1); const s = (Date.now() - t) / 1000; TIMES.push(`maximum house ${s.toFixed(1)} s`);
@@ -138,6 +163,7 @@ try {
   else if (!MAXONLY) R.note('the 200-operation maximum-house stream is its own release step: QA_RELEASE=1 or --max-only, run-all --only leak-max (TL ruling, F6-T1a gate)');
   t = Date.now();
   if (SAMPLE) { await probeRun(browser, '960x600 real sample', '', OPS, SEED, VP_DEF); TIMES.push(`sample ${((Date.now() - t) / 1000).toFixed(1)} s`); }
+  if (!MAXONLY && !process.argv.includes('--no-smoke')) { t = Date.now(); await smokeRun(browser); TIMES.push(`smoke ${((Date.now() - t) / 1000).toFixed(1)} s`); }
   else if (!MAXONLY) R.note('the 50-op sample stream runs in the third release process (f6-t1-leak.mjs --max-only --rows3-only; TL F6-T2 gate ruling, CTO §6.2): a duplicate of the 200-op maximum-house stream');
 } finally { if (browser) await browser.close(); }
 if (MAXONLY) {
