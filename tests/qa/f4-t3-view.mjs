@@ -221,7 +221,13 @@ if (HAS.look) await guard('A 1280x800', async () => {
 // ================= B. vegetation meshes =================
 const INST = (veg) => { const T1B = !!PC.C.CONTACT; const w = PC.debug.scene().world, h = PC.debug.scene().house, c = h.center, out = { meshes: 0, names: [], inst: {}, model: { trees: h.site.trees.length, shrubs: h.site.shrubs.length }, f: [] };
   w.updateMatrixWorld(true);
-  w.traverse((o) => { if (!o.isMesh) return; out.meshes++; if (!o.isInstancedMesh) return; out.names.push(o.name); const g = o.geometry, P = g.attributes.position;
+  // F6-T2 (plan §5 / N4, marker PC.data.furnitureParts): my count of the T2 meshes = per level with rooms textured + glow
+  // (full tier), lamps where a piece has a lamp part (G also with the gate lamps: wall + gate), + one glazing with openings.
+  // glow-<level> is an additive InstancedMesh on the blob map, not vegetation: kept out of the instanced names.
+  if (PC.data.furnitureParts) { const lv = h.levels.filter((l) => l.rooms.length);
+    out.t2 = lv.length * 2 + lv.filter((l) => l.rooms.some((r) => r.furniture.some((p) => (p.parts || []).some((q) => q.mat === 'lamp'))) || (l.id === 'G' && h.site.wall && h.site.gate)).length + ((h.openings || []).length ? 1 : 0); } else out.t2 = 0;
+  out.glow = [];
+  w.traverse((o) => { if (!o.isMesh) return; out.meshes++; if (!o.isInstancedMesh) return; if (/^glow-/.test(o.name)) { out.glow.push(o.name); return; } out.names.push(o.name); const g = o.geometry, P = g.attributes.position;
     out.inst[o.name] = { count: o.count, culled: o.frustumCulled, cast: o.castShadow, recv: o.receiveShadow, type: g.type, par: g.parameters, parent: o.parent && o.parent.name, indexed: !!g.index, icol: !!o.instanceColor };
     if (o.name === 'blobs') return;
     const kind = o.name === 'shrubs' ? 'shrubs' : 'trees', list = h.site[kind], spec = o.name === 'trunks' ? [veg.tree.trunkR, 0, veg.tree.trunkH] : o.name === 'canopies' ? [veg.tree.canopyR, veg.tree.canopyY0, veg.tree.canopyY0 + veg.tree.canopyH] : [veg.shrub.r, 0, veg.shrub.h];
@@ -262,8 +268,8 @@ if (HAS.scatter) await guard('B vegetation', async () => {
   await to5(S); let r = await S.page.evaluate(INST, veg); const f = instProblems(r, 'sample'), m25 = r.meshes;
   if (!r.model.trees || !r.model.shrubs) f.push(`sample: ${r.model.trees} trees, ${r.model.shrubs} shrubs`);
   await S.shot('B-sample-trees');
-  await to5(S, 's.ans.vegPct = 0;'); r = await S.page.evaluate(INST, veg); f.push(...instProblems(r, '0 %')); if (r.names.length || r.meshes !== 12 + NEW6) f.push(`0 %: ${r.meshes} meshes, instanced ${r.names} (${12 + NEW6}, none)`);
-  if (m25 !== 12 + NEW6 + 3 + (T1BV ? 1 : 0)) f.push(`sample at 25 %: ${m25} meshes (12 + ${NEW6 ? NEW6 + ' F6 + ' : ''}3${T1BV ? ' + blobs' : ''})`);
+  await to5(S, 's.ans.vegPct = 0;'); r = await S.page.evaluate(INST, veg); f.push(...instProblems(r, '0 %')); if (r.names.length || r.meshes !== 12 + NEW6 + r.t2) f.push(`0 %: ${r.meshes} meshes, instanced ${r.names} (${12 + NEW6 + r.t2}, none)`);
+  if (m25 !== 12 + NEW6 + 3 + (T1BV ? 1 : 0) + r.t2) f.push(`sample at 25 %: ${m25} meshes (12 + ${NEW6 ? NEW6 + ' F6 + ' : ''}3${T1BV ? ' + blobs' : ''}${r.t2 ? ` + ${r.t2} F6-T2` : ''})`);
   await to5(S, "s.plot.pts = [[0, 0], [100, 0], [100, 100], [0, 100]]; s.ans.streetEdge = 0; s.ans.footprintPct = 15; s.ans.vegPct = 80; s.ans.floors = 3; s.ans.basement = true; s.ans.lift = true; s.ans.usableRoof = true; s.ans.roofType = 'terrace'; s.ans.pool = { on: true, size: 'L' }; s.ans.parking = { cars: 4, covered: true }; s.ans.extras = { wall: true, gate: 'right', seating: true }; s.ans.pairs = []; s.ans.rooms = []; let n = 1; for (const l of ['B', 'G', '1', '2']) for (const ty of ['bedroom', 'bathroom', 'kitchen', 'living', 'dining', 'majlis', 'office', 'maid', 'storage', 'laundry']) s.ans.rooms.push({ id: 'r' + n++, type: ty, level: l, size: 'S', area: null, master: false }); s.ans.nextRoomId = n;");
   r = await S.page.evaluate(INST, veg); f.push(...instProblems(r, '100 x 100 m at 80 %, 40 rooms'));
   if (r.model.trees !== 120 || r.model.shrubs !== 200 || r.meshes > 40) f.push(`maximum: ${r.model.trees} trees, ${r.model.shrubs} shrubs, ${r.meshes} meshes (120 / 200 / <= 40)`);

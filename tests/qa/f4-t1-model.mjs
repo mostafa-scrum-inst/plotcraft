@@ -10,7 +10,7 @@ import * as H from './f4-t1-ref.mjs';
 
 const R = collector('F4-T1 model');
 const { PC, THREE } = H.loadPC3();
-const D = { exteriors: PC.data.exteriors, roomTints: PC.data.roomTints, interiors: PC.data.interiors };
+const D = { exteriors: PC.data.exteriors, roomTints: PC.data.roomTints, interiors: PC.data.interiors, floors: PC.data.floors };   // floors: F6-T2 I2 (undefined before)
 const t0 = Date.now();
 
 function make(mut) { const s = Q.plain(PC.sample.state()); if (mut) mut(s); s.plans = {}; PC.plans.sync(s); for (const id in s.plans) if (!s.plans[id].error) s.plans[id].approved = true; return s; }
@@ -19,6 +19,9 @@ function shell(house) {
   const world = new THREE.Group(); world.name = 'world';
   const mats = { batch: new THREE.MeshLambertMaterial({ vertexColors: true }), ground: new THREE.MeshLambertMaterial(), groundOuter: new THREE.MeshLambertMaterial(), poolWater: new THREE.MeshLambertMaterial(), trunk: new THREE.MeshLambertMaterial(), canopy: new THREE.MeshLambertMaterial(), shrub: new THREE.MeshLambertMaterial() };   // later tasks' materials (unused by the F4-T1 builders)
   const made = PC.three.buildShell(house, world, mats);
+  if (H.T2(D)) {   // F6-T2 I2: the floors are in textured-<level>, built by buildInterior (furniture / lamps there too)
+    Object.assign(mats, { furniture: new THREE.MeshLambertMaterial({ vertexColors: true }), interior: new THREE.MeshLambertMaterial({ vertexColors: true }), lamp: new THREE.MeshLambertMaterial() });
+    made.push(...PC.three.buildInterior(house, world, mats)); }
   return { world, made, sum: H.summarize(world) };
 }
 // the model itself against my expectation (frame L, numbers)
@@ -72,7 +75,7 @@ for (const [pk, pm] of Object.entries(PLOTS)) for (const pos of ['fl', 'fr', 'bl
 }
 const cut = (a) => a.slice(0, 8).concat(a.length > 8 ? [`... ${a.length} in all`] : []);
 R.check(`1a house model = my oracle (centre, radius, plot in L, footprint, storeys, level order, rooms = approved plans in L, stair / lift = my A-8 core on every level, roof base) over ${built} states`, cut(mProb));
-R.check('1b shell (real r128 geometry) = my oracle: slab box per level at baseY..floor, hall top face, one tint quad per room at my mix colour, stair and lift one box each on every level, Q10 exterior extent, entrance gap, no geometry above the 1.2 m walls, groundPlot = plot minus footprint, groundCap, groundOuter', cut(sProb));
+R.check('1b shell (real r128 geometry) = my oracle: slab box per level at baseY..floor, hall top face, ' + (H.T2(D) ? 'F6-T2 textured-<level> floors (hall over the footprint, each room tiled exactly on its tileM grid and ring lines, my floor mix x ring factor, rugs inside rooms),' : 'one tint quad per room at my mix colour,') + ' stair and lift one box each on every level, Q10 exterior extent, entrance gap, no geometry above the 1.2 m walls, groundPlot = plot minus footprint, groundCap, groundOuter', cut(sProb));
 R.check('2 Q14 in T from the street (+Z side, viewer facing -Z): fl min X / max Z, fr max X / max Z, bl min X / min Z, br max X / min Z, centre within the 0.5 snap; lift on and off, every level', cut(qProb));
 R.check(`2 matrix covered all 5 positions on deep and wide footprints (${[...pos5].sort().join(' ')})`, pos5.size === 10 ? [] : [`only ${pos5.size} of 10`]);
 R.note(`matrix: ${built} states built (${deep} deep, ${wide} wide footprints), ${skipped} skipped as no-layout`);
@@ -94,10 +97,10 @@ R.note(`matrix: ${built} states built (${deep} deep, ${wide} wide footprints), $
   else {
     const h = PC.house.build(s), X = H.expected(s, PC.site.analyse(s).footprint, D), sum = shell(h).sum;
     g.push(...H.shellProblems(sum, X, D));
-    const cols = new Set(X.levels.flatMap((l) => l.rooms.map((r) => r.c.map((x) => x.toFixed(5)).join())));
+    const cols = new Set(X.levels.flatMap((l) => l.rooms.map((r) => (H.T2(D) ? r.fc : r.c).map((x) => x.toFixed(5)).join())));
     if (cols.size !== types.length) g.push(`${types.length} room types gave ${cols.size} distinct tints`);
   }
-  R.check(`3b tints per room type: a house with all ${types.length} types shows each at its own A-10 colour`, g);
+  R.check(`3b tints per room type: a house with all ${types.length} types shows each at its own ${H.T2(D) ? 'F6-T2 floor colour (kind mix with the A-10 tint)' : 'A-10 colour'}`, g);
 }
 
 // ---------- 4 rooms after an edit + approve, m and ft; refusal ----------

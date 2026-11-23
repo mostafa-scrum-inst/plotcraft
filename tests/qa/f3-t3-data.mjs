@@ -26,18 +26,38 @@ const T1B = (() => { try { return /\bCONTACT\s*:/.test(readFileSync(join(SRC, 'j
 const T1C = (() => { try { return /\bcopingT\s*:/.test(readFileSync(join(SRC, 'js/core/const.js'), 'utf8')); } catch (e) { return false; } })();
 const COPING = { sand: '#E6DAC4', white: '#F4F2EA', terracotta: '#D9CBB8', grey: '#B9BEC1' };
 const EXT_K = ['wall', 'wallInner', 'slab', 'roof', 'trim', 'parapet', ...(T1B ? ['frame', 'door'] : []), ...(T1C ? ['coping'] : [])], INT_K = ['fabric', 'wood', 'accent', 'white', 'metal', 'dark', 'floorMix'];
+// F6-T2 S1 (Designer plan N1 / I1-I3, PM Q4, Designer retune 100dc9d; tables entered by hand): marker PC.data.furnitureParts.
+// Interiors gain rooms (fabric / accent per type), furniture pieces gain parts (+ optional face), sky keys gain indoor.
+const T2 = (() => { try { return /PC\.data\.furnitureParts\s*=/.test(readFileSync(join(SRC, 'js/data/furniture.js'), 'utf8')); } catch (e) { return false; } })();
 // F6-T1a (impl-notes §6, plan §4.4 / §4.1): siteColors gains asphalt (street), each sky key gains skyMid / skyZenith (hex)
 // and exposure (number). Version-aware on the F6 core module src/js/core/texgen.js.
 const F6 = existsSync(join(SRC, 'js/core/texgen.js'));
 const SITE_K = ['ground', 'groundOuter', 'paving', 'poolWater', 'poolRim', 'boundaryWall', 'gate', 'carCanopy', 'seating', 'trunk', 'northMarker', 'highlight', ...(F6 ? ['asphalt'] : []), ...(T1B ? ['glassTop', 'glassBottom'] : [])];
-const SKY_KK = ['h', 'background', 'sunColor', 'sunI', 'hemiSky', 'hemiGround', 'hemiI', ...(F6 ? ['skyMid', 'skyZenith', 'exposure'] : [])];
+const SKY_KK = ['h', 'background', 'sunColor', 'sunI', 'hemiSky', 'hemiGround', 'hemiI', ...(F6 ? ['skyMid', 'skyZenith', 'exposure'] : []), ...(T2 ? ['indoor'] : [])];
+const ROOMS = { // Designer plan I3 table; "(base)" cells left out (they fall back to the style)
+  modern: { bedroom: ['#5C6B7A', '#D9A441'], majlis: ['#7A2E2E', '#C9A54A'], dining: ['#8A7E70', null], office: ['#2F3A44', '#4F7A6A'] },
+  classic: { bedroom: ['#CDB8A6', '#6E4A6B'], majlis: ['#8E3B33', '#B08D45'], dining: ['#A6845C', null], office: ['#4A3A2C', '#2F4A3A'] },
+  minimal: { bedroom: ['#DCD9D2', '#8FA698'], majlis: ['#B9A48A', '#6F8A7A'], dining: ['#E0DDD6', null], office: ['#9AA3A8', '#C8A878'] } };
+const FLOORS = { modern: { planks: '#8A6E55', tile: '#B9B7B2', carpet: '#6B5A4C' }, classic: { planks: '#9A6A44', tile: '#D8CBB4', carpet: '#7A2F2C' },
+  minimal: { planks: '#C9AE86', tile: '#E3E1DC', carpet: '#A89C88' } };   // Designer I2 table
+const FKIND = { living: 'planks', dining: 'planks', bedroom: 'planks', office: 'planks', hall: 'tile' /* PM Q4 */, majlis: 'carpet',
+  kitchen: 'tile', bathroom: 'tile', laundry: 'tile', storage: 'tile', maid: 'tile' };
+const FTINT = 0.2;   // Designer retune 100dc9d (0.12 in the plan), PM Q4 approved
+const INDOOR = { 0: 0.6, 4.5: 0.3, 6: 0.2, 7.5: 0, 12: 0, 16: 0, 17: 0, 18: 0.35, 19.5: 1, 21: 1, 24: 0.6 };   // Designer N1 row
+const NEW_H = { 'bedroom.bed': 1.0, 'living.tvUnit': 1.1, 'majlis.seatBack': 0.7, 'majlis.seatLeft': 0.7, 'majlis.seatRight': 0.7, 'bedroom.sideL': 0.95, 'bedroom.sideR': 0.95, 'office.desk': 1.1, 'maid.desk': 1.1 };
 const ANCH = ['back', 'front', 'left', 'right', 'bl', 'br', 'fl', 'fr', 'center'], CKEYS = ['fabric', 'wood', 'accent', 'white', 'metal', 'dark'];
 
 // ---------------- 1. schema ----------------
 R.check(`1 exteriors: sand, white, terracotta, grey, each exactly the ${EXT_K.length === 6 ? 'six A-10 roles' : `six A-10 roles + frame / door (F6-T1b)${T1C ? ' + coping (F6-T1c)' : ''}`}, #RRGGBB upper case`,
   [...eqKeys(D.exteriors, EXT), ...EXT.flatMap((e) => [...eqKeys(D.exteriors[e], EXT_K), ...EXT_K.filter((k) => !HEX.test(D.exteriors[e][k])).map((k) => `${e}.${k}`), ...(T1C && D.exteriors[e] && D.exteriors[e].coping !== COPING[e] ? [`${e}.coping ${D.exteriors[e].coping}, Designer table ${COPING[e]}`] : [])])]);
-R.check('1 interiors: modern, classic, minimal, exactly fabric..dark + floorMix in [0, 0.3]',
-  [...eqKeys(D.interiors, STY), ...STY.flatMap((s) => [...eqKeys(D.interiors[s], INT_K), ...CKEYS.filter((k) => !HEX.test(D.interiors[s][k])).map((k) => `${s}.${k}`), ...(typeof D.interiors[s].floorMix === 'number' && D.interiors[s].floorMix >= 0 && D.interiors[s].floorMix <= 0.3 ? [] : [s + ' floorMix'])])]);
+R.check(`1 interiors: modern, classic, minimal, exactly fabric..dark + floorMix in [0, 0.3]${T2 ? ' + rooms = the Designer I3 table (F6-T2)' : ''}`,
+  [...eqKeys(D.interiors, STY), ...STY.flatMap((s) => [...eqKeys(D.interiors[s], T2 ? [...INT_K, 'rooms'] : INT_K),
+    ...(T2 ? (() => { const f = [], r = D.interiors[s].rooms || {};
+      if (Object.keys(r).sort().join() !== Object.keys(ROOMS[s]).sort().join()) f.push(`${s}.rooms types ${Object.keys(r)}`);
+      for (const [t, [fa, ac]] of Object.entries(ROOMS[s])) { const o = r[t] || {}, want = ac ? ['fabric', 'accent'] : ['fabric'];
+        if (Object.keys(o).sort().join() !== want.sort().join()) f.push(`${s}.rooms.${t} keys ${Object.keys(o)}`);
+        if (o.fabric !== fa) f.push(`${s}.rooms.${t}.fabric ${o.fabric} != ${fa}`); if (ac && o.accent !== ac) f.push(`${s}.rooms.${t}.accent ${o.accent} != ${ac}`); }
+      return f; })() : []), ...CKEYS.filter((k) => !HEX.test(D.interiors[s][k])).map((k) => `${s}.${k}`), ...(typeof D.interiors[s].floorMix === 'number' && D.interiors[s].floorMix >= 0 && D.interiors[s].floorMix <= 0.3 ? [] : [s + ' floorMix'])])]);
 R.check('1 roomTints: the 10 types + hall, stair, lift, all hex', [...eqKeys(D.roomTints, [...TYPES, 'hall', 'stair', 'lift']), ...Object.entries(D.roomTints).filter(([, v]) => !HEX.test(v)).map(([k]) => k)]);
 R.check(`1 siteColors: the ${SITE_K.length} A-10 keys${F6 ? ' (asphalt from F6-T1' + (T1B ? ', glassTop / glassBottom from T1b' : '') + ')' : ''}, all hex; ground = summer ground`, [...eqKeys(D.siteColors, SITE_K), ...Object.entries(D.siteColors).filter(([, v]) => !HEX.test(v)).map(([k]) => k), ...(D.siteColors.ground === D.sky.seasons.summer.ground ? [] : ['ground != summer ground'])]);
 { const f = [];
@@ -45,8 +65,11 @@ R.check(`1 siteColors: the ${SITE_K.length} A-10 keys${F6 ? ' (asphalt from F6-T
   for (const t of TYPES) { const L = D.furniture[t] || [], sp = L.filter((p) => p.sparse === true);
     if (L.length > 8 || sp.length < 1 || L.length - sp.length < 2) f.push(`${t}: ${L.length} pieces, ${sp.length} sparse`);
     if (new Set(L.map((p) => p.id)).size !== L.length) f.push(t + ': duplicate id');
-    for (const p of L) { const at = t + '.' + p.id, ks = Object.keys(p).filter((k) => k !== 'off').sort().join();
-      if (ks !== ['anchor', 'color', 'd', 'h', 'id', 'sparse', 'w', 'y0'].join()) f.push(at + ' keys ' + ks);
+    for (const p of L) { const at = t + '.' + p.id, ks = Object.keys(p).filter((k) => k !== 'off' && !(T2 && k === 'face')).sort().join();
+      if (ks !== ['anchor', 'color', 'd', 'h', 'id', 'sparse', 'w', 'y0'].join() && !(T2 && ks === ['anchor', 'color', 'd', 'h', 'id', 'parts', 'sparse', 'w', 'y0'].join())) f.push(at + ' keys ' + ks);
+      if (T2 && 'parts' in p && !(D.furnitureParts && Array.isArray(D.furnitureParts[p.parts]))) f.push(at + ' parts template ' + p.parts);
+      if (T2 && 'face' in p && !['front', 'left', 'right'].includes(p.face)) f.push(at + ' face ' + p.face);
+      if (T2 && at in NEW_H && p.h !== NEW_H[at]) f.push(`${at} h ${p.h}, Designer ${NEW_H[at]}`);
       if (!(p.w > 0 && p.d > 0 && p.h > 0 && p.y0 >= 0)) f.push(at + ' sizes');
       if (p.y0 + p.h > 1.1 + 1e-9) f.push(at + ` top ${p.y0 + p.h} > 1.1 m`);
       if (!ANCH.includes(p.anchor)) f.push(at + ' anchor ' + p.anchor);
@@ -54,10 +77,30 @@ R.check(`1 siteColors: the ${SITE_K.length} A-10 keys${F6 ? ' (asphalt from F6-T
       if (typeof p.sparse !== 'boolean') f.push(at + ' sparse not written');
       if ('off' in p && !(Array.isArray(p.off) && p.off.length === 2 && p.off.every((v) => Math.abs(v) <= 1.2))) f.push(at + ' off');
       if ('off' in p && L.indexOf(p) === 0) f.push(at + ' off on the first piece (nothing to place it around)'); } }
-  R.check('1 furniture: 10 types; per type 1+ sparse, 2+ full-only, 8 at most; A-11 keys; sizes > 0; top <= 1.1 m; known anchors and colour keys; |off| <= 1.2', f); }
+  if (T2) for (const id of Object.keys(NEW_H)) { const [t, i] = id.split('.'); if (!(D.furniture[t] || []).some((p) => p.id === i)) f.push(id + ' missing'); }
+  R.check((T2 ? '1 furniture (F6-T2: parts = a known template, face front/left/right, new heights bed 1.0 / tvUnit 1.1 / majlis seats 0.7 / side tables 0.95 / desks 1.1): ' : '1 furniture: ') + '10 types; per type 1+ sparse, 2+ full-only, 8 at most; A-11 keys; sizes > 0; top <= 1.1 m; known anchors and colour keys; |off| <= 1.2', f); }
+if (T2) { const f = [], P = D.furnitureParts || {}, ROLE = ['main', ...CKEYS], MAT = ['plain', 'planks', 'weave', 'lamp'];
+  for (const [n, L] of Object.entries(P)) { if (!Array.isArray(L) || !L.length) { f.push(n + ' empty'); continue; }
+    L.forEach((q, i) => { const at = `${n}[${i}]`;
+      if (!Array.isArray(q) || q.length !== 9) { f.push(at + ' not a 9-tuple'); return; }
+      const [x0, x1, z0, z1, y0, y1, role, k, mat] = q;
+      for (const [a, b, ax] of [[x0, x1, 'x'], [z0, z1, 'z'], [y0, y1, 'y']]) if (!(a >= 0 && b <= 1 && b > a)) f.push(`${at} ${ax} ${a}..${b} outside 0..1`);
+      if (!(ROLE.includes(role) || HEX.test(role))) f.push(`${at} role ${role}`);
+      if (!(typeof k === 'number' && k > 0 && k <= 1.5)) f.push(`${at} k ${k}`);
+      if (!MAT.includes(mat)) f.push(`${at} mat ${mat}`); }); }
+  const used = new Set(TYPES.flatMap((t) => (D.furniture[t] || []).map((p) => p.parts).filter(Boolean)));
+  for (const n of Object.keys(P)) if (!used.has(n)) f.push(n + ' unused');
+  R.check(`1 furnitureParts (F6-T2 I1): ${Object.keys(P).length} templates of [x0, x1, z0, z1, y0, y1, role, k, mat], every part inside 0..1 on all axes, role main / a colour key / hex, k in (0, 1.5], mat plain / planks / weave / lamp, every template used`, f); }
+if (T2) { const F = D.floors || {}, f = [];
+  for (const [t, k] of Object.entries(FKIND)) if ((F.kind || {})[t] !== k) f.push(`kind.${t} ${(F.kind || {})[t]} != ${k}`);
+  if (Object.keys(F.kind || {}).length !== Object.keys(FKIND).length) f.push('kind types ' + Object.keys(F.kind || {}));
+  for (const st of STY) for (const [k, h] of Object.entries(FLOORS[st])) if ((F[st] || {})[k] !== h) f.push(`${st}.${k} ${(F[st] || {})[k]} != ${h}`);
+  if (F.tint !== FTINT) f.push('tint ' + F.tint);
+  R.check(`1 floors (F6-T2 I2): kind per type (hall tile, PM Q4), the Designer's per-style planks / tile / carpet hexes, tint ${FTINT}`, f); }
 { const K = D.sky.keys, f = [];
   for (const k of K) { if (Object.keys(k).join() !== SKY_KK.join()) f.push('key keys ' + Object.keys(k)); for (const n of ['background', 'sunColor', 'hemiSky', 'hemiGround', ...(F6 ? ['skyMid', 'skyZenith'] : [])]) if (!HEX.test(k[n])) f.push(`${k.h}.${n}`);
-    if (F6 && !(typeof k.exposure === 'number' && k.exposure > 0 && k.exposure <= 2)) f.push(`${k.h}.exposure ${k.exposure}`); }
+    if (F6 && !(typeof k.exposure === 'number' && k.exposure > 0 && k.exposure <= 2)) f.push(`${k.h}.exposure ${k.exposure}`);
+    if (T2 && k.indoor !== INDOOR[k.h]) f.push(`${k.h}.indoor ${k.indoor}, Designer N1 ${INDOOR[k.h]}`); }
   for (let i = 1; i < K.length; i++) if (!(K[i].h > K[i - 1].h)) f.push('not increasing at ' + K[i].h);
   if (K[0].h !== 0 || K[K.length - 1].h !== 24) f.push('first / last h ' + K[0].h + ' / ' + K[K.length - 1].h);
   const { h: h0, ...a } = K[0], { h: h1, ...b } = K[K.length - 1]; if (JSON.stringify(a) !== JSON.stringify(b)) f.push('h 24 differs from h 0');
@@ -65,7 +108,7 @@ R.check(`1 siteColors: the ${SITE_K.length} A-10 keys${F6 ? ' (asphalt from F6-T
   if (JSON.stringify(Object.keys(D.sky.seasons)) !== JSON.stringify(SEAS)) f.push('seasons ' + Object.keys(D.sky.seasons));
   if (D.sky.groundBounce !== 0.25) f.push('groundBounce ' + D.sky.groundBounce);
   const E = SEAS.map((s) => D.sky.seasons[s].elevMax).join(); if (E !== '52,72,52,32') f.push('elevMax ' + E);
-  R.check('1 sky: key lists, h 0 -> 24 strictly increasing, last = first, noon key, four seasons, elevMax 52/72/52/32, groundBounce 0.25', f); }
+  R.check((T2 ? '1 sky (F6-T2: indoor = the Designer N1 row): ' : '1 sky: ') + 'key lists, h 0 -> 24 strictly increasing, last = first, noon key, four seasons, elevMax 52/72/52/32, groundBounce 0.25', f); }
 
 // Data files hold literals only (A-2 data layer: "any code other than assigning literals to PC.data.*" is forbidden).
 // My own reader: the IIFE body must be nothing but 'use strict' and PC.data.<name> = <literal>; statements, and each

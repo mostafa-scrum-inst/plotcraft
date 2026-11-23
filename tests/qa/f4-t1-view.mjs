@@ -27,7 +27,7 @@ const noShots = process.argv.includes('--no-shots'), shots = join(ROOT, 'tests/q
 if (!noShots) mkdirSync(shots, { recursive: true });
 const session = sessions({ R, shots, noShots });
 const { PC } = H.loadPC3();
-const D = { exteriors: PC.data.exteriors, roomTints: PC.data.roomTints, interiors: PC.data.interiors };
+const D = { exteriors: PC.data.exteriors, roomTints: PC.data.roomTints, interiors: PC.data.interiors, floors: PC.data.floors };   // floors: F6-T2 I2 (undefined before)
 const VP = { phone: { tag: '360x640', w: 360, h: 640, touch: true }, land: { tag: '640x360', w: 640, h: 360, touch: true }, desk: { tag: '1280x800', w: 1280, h: 800, touch: false } };
 const DEG = Math.PI / 180, t0 = Date.now();
 const cut = (a) => a.slice(0, 8).concat(a.length > 8 ? [`... ${a.length} in all`] : []);

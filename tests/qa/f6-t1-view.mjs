@@ -65,7 +65,7 @@ await guard('B budgets', async () => {
     for (const on of [true, false]) {
       await roofTo(S, on); await ready(S);
       const b = await S.page.evaluate(() => { const i = PC.debug.scene(), r = i.renderer; let meshes = 0; const tr = [], tex = new Map();
-        i.scene.traverse((o) => { if (o.isMesh) { let vis = true; for (let n = o; n; n = n.parent) if (!n.visible) vis = false; meshes++; for (const m of [].concat(o.material || [])) { if (m.transparent && vis) tr.push(o.name || '(unnamed)'); for (const k of ['map', 'alphaMap', 'bumpMap', 'normalMap', 'roughnessMap', 'aoMap', 'emissiveMap', 'lightMap', 'specularMap']) if (m[k] && m[k].isTexture) tex.set(m[k].uuid, m[k]); } } });
+        i.scene.traverse((o) => { if (o.isMesh) { let vis = true; for (let n = o; n; n = n.parent) if (!n.visible) vis = false; meshes++; for (const m of [].concat(o.material || [])) { if (m.transparent && vis && !(/^glow-/.test(o.name) && m.blending === THREE.AdditiveBlending && !m.depthWrite)) tr.push(o.name || '(unnamed)'); for (const k of ['map', 'alphaMap', 'bumpMap', 'normalMap', 'roughnessMap', 'aoMap', 'emissiveMap', 'lightMap', 'specularMap']) if (m[k] && m[k].isTexture) tex.set(m[k].uuid, m[k]); } } });
         let bytes = 0; for (const t of tex.values()) { const im = t.image || {}, w = im.width || 0, h = im.height || 0; bytes += w * h * 4 * (t.generateMipmaps && t.minFilter !== THREE.NearestFilter && t.minFilter !== THREE.LinearFilter ? 4 / 3 : 1); }
         const ar = r.info.autoReset; r.info.autoReset = false; r.info.reset(); r.shadowMap.needsUpdate = true; i.renderNow(); const calls = r.info.render.calls, tris = r.info.render.triangles; r.info.autoReset = ar;
         return { meshes, calls, tris, transparent: tr, texN: r.info.memory.textures, sceneTex: tex.size, mb: bytes / 1048576, tier: (PC.view3d.info() || {}).tier || null }; });
@@ -139,6 +139,9 @@ await guard('S K H sample', async () => {
 // (membrane, a 5th scene texture); usable terrace: the map is the paving mesh's texture object (no second upload), 4 scene
 // textures; pitched: no deck. Receives, does not cast. Sample 21 meshes, maximum house 27.
 const T1C = !!(PC.C.ROOF && PC.C.ROOF.copingT !== undefined);
+// F6-T2 (plan §5 / I2, marker PC.data.furnitureParts): + the interior atlas (one more scene texture), and per level with rooms
+// textured + glow (full tier) + lamps, + one glazing: sample (G, 1) 21 + 2 x 3 + 1 = 28, maximum house 27 + 4 x 3 + 1 = 40
+const T2V = !!PC.data.furnitureParts, T2TEX = T2V ? 1 : 0, T2S = T2V ? 7 : 0, T2M = T2V ? 13 : 0;
 if (T1C) await guard('D deck', async () => {
   const browser = await launch();
   try {
@@ -152,10 +155,10 @@ if (T1C) await guard('D deck', async () => {
       return { meshes, sceneTex: tex.size, deck, roof: i.house && i.house.roof && i.house.roof.type, ext: i.house && i.house.exterior }; });
     const near3 = (a, b) => a && b && a.every((x, k) => Math.abs(x - b[k]) < 2e-4);
     for (const [name, mut, deckWant, mapWant, texWant, meshWant] of [
-      ['flat sample', "s.ans.roofType = 'flat'; s.ans.usableRoof = false;", 1, 'own', 5, 21],
-      ['usable terrace sample', "s.ans.roofType = 'terrace'; s.ans.usableRoof = true;", 1, 'paving', 4, null],
+      ['flat sample', "s.ans.roofType = 'flat'; s.ans.usableRoof = false;", 1, 'own', 5 + T2TEX, 21 + T2S],
+      ['usable terrace sample', "s.ans.roofType = 'terrace'; s.ans.usableRoof = true;", 1, 'paving', 4 + T2TEX, null],
       ['pitched sample', "s.ans.roofType = 'pitched'; s.ans.usableRoof = false;", 0, null, null, null],
-      ['maximum house', MAXMUT, 1, 'paving', null, 27]].filter(([n]) => (RELONLY ? n === 'maximum house' : REL || n !== 'maximum house'))) {
+      ['maximum house', MAXMUT, 1, 'paving', null, 27 + T2M]].filter(([n]) => (RELONLY ? n === 'maximum house' : REL || n !== 'maximum house'))) {
       if (!(await to5(S, mut))) { f.push(`${name}: not ready`); continue; }
       const r = await probe(), st = await S.page.evaluate(() => PC.store.get().ans.exterior), E = T3.exteriors[st || 'sand'];
       if (r.deck.length !== deckWant) { f.push(`${name}: ${r.deck.length} roofDeck meshes (${deckWant})`); continue; }
@@ -167,7 +170,7 @@ if (T1C) await guard('D deck', async () => {
         if (!d.hasMap || (mapWant === 'paving') !== d.samePaving) f.push(`${name}: roofDeck map ${d.hasMap ? (d.samePaving ? 'the paving texture object' : 'its own texture') : 'none'} (${mapWant === 'paving' ? 'the paving texture object' : 'its own membrane texture'})`);
       }
     }
-    R.check(`${T}${RELONLY ? ' (release step: maximum house)' : ''}: flat sample one roofDeck (Lambert, exteriors.roof, own membrane map, 5 scene textures, 21 meshes), usable terrace on the paving texture object (4 textures), pitched none, maximum house 27 meshes; receives, does not cast`, f);
+    R.check(`${T}${RELONLY ? ' (release step: maximum house)' : ''}: flat sample one roofDeck (Lambert, exteriors.roof, own membrane map, ${5 + T2TEX} scene textures, ${21 + T2S} meshes), usable terrace on the paving texture object (${4 + T2TEX} textures), pitched none, maximum house ${27 + T2M} meshes${T2V ? ' (F6-T2: + atlas, + textured / glow / lamps per level, + glazing)' : ''}; receives, does not cast`, f);
     await S.end(T);
   } finally { await browser.close(); }
 });
