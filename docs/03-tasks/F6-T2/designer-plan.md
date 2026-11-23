@@ -185,6 +185,11 @@ I re-run `verify/shots.mjs` into `docs/03-tasks/F6-T2/shots/` and judge:
 3. **22 h, dollhouse:** warm floor pools around lamps and room centres; bright lamp shades; the outside stays moonlit blue.
 4. **19.5 h and 17.5 h:** the transition reads (some glow at 17.5 h, full at 19.5 h).
 5. **Lite tier at 22 h:** no pools, but still clearly lit windows and lamps.
+6. **PM floor check (TL Q4, F4-S1: rooms are told apart by type):**
+   - Views: the sample at Reset with only Ground shown, 360x640 and 1280x800. Before: `before/sample-lvG-noon-1280x800.jpg` and `before/sample-lvG-noon-360x640.jpg`; after: the same names in `shots/`.
+   - Check: neighbouring rooms of different types clearly differ, at least bedroom vs bathroom vs kitchen vs living/majlis.
+   - Risky case: two rooms of different types sharing a floor material, i.e. two board-floored rooms (sample G: living and dining). I add a labelled crop of such a pair to `shots/`.
+   - If they don't differ, the fallback is about a 35 % `floorTint` for the board-floored types, as data only.
 
 The pixel checks (luma order noon > evening > night, the O-1 shadow check, winter canopy) must hold. The night luma rises with N2–N5, so the TL may need to restate "night is darkest" as the **outdoor** ground luma at 22 h (before/after numbers in the impl review).
 
