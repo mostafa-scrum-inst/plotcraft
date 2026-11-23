@@ -69,6 +69,10 @@ Everything lives on disk under /home/claude/plotcraft (cloud sessions: /home/use
 - Gate now: median of 3 quiet default runs <= 420 s, none > 440 (TEAM-PROTOCOL addendum). Main 6968d00: 401.8/406.5/408.9 s. QA_FULL ~464 s. Release step = 2 parallel processes (stream 243.5 s, rows 239.7 s; NOTE 260, limit 300) - ~16 s room each; next moves need a third process or real cuts. dist ~22 kB under the 627,302-byte C-1.3 budget.
 - CD-7 phone check can run on v9; F5-T3b etc. as below.
 
+## Batch 18 result (F6-T2, 2026-11-23)
+
+Furnished interiors (part-built furniture, room palettes, one 512 px floor atlas) and evening lights (indoor key per sky hour, lit glazing, lamp batches, glow pools; no real lights). Published as app v10, testing doc https://claude.ai/artifact/NsUBqBJbzvSpbNQDcZpfGn. Release step runs serially (~650 s); QA_FULL judged as median of 3 ≤ 480 s, none > 500 s. QA owes a ≥20 s QA_FULL-only cut before the next gate. Phone check must include Night, Roof on and off.
+
 ## Waiting on the client: phone-gate decision card (sent 2026-11-22)
 - Option 1 (name phone checker, rec): record CD-6 a-c answers -> F4 APPROVED; run F5-T3b on findings -> QA incl. QA_FULL=1 -> republish -> F5 APPROVED.
 - Option 2 (desktop Chrome via Claude in Chrome): check published URL (three.js loads from cdnjs in iframe, stage 5 draws, 0 console errors, mouse orbit/zoom/pan, level, Roof, room pick, tour start/stop, screenshots) -> both APPROVED with risk recorded; F5-T3b items -> limits.
