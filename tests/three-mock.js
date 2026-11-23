@@ -34,7 +34,7 @@
       // F6-T1b (plan 6.2 / 6.3): the blob texture clamps
       'ClampToEdgeWrapping'],
     WebGLRenderer: ['setPixelRatio', 'setSize', 'render', 'dispose', 'shadowMap', 'outputEncoding', 'domElement',
-      'toneMapping', 'toneMappingExposure', 'capabilities', 'compile'],   // F6-T2: compile (the build precompiles the night-only programs)
+      'toneMapping', 'toneMappingExposure', 'capabilities', 'compile', 'setScissor', 'setScissorTest', 'initTexture'],   // F6-T2: compile (the build precompiles the night-only programs)
     'WebGLRenderer.shadowMap': ['enabled', 'type', 'autoUpdate', 'needsUpdate'],   // F6-T1a: on-demand shadow map
     'WebGLRenderer.capabilities': ['maxTextureSize', 'getMaxAnisotropy'],
     DataTexture: TEX,
@@ -514,9 +514,20 @@
       if (arguments.length !== 3 || !num(w) || !num(h) || w <= 0 || h <= 0 || typeof style !== 'boolean') fail('renderer.setSize(w, h, updateStyle) takes two positive numbers and a boolean');
       this.size = [w, h, style]; this.calls.push(['setSize', w, h, style]);
     };
+    hide(o, 'scissor', null); hide(o, 'scissorTest', false); hide(o, 'uploads', 0); hide(o, 'uploaded', []);
+    hide(o, 'inited', []);
+    o.initTexture = function (t) { if (kind(t) !== 'DataTexture') fail('initTexture(texture)'); this.inited.push(t); };
+    o.setScissor = function (x, y, w, h) { if (arguments.length !== 4 || ![x, y, w, h].every(num)) fail('setScissor(x, y, w, h)'); this.scissor = [x, y, w, h]; };
+    o.setScissorTest = function (on) { if (typeof on !== 'boolean') fail('setScissorTest(boolean)'); this.scissorTest = on; };
     o.render = function (scene, camera) {
       if (kind(scene) !== 'Scene') fail('render(scene, camera) needs a Scene');
       if (kind(camera) !== 'PerspectiveCamera') fail('render(scene, camera) needs a PerspectiveCamera');
+      // F6-T2: a draw clipped to a 1 px scissor is the build's upload pass, not a frame: recorded apart (visible names)
+      if (this.scissorTest) {
+        if (!this.scissor || this.scissor[2] !== 1 || this.scissor[3] !== 1) fail('a scissored render is the 1 px upload pass only');
+        var up = []; raw(scene).traverse(function (x) { if (x.name && x.visible !== false) up.push(x.name); });
+        this.uploads++; this.uploaded.push(up); var sm0 = raw(this.shadowMap); if (sm0.needsUpdate) fail('the upload pass draws no shadow map'); return;
+      }
       audit(scene); this.renders++; this.calls.push(['render']);
       var sm = raw(this.shadowMap);
       if (sm.enabled && (sm.autoUpdate || sm.needsUpdate)) { this.shadowRenders++; sm.needsUpdate = false; }

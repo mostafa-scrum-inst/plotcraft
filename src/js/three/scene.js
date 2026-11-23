@@ -285,13 +285,24 @@
     precompile();
   }
   // F6-T2 (CTO 1.2, TL): the glow meshes are hidden by day, and r128 builds a program only for what it draws; compile
-  // them once at build (shown for the call, then put back) so dusk switches nothing and stalls nothing.
+  // them once at build (shown for the call, then put back) so dusk switches nothing and stalls nothing. The same for
+  // the furniture and textured-<level>, hidden in exterior mode (TL gate ruling): compiled, and their buffers and the
+  // atlas uploaded by one draw clipped to a 1 px scissor without a shadow pass, so the first Roof-off frame (a phone
+  // opens with the Roof on) uploads nothing and the renderer's geometry count does not change.
+  var PRE = /^(glow-|textured-|furniture$)/;
   function precompile() {
     if (!S.renderer || !S.renderer.compile) return;
     var gs = [];
-    S.world.traverse(function (o) { if (o.name.indexOf('glow-') === 0) { gs.push([o, o.visible]); o.visible = true; } });
+    S.world.traverse(function (o) { if (PRE.test(o.name)) { gs.push([o, o.visible]); o.visible = true; } });
     if (!gs.length) return;
-    S.renderer.compile(S.scene, S.camera);
+    var R = S.renderer, sm = R.shadowMap, nu = sm.needsUpdate;
+    R.compile(S.scene, S.camera);
+    if (R.initTexture && S.mats.interior && S.mats.interior.map) R.initTexture(S.mats.interior.map);   // CTO: the atlas up at build
+    if (R.setScissorTest) {
+      sm.needsUpdate = false;
+      R.setScissor(0, 0, 1, 1); R.setScissorTest(true); R.render(S.scene, S.camera); R.setScissorTest(false);
+      sm.needsUpdate = nu;
+    }
     gs.forEach(function (e) { e[0].visible = e[1]; });
   }
 

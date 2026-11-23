@@ -87,6 +87,36 @@ test('the build precompiles the night-only glow programs (CTO 1.2, TL): compile(
   const last = R.compiled[R.compiled.length - 1];
   for (const lv of E.house.levels) assert.ok(last.includes('glow-' + lv.id), 'compiled with glow-' + lv.id + ' shown');
   assert.ok(glows(E).every((g) => !g.visible), 'hidden again at noon');
+  // TL gate ruling / CTO: the interior hidden in exterior mode is still uploaded at build: the atlas by initTexture, the
+  // buffers by one 1 px scissored draw with furniture + textured-<level> shown and no shadow pass; hidden again afterwards
+  assert.equal(R.inited[R.inited.length - 1], E.mock.raw(E.mesh('textured-G', E.world.getObjectByName('level-G')).material).map, 'the atlas');
+  assert.ok(R.uploads >= 1);
+  const up = R.uploaded[R.uploaded.length - 1];
+  for (const lv of E.house.levels) assert.ok(up.includes('textured-' + lv.id) && up.includes('glow-' + lv.id), 'upload pass draws textured / glow of ' + lv.id);
+  assert.ok(up.filter((n) => n === 'furniture').length === E.house.levels.length, 'and every furniture mesh');
   const gz = E.world.getObjectByName('glazing');
   assert.deepEqual([gz.castShadow, gz.receiveShadow, E.mock.raw(gz.material).__kind, E.mock.raw(gz.material).vertexColors], [false, true, 'MeshLambertMaterial', true]);
+});
+
+test('exterior hide (TL gate ruling, CTO conditions): furniture and textured-<level> are drawn unless the roof is actually shown (Roof on AND All); glazing and glow stay; composes with the level selector and Basement; every switch marks the shadow map', () => {
+  const E = opened((PC) => maxHouse(PC)), V = E.PC.view3d, h = E.house, R = E.mock.raw(E.info().renderer);
+  const drawn = (re) => { const o = []; E.world.traverse((m) => { if (re.test(m.name)) { let v = true; for (let n = m; n; n = n.parent) if (!n.visible) v = false; o.push(v); } }); return o; };
+  const levels = ['all', ...h.levels.map((l) => l.id)];
+  for (const roof of [true, false]) for (const sel of levels) {
+    const before = E.info().shadowUpdates;
+    V.setRoof(roof); V.setLevel(sel);
+    assert.ok(E.info().shadowUpdates > before, `${roof} / ${sel}: shadow map marked`);
+    const top = sel === 'all' ? Infinity : h.levels.find((l) => l.id === sel).index, shown = roof && sel === 'all';
+    h.levels.forEach((lv) => {
+      const L = E.world.getObjectByName('level-' + lv.id), inLv = lv.index <= top;
+      assert.equal(L.visible, inLv, `${roof} / ${sel}: level ${lv.id}`);
+      assert.equal(E.mesh('furniture', L).visible, !shown, `${roof} / ${sel}: furniture ${lv.id}`);
+      assert.equal(E.mesh('textured-' + lv.id, L).visible, !shown, `${roof} / ${sel}: textured ${lv.id}`);
+    });
+    assert.equal(E.world.getObjectByName('glazing').visible, true, 'glazing mesh stays (its roof group follows the roof)');
+    assert.equal(E.world.getObjectByName('roof').visible, shown, `${roof} / ${sel}: roof group`);
+  }
+  V.setLevel('all'); V.setRoof(true); V.setLook({ hour: 22 });
+  assert.ok(drawn(/^glow-/).every(Boolean) && drawn(/^glazing$/).every(Boolean), 'exterior at night: lit windows and outdoor glow drawn');
+  assert.ok(drawn(/^(furniture|textured-)/).every((v) => !v), 'exterior: no interior drawn');
 });

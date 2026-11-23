@@ -6125,12 +6125,20 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     applyVisibility();
     precompile();
   }
+  var PRE = /^(glow-|textured-|furniture$)/;
   function precompile() {
     if (!S.renderer || !S.renderer.compile) return;
     var gs = [];
-    S.world.traverse(function (o) { if (o.name.indexOf('glow-') === 0) { gs.push([o, o.visible]); o.visible = true; } });
+    S.world.traverse(function (o) { if (PRE.test(o.name)) { gs.push([o, o.visible]); o.visible = true; } });
     if (!gs.length) return;
-    S.renderer.compile(S.scene, S.camera);
+    var R = S.renderer, sm = R.shadowMap, nu = sm.needsUpdate;
+    R.compile(S.scene, S.camera);
+    if (R.initTexture && S.mats.interior && S.mats.interior.map) R.initTexture(S.mats.interior.map);   // CTO: the atlas up at build
+    if (R.setScissorTest) {
+      sm.needsUpdate = false;
+      R.setScissor(0, 0, 1, 1); R.setScissorTest(true); R.render(S.scene, S.camera); R.setScissorTest(false);
+      sm.needsUpdate = nu;
+    }
     gs.forEach(function (e) { e[0].visible = e[1]; });
   }
 
@@ -6146,6 +6154,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     var ext = S.roof && sel === 'all';
     S.world.children.forEach(function (g) { g.children.forEach(function (m) {
       if (m.name.indexOf('glow-') === 0) m.count = ext ? m.userData.ranges.all : m.userData.ranges.pools + m.userData.ranges.spill;
+      if (m.name === 'furniture' || m.name.indexOf('textured-') === 0) m.visible = !ext;
     }); });
     shadowsDirty();
   }

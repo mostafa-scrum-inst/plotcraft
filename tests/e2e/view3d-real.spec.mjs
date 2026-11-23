@@ -487,6 +487,22 @@ async function indoorReal(page, tag) {
     const mean = (a) => a.reduce((s, x) => s + x, 0) / (a.length || 1);
     return { i, gl, W, H, w, first, scr, rgb, luma, hue, sum, mean, h: i.house, V: PC.view3d };
   })()`;
+  // (f) exterior hide (TL gate ruling, CTO condition 3): after a fresh build in exterior mode (maxBudget's last open), the
+  // first Roof-off frame of the max house costs <= 2 x a steady dollhouse frame and uploads no geometry or texture
+  const f = await page.evaluate(() => {
+    const i = PC.debug.scene(), V = PC.view3d, gl = i.renderer.getContext(), px = new Uint8Array(4), m = i.renderer.info.memory;
+    const frame = () => { const t = performance.now(); i.renderNow(); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); return performance.now() - t; };
+    const med = (a) => a.slice().sort((x, y) => x - y)[a.length >> 1];
+    V.setLevel('all'); V.setRoof(true); frame();
+    const mem0 = [m.geometries, m.textures];
+    V.setRoof(false); const first = frame(), mem1 = [m.geometries, m.textures];
+    const steady = med([0, 0, 0, 0, 0].map(() => { i.renderer.shadowMap.needsUpdate = true; return frame(); }));
+    V.setRoof(true);
+    return { first, steady, mem0, mem1, builds: i.builds };
+  });
+  console.log(`  [record] ${tag} F6-T2 first Roof-off ${f.first.toFixed(0)} ms, steady ${f.steady.toFixed(0)} ms, memory ${f.mem0.join(' / ')} -> ${f.mem1.join(' / ')}`);
+  T.ok(f.first <= 2 * f.steady, `${tag} F6-T2 first Roof-off frame after an exterior build ${f.first.toFixed(0)} ms <= 2 x steady ${f.steady.toFixed(0)} ms (interior uploaded at build)`);
+  T.eq(f.mem1, f.mem0, `${tag} F6-T2 first Roof-off frame uploads no geometry / texture (renderer memory ${f.mem0.join(' / ')})`);
   // (a) + (b) + (e): exterior at Reset, noon then 22 h
   const r = await page.evaluate((HELP) => {
     const E = (0, eval)(HELP), { i, w, h, V, first, scr, rgb, luma, hue, sum, W, H } = E;
