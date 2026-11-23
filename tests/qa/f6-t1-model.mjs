@@ -29,6 +29,9 @@ const cut = (a, n = 8) => a.slice(0, n).concat(a.length > n ? [`... ${a.length} 
 const HAB = ['living', 'dining', 'majlis', 'bedroom', 'office', 'kitchen'], SERV = ['bathroom', 'laundry', 'maid', 'storage'];
 const SPEC = { glazed: { w: 1.2, h: 1.4, sill: 0.9 }, small: { w: 0.6, h: 0.6, sill: 1.6 }, slot: { w: 0.6, h: 1.6 }, door: { w: 1.0, h: 2.2, sill: 0 } };
 const END = 0.6, PITCH = 2.6, SMALL_MIN = 1.2, DOOR_CLEAR = 0.6, HEAD_GAP = 0.3, SLAB = 0.2;
+// F6-T1c W1 (plan §5, house v 3; marker PC.C.OPEN.hallPitch): hall panes on the free runs of a side (its extent minus the
+// room, stair and lift runs), glazed, n = max(1, floor((L - 0.6) / 3.9)) on L >= 2.4, evenly spaced 0.6 m clear of the ends
+const W1 = !!(PC.C.OPEN && PC.C.OPEN.hallPitch !== undefined), HALL_PITCH = 3.9;
 
 function make(mut) { const s = Q.plain(PC.sample.state()); if (mut) mut(s); s.plans = {}; PC.plans.sync(s); for (const id in s.plans) if (!s.plans[id].error) s.plans[id].approved = true; return s; }
 const MAXM = (s) => { s.plot.pts = [[0, 0], [60, 0], [60, 50], [0, 50]]; s.ans.streetEdge = 0; s.ans.footprintPct = 40; s.ans.floors = 3; s.ans.basement = true; s.ans.lift = true; s.ans.usableRoof = true; s.ans.roofType = 'terrace';
@@ -58,13 +61,22 @@ function runsOf(h, L, side) {
   }
   return out.sort((x, y) => x[0] - y[0]);
 }
-const stairRun = (h, L, side) => { const st = L.stair, fp = h.footprint; if (!st) return null;
+const stairRun = (h, L, side, st = L.stair) => { const fp = h.footprint; if (!st) return null;
   const on = side === 'front' ? near(st.v, fp.v) : side === 'back' ? near(st.v + st.d, fp.v + fp.d) : side === 'left' ? near(st.u, fp.u) : near(st.u + st.w, fp.u + fp.w);
   return on ? (side === 'front' || side === 'back' ? [st.u, st.u + st.w] : [st.v, st.v + st.d]) : null; };
 
+// my free runs: the side's extent minus the union of the room runs, the stair run and the lift run
+function freeRuns(h, L, side) {
+  const fp = h.footprint, lo = side === 'front' || side === 'back' ? fp.u : fp.v, hi = lo + (side === 'front' || side === 'back' ? fp.w : fp.d);
+  const used = [...runsOf(h, L, side).map(([a, b]) => [a, b]), stairRun(h, L, side), stairRun(h, L, side, L.lift)].filter(Boolean).sort((x, y) => x[0] - y[0]);
+  const out = []; let at = lo;
+  for (const [a, b] of used) { if (a > at + 1e-6) out.push([at, a]); at = Math.max(at, b); }
+  if (hi > at + 1e-6) out.push([at, hi]);
+  return out;
+}
 function openingProblems(tag, s, h) {
   const f = [], O = h.openings || [], fp = h.footprint, storeyH = h.storeyH;
-  if (h.v !== 2) f.push(`${tag}: house.v ${h.v} (2 expected)`);
+  if (h.v !== (W1 ? 3 : 2)) f.push(`${tag}: house.v ${h.v} (${W1 ? 3 : 2} expected)`);
   const levelOf = Object.fromEntries(h.levels.map((l) => [l.id, l]));
   if (O.some((o) => !levelOf[o.level] || levelOf[o.level].index < 0)) f.push(`${tag}: openings on a basement or unknown level: ${JSON.stringify(O.filter((o) => !levelOf[o.level] || levelOf[o.level].index < 0).slice(0, 2))}`);
   const en = h.site.entrance, door = O.filter((o) => o.kind === 'door');
@@ -85,6 +97,9 @@ function openingProblems(tag, s, h) {
       if (dr && o.b > dr.a - DOOR_CLEAR + 1e-9 && o.a < dr.b + DOOR_CLEAR - 1e-9) f.push(`${tag} G front: ${o.kind} ${o.a}..${o.b} within 0.6 m of the door ${dr.a}..${dr.b}`);
       if (o.kind === 'slot') { if (!sr || o.a < sr[0] - 1e-9 || o.b > sr[1] + 1e-9) f.push(`${tag} ${L.id} ${side}: slot ${o.a}..${o.b} not on a stair edge ${JSON.stringify(sr)}`); continue; }
       const run = runs.find(([a0, a1]) => o.a >= a0 - 1e-9 && o.b <= a1 + 1e-9);
+      const fr = !run && W1 ? freeRuns(h, L, side).find(([a0, a1]) => o.a >= a0 - 1e-9 && o.b <= a1 + 1e-9) : null;
+      if (fr) { if (o.kind !== 'glazed') f.push(`${tag} ${L.id} ${side}: ${o.kind} on a free (hall) run, glazed expected`);
+        if (o.a < fr[0] + END - 1e-9 || o.b > fr[1] - END + 1e-9) f.push(`${tag} ${L.id} ${side}: hall pane ${o.a}..${o.b} closer than 0.6 m to its free run end ${fr[0]}..${fr[1]}`); continue; }
       if (!run) { f.push(`${tag} ${L.id} ${side}: ${o.kind} ${o.a}..${o.b} on no room edge of that side`); continue; }
       const ty = run[2].type, k = HAB.includes(ty) ? 'glazed' : SERV.includes(ty) ? 'small' : null;
       if (k !== o.kind) f.push(`${tag} ${L.id} ${side}: ${o.kind} in a ${ty} (${k} expected)`);
@@ -92,13 +107,15 @@ function openingProblems(tag, s, h) {
     }
     if (sr && !os.some((o) => o.kind === 'slot')) f.push(`${tag} ${L.id} ${side}: the stair is on this side (${sr}) but has no slot`);
     if (!sr && os.some((o) => o.kind === 'slot')) f.push(`${tag} ${L.id} ${side}: a slot with no stair edge`);
-    // counts per run (runs not near the door: the door may drop panes)
-    for (const [a0, a1, r] of runs) {
+    // counts per run (runs not near the door: the door may drop panes); W1: the free runs are hall runs at pitch 3.9
+    const HALL = { type: 'living', hall: true, name: 'hall run' };
+    for (const [a0, a1, r] of [...runs, ...(W1 ? freeRuns(h, L, side).map(([a, b]) => [a, b, HALL]) : [])]) {
+      const P = r.hall ? HALL_PITCH : PITCH;
       const len = a1 - a0, here = os.filter((o) => o.kind !== 'door' && o.kind !== 'slot' && o.a >= a0 - 1e-9 && o.b <= a1 + 1e-9);
       const nearDoor = dr && a1 > dr.a - DOOR_CLEAR - SPEC.glazed.w && a0 < dr.b + DOOR_CLEAR + SPEC.glazed.w;
       if (HAB.includes(r.type)) {
-        const n = len < SPEC.glazed.w + 2 * END - 1e-9 ? 0 : Math.max(1, Math.floor((len - END) / PITCH + 1e-9));
-        if (nearDoor ? here.length > n : here.length !== n) f.push(`${tag} ${L.id} ${side} ${r.name} run ${len.toFixed(2)} m: ${here.length} panes, ${n} by n = max(1, floor((run - 0.6) / 2.6))${nearDoor ? ' at most (door)' : ''}`);
+        const n = len < SPEC.glazed.w + 2 * END - 1e-9 ? 0 : Math.max(1, Math.floor((len - END) / P + 1e-9));
+        if (nearDoor ? here.length > n : here.length !== n) f.push(`${tag} ${L.id} ${side} ${r.name} run ${len.toFixed(2)} m: ${here.length} panes, ${n} by n = max(1, floor((run - 0.6) / ${P}))${nearDoor ? ' at most (door)' : ''}`);
         if (!nearDoor && here.length >= 1) { const c = here.map((o) => (o.a + o.b) / 2), mid = (a0 + a1) / 2;
           if (!near(c[0] - a0, a1 - c[c.length - 1], 1e-6)) f.push(`${tag} ${L.id} ${side} ${r.name}: panes not symmetric about the run centre ${mid}`);
           for (let i = 2; i < c.length; i++) if (!near(c[i] - c[i - 1], c[1] - c[0], 1e-6)) f.push(`${tag} ${L.id} ${side} ${r.name}: uneven pane spacing`);

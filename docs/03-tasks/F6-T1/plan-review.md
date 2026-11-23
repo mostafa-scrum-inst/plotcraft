@@ -218,3 +218,11 @@ If the runs are still over: QA measures f1-t1-layout 640x360 next, and any furth
 - **Ruling 1: the loaded-build regression guard goes from 800 ms to 1200 ms** (3 × budget), best of 3. The C-4.8 budget remains the 400 ms solo step. The CTO was informed.
 - **Ruling 2: QA moves at least 30 s of QA_FULL-only work into the release step before the T1c gate.** It moves duplicated viewport passes only. The release NOTE line goes from 260 s to 280 s, and the 300 s limit stays.
 - CTO accepts the 1200 ms guard. If it trips, the solo step is rerun before the trip is called noise.
+
+## Addendum: QA_FULL trim 2 and release-step split (TL, 2026-11-23)
+- **QA_FULL trim (QA, b29b95a), accepted:** about 33 s of duplicated viewport passes moved to the release step.
+  - QA_FULL is now 450.9 s. Its one failure was the 800 ms in-pool guard, which goes to 1200 ms.
+  - The release step is now 280.8 s.
+- **Ruling:** in T1c, run-all runs the release step as two parallel processes: the leak-max stream, and the moved rows. Each process has NOTE 260 s and limit 300 s.
+  - Until then, the NOTE line is 290 s.
+  - No rows move back.

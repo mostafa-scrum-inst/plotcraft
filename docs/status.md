@@ -308,4 +308,7 @@
 - [TL] Default trim result accepted (97b812f): 411.9 / 413.1 s, release 246.1 s, no check lost; f6t1 merge needs one quiet confirm run ≤ 420 s after FS re-times.
 - [TL] Post-merge timing: confirm 411.2 s; loaded-build guard 800→1200 ms (CTO informed); QA moves ≥ 30 s QA_FULL→release before T1c gate, release NOTE 280 s.
 - [TL] CTO accepted 1200 ms guard (trip → solo rerun before calling noise); FS told.
-- [QA] QA_FULL trim (TL, before F6-T1c gate): f2-t3 B/F/M and f1-t3 I/L/N extra viewports into the release step (NOTE line 280 s): QA_FULL 450.9 s (was 474.9), release step 280.8 s (9/9, NOTE by 0.8 s).
+- [TL] F6-T1c dist tripwire 600000→700000 approved (C-1.3 627 kB budget unchanged, ~22 kB left; CTO informed).
+- [TL] CTO condition on dist: DIST_BUDGET_BYTES 627302 named constant + boundary test in T1c; FS told.
+- [TL] QA_FULL trim 2 accepted (b29b95a, 450.9 s); release step → two parallel processes in T1c (NOTE 260/limit 300 each), NOTE 290 s until then.
+- [QA] F6-T1c rows (version-aware, marker PC.C.ROOF.copingT / PC.C.OPEN.hallPitch): coping table, G1 meadow, W1 hall-window oracle (house v 3), drip edge / coping / roofDeck / deck bands (deckLift 0.01), roofDeck on real r128, mesh counts 21/27/28; f6-t1-leak --stream-only / --rows-only for the TL's parallel release step (260 s NOTE per process). Green on f6t1c a4f62da and on f6t1.

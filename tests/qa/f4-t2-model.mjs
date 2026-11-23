@@ -35,7 +35,7 @@ const SEAT_TEXT = 'Garden seating does not fit in the yard: it is left out of th
 function make(mut) { const s = Q.plain(PC.sample.state()); if (mut) mut(s); s.plans = {}; PC.plans.sync(s); for (const id in s.plans) if (!s.plans[id].error) s.plans[id].approved = true; return s; }
 function scene(house) {
   const world = new THREE.Group(); world.name = 'world';
-  const mats = { batch: new THREE.MeshLambertMaterial({ vertexColors: true }), paving: new THREE.MeshLambertMaterial({ vertexColors: true }), ui: new THREE.MeshBasicMaterial({ vertexColors: true }), tiles: new THREE.MeshLambertMaterial({ vertexColors: true }), ground: new THREE.MeshLambertMaterial(), groundOuter: new THREE.MeshLambertMaterial(), poolWater: new THREE.MeshLambertMaterial(), trunk: new THREE.MeshLambertMaterial(), canopy: new THREE.MeshLambertMaterial(), shrub: new THREE.MeshLambertMaterial() };   // F4-T3 vegetation materials (unused before)
+  const mats = { deck: new THREE.MeshLambertMaterial(), batch: new THREE.MeshLambertMaterial({ vertexColors: true }), paving: new THREE.MeshLambertMaterial({ vertexColors: true }), ui: new THREE.MeshBasicMaterial({ vertexColors: true }), tiles: new THREE.MeshLambertMaterial({ vertexColors: true }), ground: new THREE.MeshLambertMaterial(), groundOuter: new THREE.MeshLambertMaterial(), poolWater: new THREE.MeshLambertMaterial(), trunk: new THREE.MeshLambertMaterial(), canopy: new THREE.MeshLambertMaterial(), shrub: new THREE.MeshLambertMaterial() };   // F4-T3 vegetation materials (unused before)
   const made = PC.three.buildShell(house, world, mats).concat(PC.three.buildInterior(house, world, mats), PC.three.buildRoof(house, world, mats), PC.three.buildSite(house, world, mats));
   world.updateMatrixWorld(true); return { world, made };
 }
@@ -57,6 +57,49 @@ const isCol = (it, hex) => it.c.every((c) => sameC(c, hex));
 // T box (X, Y, Z) of an L rectangle
 const tb = (F, u0, u1, v0, v1, y0, y1) => ({ min: [F.X(u0), y0, F.Z(v1)], max: [F.X(u1), y1, F.Z(v0)] });
 const boxEq = (it, b, t = 2e-4) => [0, 1, 2].every((k) => near(it.min[k], b.min[k], t) && near(it.max[k], b.max[k], t));
+// F6-T1c (plan §1-3; marker PC.C.ROOF.copingT): my reading of coping, roofDeck and the deck bands on a flat / terrace roof
+const T1C = !!(PC.C.ROOF && PC.C.ROOF.copingT !== undefined), COP_T = 0.05, COP_O = 0.03, DECK_LIFT = 0.01,   /* FS ec12a64 deck z-fight fix: 0.002 -> 0.01 */ BAND_W = 0.35, BAND_K = 0.80, HEAD_W = 0.25, HEAD_K = 0.85;
+const areaXZ = (x) => (x.max[0] - x.min[0]) * (x.max[2] - x.min[2]);
+const triArea = (x) => x.tris.reduce((a, [i, j, k]) => { const p = x.v[i], q = x.v[j], r = x.v[k]; return a + Math.abs((q[0] - p[0]) * (r[2] - p[2]) - (r[0] - p[0]) * (q[2] - p[2])) / 2; }, 0);
+function t1cRoof(tag, it, world, F, E, r, heads) {
+  const f = [], { u0, u1, v0, v1, tp, ph, p } = r, yt = tp + ph;
+  // coping on the parapet ring: 4 coping boxes yt .. yt + 0.05 covering the ring widened by 0.03 on both faces (union = outer - inner)
+  const cop = it.filter((x) => x.kind === 'box' && isCol(x, E.coping) && near(x.min[1], yt, 1e-4));
+  const O = tb(F, u0 - COP_O, u1 + COP_O, v0 - COP_O, v1 + COP_O, yt, yt + COP_T), I = tb(F, u0 + p + COP_O, u1 - p - COP_O, v0 + p + COP_O, v1 - p - COP_O, yt, yt + COP_T);
+  const ringA = areaXZ(O) - areaXZ(I), gotA = cop.reduce((a, x) => a + areaXZ(x), 0);
+  if (cop.length !== 4 || cop.some((x) => !near(x.max[1], yt + COP_T, 1e-4) || [0, 2].some((k) => x.min[k] < O.min[k] - 1e-4 || x.max[k] > O.max[k] + 1e-4) || (x.min[0] < I.max[0] - 1e-4 && x.max[0] > I.min[0] + 1e-4 && x.min[2] < I.max[2] - 1e-4 && x.max[2] > I.min[2] + 1e-4)) || !near(gotA, ringA, 1e-3))
+    f.push(`${tag}: coping ${cop.length} boxes, area ${gotA.toFixed(3)} (4 boxes ${COP_T} m thick on the parapet top ${yt.toFixed(2)}, 0.03 m over both faces, area ${ringA.toFixed(3)})`);
+  // a cap on each head (stair head 2.4 / lift overrun 1.2): one coping box 0.03 m wider on every side, top .. + 0.05
+  for (const [hd, hh] of heads) { const b = tb(F, hd.u - COP_O, hd.u + hd.w + COP_O, hd.v - COP_O, hd.v + hd.d + COP_O, tp + hh, tp + hh + COP_T);
+    if (!it.some((x) => x.kind === 'box' && boxEq(x, b) && isCol(x, E.coping))) f.push(`${tag}: no coping cap on the ${hh} m head`); }
+  // roofDeck: one face-up quad (kind deck) inside the parapet at slab top + deckLift (0.01), Lambert in exteriors.roof, receives, does not cast
+  const dm = []; world.traverse((x) => { if (x.isMesh && x.name === 'roofDeck') dm.push(x); });
+  if (dm.length !== 1 || !dm[0].parent || dm[0].parent.name !== 'roof') f.push(`${tag}: ${dm.length} roofDeck meshes (one, in the roof group)`);
+  else { const d = dm[0], di = d.userData.items ? itemsOf(d) : [];
+    const want = tb(F, u0 + p, u1 - p, v0 + p, v1 - p, tp + DECK_LIFT, tp + DECK_LIFT);
+    if (di.length !== 1 || di[0].kind !== 'deck' || !boxEq(di[0], want, 1e-4) || di[0].n.some((n) => n[1] < 0.999)) f.push(`${tag}: roofDeck ${JSON.stringify(di.map((x) => [x.kind, x.min, x.max]))}, one face-up deck quad ${JSON.stringify(want)} expected`);
+    // (its material is the scene's mats.deck: colour / map are checked on real r128 in f6-t1-view)
+    if (d.castShadow || !d.receiveShadow) f.push(`${tag}: roofDeck cast ${d.castShadow} / receive ${d.receiveShadow} (false / true)`); }
+  // deck bands: 4 face-up strips at slab top + 0.013 along the parapet, 0.35 m wide, exteriors.roof x 0.80 at the parapet -> x 1
+  const band = it.filter((x) => x.kind === 'deckBand'), yb = tp + DECK_LIFT + 0.003, pb = band.filter((x) => near(x.min[1], yb, 1e-4) && near(x.max[1], yb, 1e-4));
+  const Bo = tb(F, u0 + p, u1 - p, v0 + p, v1 - p, yb, yb), Bi = tb(F, u0 + p + BAND_W, u1 - p - BAND_W, v0 + p + BAND_W, v1 - p - BAND_W, yb, yb);
+  const inside = (x, B) => [0, 2].every((k) => x.min[k] >= B.min[k] - 1e-4 && x.max[k] <= B.max[k] + 1e-4);
+  const par = pb.slice().sort((a, b) => triArea(b) - triArea(a)).slice(0, 4).filter((x) => inside(x, Bo));   // the parapet strips are the 4 largest
+  if (band.some((x) => !near(x.min[1], x.max[1], 1e-6) || !near(x.min[1], yb, 1e-4))) f.push(`${tag}: a deckBand strip not flat at slab top + deckLift + 0.003 (0.013)`);
+  const L0 = H.lin(E.roof), lum = (c) => c[0] + c[1] + c[2], k = (c) => lum(c) / lum(L0);
+  const edgeK = (x) => x.v.map((v, i) => [Math.min(v[0] - Bo.min[0], Bo.max[0] - v[0], v[2] - Bo.min[2], Bo.max[2] - v[2]), x.c[i]]);
+  const badK = par.flatMap(edgeK).filter(([dd, c]) => !c || (near(dd, 0, 1e-4) ? !near(k(c), BAND_K, 0.01) : near(dd, BAND_W, 1e-3) ? !near(k(c), 1, 0.01) : false));
+  if (par.length < 4) f.push(`${tag}: ${par.length} parapet deck bands (4 expected)`);
+  else { const bandA = par.reduce((a, x) => a + triArea(x), 0); if (!near(bandA, areaXZ(Bo) - areaXZ(Bi), 1e-3)) f.push(`${tag}: parapet deck bands cover ${bandA.toFixed(3)} m2, the ${BAND_W} m band is ${(areaXZ(Bo) - areaXZ(Bi)).toFixed(3)}`); }
+  if (badK.length) f.push(`${tag}: deck band colour ${badK.slice(0, 2).map(([dd, c]) => `${dd.toFixed(2)} m: x${c ? k(c).toFixed(3) : '?'}`).join(', ')} (roof x ${BAND_K} at the parapet, x 1 at ${BAND_W} m)`);
+  // head bands: at most 4 strips per head, each within 0.25 m of the head and clipped to the deck
+  if (heads.length) { const Hs = heads.map(([hd]) => tb(F, hd.u - HEAD_W, hd.u + hd.w + HEAD_W, hd.v - HEAD_W, hd.v + hd.d + HEAD_W, yb, yb)), hb = pb.filter((x) => !par.includes(x));
+    if (hb.some((x) => !inside(x, Bo) || !Hs.some((Ho) => inside(x, Ho))) || hb.length < heads.length || hb.length > 4 * heads.length) f.push(`${tag}: ${hb.length} head bands for ${heads.length} heads (1..4 each, within ${HEAD_W} m of a head, clipped to the deck)`); }
+  // order (plan §1): the opening decals (glass / reveal) stay last in roofBatch
+  const firstGlass = it.findIndex((x) => x.kind === 'glass');
+  if (firstGlass >= 0 && it.slice(firstGlass).some((x) => ['deckBand'].includes(x.kind) || (x.kind === 'box' && isCol(x, E.coping)))) f.push(`${tag}: coping / deck bands after the opening decals in roofBatch`);
+  return f;
+}
 // outward winding: each triangle's winding normal agrees with its stored normal and points away from the item's centre
 function windingProblems(items, tag) {
   const f = [];
@@ -72,7 +115,7 @@ const VEG = (h) => (h.site.trees && h.site.trees.length ? 2 : 0) + (h.site.shrub
 const byName = (world, name) => meshes(world).filter((m) => m.name === name);
 // F6-T1a (impl-notes §6): pads, seating pad, pool rim and footpath moved to 'paving', the N needle half to 'northNeedle',
 // the pitched slopes to 'roofTiles'; the site checks read the union of the site meshes (version-aware: absent before F6).
-const F6 = !!(PC.texgen || (PC.C.VIEW3D && PC.C.VIEW3D.tiers)), F6_NEW = ['paving', 'northNeedle', 'roofTiles', 'sky', 'groundRing', 'blobs'];
+const F6 = !!(PC.texgen || (PC.C.VIEW3D && PC.C.VIEW3D.tiers)), F6_NEW = ['paving', 'northNeedle', 'roofTiles', 'sky', 'groundRing', 'blobs', 'roofDeck'];   // roofDeck: F6-T1c R2 (flat / terrace roofs)
 // F6-T1b (plan §6.1 / §6.2): opening decals and the wall-base skirt stand 0.005-0.05 m proud of the facade, so a ray from
 // outside may meet them first (impl-notes T1b); marker PC.C.CONTACT
 const T1B = !!PC.C.CONTACT, PROUD = T1B ? 0.09 : 0;   // the sill stands 0.08 m out (designer-plan Q-D1)
@@ -182,7 +225,10 @@ if (want('R')) {
       if (it.some((x) => x.kind === 'box' && isCol(x, E.parapet))) f.push(`${tag}: parapet on a pitched roof`);
     } else {
       const tp = baseY + 0.2, ph = c.usable || type === 'terrace' ? 1.0 : 0.3, p = 0.15;
-      has(bx(u0, u1, v0, v1, baseY, tp), E.roof, 'slab');
+      // F6-T1c R1 (plan §1): the slab box is in exteriors.slab and dripOut 0.04 proud of the footprint on all sides
+      const DR = T1C ? 0.04 : 0;
+      has(bx(u0 - DR, u1 + DR, v0 - DR, v1 + DR, baseY, tp), T1C ? E.slab : E.roof, T1C ? 'slab (slab colour, 0.04 m drip edge)' : 'slab');
+      if (T1C) f.push(...t1cRoof(tag, it, world, F, E, { u0, u1, v0, v1, tp, ph, p }, c.usable ? [[L(core.stair), 2.4], ...(c.lift ? [[L(core.lift), 1.2]] : [])] : []));
       for (const [b, w] of [[bx(u0, u1, v0, v0 + p, tp, tp + ph), 'front'], [bx(u0, u1, v1 - p, v1, tp, tp + ph), 'back'], [bx(u0, u0 + p, v0 + p, v1 - p, tp, tp + ph), 'left'], [bx(u1 - p, u1, v0 + p, v1 - p, tp, tp + ph), 'right']]) has(b, E.parapet, `${w} parapet ${ph} m`);
       if (type === 'terrace') { const a0 = u0 + p, a1 = u1 - p, b0 = v0 + fp.d * 2 / 3, b1 = v1 - p, k = 0.15, hgt = tp + 2.4;
         for (const [cu, cv] of [[a0, b0], [a1 - k, b0], [a0, b1 - k], [a1 - k, b1 - k]]) has(bx(cu, cu + k, cv, cv + k, tp, hgt), E.roof, `pergola post at ${cu.toFixed(2)},${cv.toFixed(2)}`);
@@ -190,7 +236,7 @@ if (want('R')) {
         const nWant = Math.floor((span - 0.1) / 0.6 + 1e-9) + 1;
         if (beams.length !== nWant || beams.some((x) => !near(longU ? x.max[0] - x.min[0] : x.max[2] - x.min[2], len, 1e-3))) f.push(`${tag}: ${beams.length} beams (expected ${nWant}, each ${len.toFixed(2)} m along the region's longer side)`);
         if (beams.some((x) => x.max[2] > F.Z(b0) + 1e-3 || x.min[2] < F.Z(b1) - 1e-3)) f.push(`${tag}: a beam outside the back third`);
-      } else if (it.some((x) => x.kind === 'box' && x.max[1] > tp + ph + 1e-3 && !(c.usable))) f.push(`${tag}: something above the parapet`);
+      } else if (it.some((x) => x.kind === 'box' && x.max[1] > tp + ph + (T1C && isCol(x, E.coping) ? 0.05 : 0) + 1e-3 && !(c.usable))) f.push(`${tag}: something above the parapet`);
       if (c.usable) { const sH = L(core.stair); has(bx(sH.u, sH.u + sH.w, sH.v, sH.v + sH.d, tp, tp + 2.4), E.parapet, 'stair head 2.4 m');
         if (c.lift) { const lH = L(core.lift); has(bx(lH.u, lH.u + lH.w, lH.v, lH.v + lH.d, tp, tp + 1.2), E.parapet, 'lift overrun 1.2 m'); } }
       else if (it.some((x) => near(x.max[1], tp + 2.4) && !(type === 'terrace'))) f.push(`${tag}: a stair head on a roof that is not usable`);
@@ -366,7 +412,7 @@ if (want('B')) {
     const vx = VEG(hm); if (mm > LIM + (F6 ? 0 : vx)) f.push(`${mm} meshes > ${LIM}${vx && !F6 ? ` + ${vx} vegetation` : ''}`);
     if (!hm.site.pool || !hm.site.parking || !hm.site.gate || !hm.site.seating || !hm.roof.stairHead || !hm.roof.liftHead) f.push(`items missing: ${JSON.stringify({ pool: !!hm.site.pool, parking: !!hm.site.parking, gate: !!hm.site.gate, seating: !!hm.site.seating, heads: [!!hm.roof.stairHead, !!hm.roof.liftHead] })}`);
     if (hm.levels.some((l) => !l.rooms.every((r) => r.furniture.length))) f.push('a room without furniture'); }
-  if (ms !== 12 + VEG(hs) + nNew(sw0)) f.push(`sample: ${ms} meshes (FS reports 12${VEG(hs) ? ` + ${VEG(hs)} vegetation (F4-T3)` : ''}${F6 ? ` + ${nNew(sw0)} F6 (paving / needle / tiles / sky / groundRing / blobs)` : ''})`);
+  if (ms !== 12 + VEG(hs) + nNew(sw0)) f.push(`sample: ${ms} meshes (FS reports 12${VEG(hs) ? ` + ${VEG(hs)} vegetation (F4-T3)` : ''}${F6 ? ` + ${nNew(sw0)} F6 (paving / needle / tiles / sky / groundRing / blobs / roofDeck)` : ''})`);
   R.check(`B maximum house (4 levels x 10 room types, full, lift, pool L, 4 covered cars, wall, gate, seating, usable terrace): ${mm} meshes <= ${F6 ? '64 (F6-T1 budget)' : '18 (+ vegetation from F4-T3)'}, every item present, every room furnished; sample ${ms} meshes`, f);
   R.note(`B maximum house: ${mm} meshes, sample ${ms}; model ${tm} ms, batches ${tb3} ms (node, r128 without renderer)`);
 }

@@ -50,12 +50,15 @@ if (want('O')) {
   }
   for (const s of V.SEASONS) { const m = V.mySky(12, s, 0, SKY), w = MATS[s]; if (m.groundColor !== w[0] || (w[2] && m.canopyColor !== w[1]) || m.canopyVisible !== w[2] || m.shrubColor !== w[3]) f.push(`${s} materials ${JSON.stringify([m.groundColor, m.canopyColor, m.canopyVisible, m.shrubColor])}`); }
   // F6-T1 (designer-plan B8): groundOuter becomes meadow #8E9E6A, retuned to #727E58 (20c9238); version-aware
-  const GO = GOLD && GOLD.r6 ? '#727E58' : (PC.texgen || (PC.C.VIEW3D && PC.C.VIEW3D.tiers)) ? '#8E9E6A' : '#B3B0A6';
+  // F6-T1c G1 (Designer, 66c5d87; marker PC.C.ROOF.copingT): groundOuter = summer meadow #6A8550, spring meadow #6F8A58
+  const T1C = !!(PC.C.ROOF && PC.C.ROOF.copingT !== undefined);
+  const GO = T1C ? V.G1_MEADOW.summer : GOLD && GOLD.r6 ? '#727E58' : (PC.texgen || (PC.C.VIEW3D && PC.C.VIEW3D.tiers)) ? '#8E9E6A' : '#B3B0A6';
+  if (T1C) for (const [se, w] of Object.entries(V.G1_MEADOW)) { const m = SKY.seasons[se] && SKY.seasons[se].meadow; if (String(m).toUpperCase() !== w) f.push(`${se} meadow ${m}, G1 table ${w}`); }
   if (T3.siteColors.groundOuter !== GO) f.push(`groundOuter ${T3.siteColors.groundOuter}, expected ${GO}`);
   if (GOLD && GOLD.r6) {   // the retune's changed key fields and site colours = the Designer's hand table (C-6.5)
     for (const [h, ed] of Object.entries(GOLD.edits || V.R6_KEY_EDITS)) { const k = SKY.keys.find((x) => Math.abs(x.h - Number(h)) < 1e-9); if (!k) { f.push(`no sky key at ${h} h`); continue; }
       for (const [n, w] of Object.entries(ed)) if (typeof w === 'number' ? Math.abs(k[n] - w) > 1e-9 : String(k[n]).toUpperCase() !== w) f.push(`key ${h} h ${n} ${k[n]}, table ${w}`); }
-    for (const [n, w] of Object.entries(V.R6_SITE)) if (String(T3.siteColors[n]).toUpperCase() !== w) f.push(`siteColors.${n} ${T3.siteColors[n]}, table ${w}`);
+    for (const [n, w] of Object.entries(T1C ? { ...V.R6_SITE, groundOuter: V.G1_MEADOW.summer } : V.R6_SITE)) if (String(T3.siteColors[n]).toUpperCase() !== w) f.push(`siteColors.${n} ${T3.siteColors[n]}, table ${w}`);
     if (SKY.groundBounce !== undefined && Math.abs(SKY.groundBounce - 0.25) > 1e-9) f.push(`groundBounce ${SKY.groundBounce}`); }
   const n = V.mySky(12, 'summer', 0, SKY); for (const k in NOON) if (n[k] !== NOON[k]) f.push(`noon ${k} ${n[k]}`);
   R.check(`O QA oracle (A-13, two rounded A-10 mix steps) reproduces the Designer\'s ${GROWS.length}-row golden table (${GOLD && GOLD.r6 ? `F6-T1${GOLD.r7 ? 'b' : 'a'} retune rows; key edits and site colours = the hand table` : GOLD && GOLD.o1 ? 'O-1 17.5 h rows' : 'F4-T3 rows'}), the season material table and the ${GOLD && GOLD.r6 ? 'retuned' : 'F4-T1'} noon look`, f);

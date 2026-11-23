@@ -48,7 +48,7 @@ const t0 = Date.now(), TIMES = [];
 // F6-T1 (impl-notes §6, plan §3): the full tier's shadow map is 2048 on fine pointers (it was <= 1024).
 // F6-T1 run-time moves (TL Q-T8, docs/03-tasks/F6-T1/qa-full-moves.md): A's 0 / 6 / 18 / 24 h edge looks and E (640x360,
 // 768x1024) run with QA_FULL=1 only (the 16 preset looks stay in the default run).
-const FULL = !!process.env.QA_FULL, F6 = !!(PC.texgen || (PC.C.VIEW3D && PC.C.VIEW3D.tiers)), MAPMAX = F6 ? 2048 : 1024, T1BV = !!PC.C.CONTACT, NEW6 = (F6 ? 3 : 0) + (T1BV ? 1 : 0) /* paving, northNeedle, sky (impl-notes §1 meshes; flat-roof sample); T1b groundRing */, EDGE_H = FULL ? [0, 6, 18, 24] : [];
+const FULL = !!process.env.QA_FULL, F6 = !!(PC.texgen || (PC.C.VIEW3D && PC.C.VIEW3D.tiers)), MAPMAX = F6 ? 2048 : 1024, T1BV = !!PC.C.CONTACT, T1CV = !!(PC.C.ROOF && PC.C.ROOF.copingT !== undefined), NEW6 = (F6 ? 3 : 0) + (T1BV ? 1 : 0) + (T1CV ? 1 : 0) /* F6-T1c: + roofDeck on the flat-roof sample */ /* paving, northNeedle, sky (impl-notes §1 meshes; flat-roof sample); T1b groundRing */, EDGE_H = FULL ? [0, 6, 18, 24] : [];
 const cut = (a, n = 8) => a.slice(0, n).concat(a.length > n ? [`... ${a.length} in all`] : []);
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const RAF = () => { const raf = window.requestAnimationFrame.bind(window); window.__raf = 0; window.requestAnimationFrame = (cb) => { window.__raf++; return raf(cb); }; };
