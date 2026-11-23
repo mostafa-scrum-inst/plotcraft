@@ -63,7 +63,8 @@ async function to5(S, mut = '') {
 // TL ruling (F6-T1c run-time debt): the maximum-house part of D runs in the release step only (QA_RELEASE=1;
 // f6-t1-leak.mjs --stream-only runs this file with --release-only, which runs D whole).
 const REL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only');
-async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) return; if (RELONLY && label[0] !== 'D') return; const t = Date.now(); try { await fn(); } catch (e) { R.check(`${label}: ran to the end`, [String(e && e.stack || e).split('\n').slice(0, 3).join(' | ')]); } TIMES.push(`${label} ${((Date.now() - t) / 1000).toFixed(1)} s`); }
+async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) return; if (RELONLY && !['D', 'E'].includes(label[0])) return;   // E twins: release step since the TL QA_FULL headroom ruling after F6-T2
+  const t = Date.now(); try { await fn(); } catch (e) { R.check(`${label}: ran to the end`, [String(e && e.stack || e).split('\n').slice(0, 3).join(' | ')]); } TIMES.push(`${label} ${((Date.now() - t) / 1000).toFixed(1)} s`); }
 const PRESET_HOOK = { 8: 'v3-preset-morning', 12: 'v3-preset-noon', 17.5: 'v3-preset-evening', 22: 'v3-preset-night' };
 
 // ---------- the scene's look, read in the page ----------
@@ -313,7 +314,7 @@ await guard('C 360x640', async () => {
 });
 
 // ================= E. exploratory: Light pane at 640x360 and 768x1024 (F1-T1 layout rules, 44 px, one line each) =================
-if (HAS.look && FULL) for (const vp of [{ tag: '640x360', w: 640, h: 360, touch: true }, { tag: '768x1024', w: 768, h: 1024, touch: true }]) await guard(`E ${vp.tag}`, async () => {
+if (HAS.look && REL) for (const vp of [{ tag: '640x360', w: 640, h: 360, touch: true }, { tag: '768x1024', w: 768, h: 1024, touch: true }]) await guard(`E ${vp.tag}`, async () => {
   const S = await session(browser, vp, { three: 'real' }), T = `E ${vp.tag} real`; await to5(S); await lightTab(S);
   await S.act('v3-preset-evening'); await settleLook(S); const f = ctlProblems(await ctl(S), 17.5, 'summer', 'Evening');
   const lay = await S.page.evaluate(() => { const q = (h) => document.querySelector(`[data-pc="${h}"]`); return ['v3-time', 'v3-season', 'v3-preset-morning', 'v3-preset-noon', 'v3-preset-evening', 'v3-preset-night'].map((h) => { const r = q(h).getBoundingClientRect(); return [h, r.width, r.height, r.right <= innerWidth + 0.5 && r.left >= -0.5]; }).filter(([, w, hh, inV]) => w < 43.5 || hh < 43.5 || !inV); });
@@ -375,7 +376,8 @@ if (HAS.look && HAS.scatter) await guard('D extras', async () => {
 });
 
 await browser.close();
-if (!FULL) R.note('A edge hours 0 / 6 / 18 / 24 and E 640x360 / 768x1024 run with QA_FULL=1 only (TL Q-T8 run-time moves)');
+if (!FULL) R.note('A edge hours 0 / 6 / 18 / 24 run with QA_FULL=1 only (TL Q-T8 run-time moves)');
+if (!REL) R.note('E 640x360 / 768x1024 run in the release step (rows3; TL QA_FULL headroom ruling after F6-T2, before: QA_FULL=1)');
 R.note(`sections: ${TIMES.join(', ')}; run ${((Date.now() - t0) / 1000).toFixed(1)} s; sunDir clamp variant ${VARIANT}`);
 if (!REL) R.note('D: the maximum house with the caps (24 looks) runs in the release step only (QA_RELEASE=1; TL run-time ruling F6-T1c)');
 process.exit(R.done() ? 0 : 1);

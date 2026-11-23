@@ -58,7 +58,7 @@ async function pixels(S) { const buf = await S.page.locator('[data-pc="v3-canvas
 const rawTap = async (S, sel) => { const b = await S.page.evaluate((q) => { const r = document.querySelector(q).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }, sel); if (S.vp.touch) await S.page.touchscreen.tap(...b); else await S.page.mouse.click(...b); await S.settle(); };
 const viewTab = async (S) => { if (await S.shown('v3-tab-view')) await S.act('v3-tab-view'); };
 const pick = (v) => `css:[data-pc="v3-level"] label:has(input[value="${v}"])`;
-async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) return; const relRow = label[0] === 'E' || label === 'A roof 1280x800';   // A roof 1280x800: TL F6-T2 gate ruling (duplicate of f4-t2-model / f4-t1 A / f6-t1 D)
+async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) return; const relRow = label[0] === 'E' || ['A roof 1280x800', 'A roof 360x640', 'B interior 360x640'].includes(label);   // 360x640: out of QA_FULL (TL headroom ruling after F6-T2)   // A roof 1280x800: TL F6-T2 gate ruling (duplicate of f4-t2-model / f4-t1 A / f6-t1 D)
   if (RELONLY ? !relRow : !REL && relRow) return; const t = Date.now(); try { await fn(); } catch (e) { R.check(`${label}: ran to the end`, [String(e && e.stack || e).split('\n').slice(0, 3).join(' | ')]); } TIMES.push(`${label} ${((Date.now() - t) / 1000).toFixed(1)} s`); }
 // QA's node build of the same state (vm r128): the roof batch's item count
 function nodeRoofItems(state) { const s = Q.plain(state), h = PC.house.build(s); if (!h) return null; const world = new THREE.Group(); world.name = 'world';
@@ -68,7 +68,7 @@ function nodeRoofItems(state) { const s = Q.plain(state), h = PC.house.build(s);
 const browser = await launch();
 try {
 // ================= A. Roof switch per roof type =================
-for (const vp of [...(FULL ? [VP.phone] : []), VP.desk]) await guard(`A roof ${vp.tag}`, async () => {
+for (const vp of [...(REL ? [VP.phone] : []), VP.desk]) await guard(`A roof ${vp.tag}`, async () => {
   const S = await session(browser, vp, { three: 'real' }), T = `A ${vp.tag}`, f = [], imgs = {}; let first = true;
   for (const [name, mut] of [['flat', "s.ans.roofType = 'flat';"], ['pitched', "s.ans.roofType = 'pitched';"], ['terrace', "s.ans.roofType = 'terrace';"], ['usable flat + lift', "s.ans.roofType = 'flat'; s.ans.usableRoof = true; s.ans.lift = true;"]]) {
     await to5(S, mut); await viewTab(S); await S.act(pick('all')); await ready(S);
@@ -98,7 +98,7 @@ for (const vp of [...(FULL ? [VP.phone] : []), VP.desk]) await guard(`A roof ${v
 });
 
 // ================= B. Q18 / Q19 through stage 4 =================
-for (const vp of [...(FULL ? [VP.phone] : []), VP.desk]) await guard(`B interior ${vp.tag}`, async () => {
+for (const vp of [...(REL ? [VP.phone] : []), VP.desk]) await guard(`B interior ${vp.tag}`, async () => {
   const S = await session(browser, vp, { three: 'real' }), T = `B ${vp.tag}`, f = [];
   await to5(S); const w0 = await W(S), b0 = (await info(S)).builds;
   await S.act('btn-back'); await S.settle(); await S.act('css:[data-pc="q-interior-style"] label:has(input[value="classic"])'); await S.act('btn-next'); await ready(S);
@@ -211,8 +211,8 @@ for (const vp of [VP.phone, VP.desk]) await guard(`F undo ${vp.tag}`, async () =
   await S.end(T);
 });
 } finally { await browser.close(); }
-if (!FULL) R.note('A roof and B interior at 360x640 run with QA_FULL=1 only (TL Q-T8 run-time moves)');
+if (!REL) R.note('A roof and B interior at 360x640 run in the release step (rows3; TL QA_FULL headroom ruling after F6-T2, before: QA_FULL=1)');
 R.note('sections: ' + TIMES.join(', '));
 R.note(`runtime ${((Date.now() - t0) / 1000).toFixed(1)} s`);
-if (!REL) R.note('E (maximum-house budget) and A roof 1280x800 (TL F6-T2 gate ruling; A roof 360x640 stays QA_FULL) run in the release step only (QA_RELEASE=1; TL run-time ruling F6-T1c)');
+if (!REL) R.note('E (maximum-house budget) and A roof 1280x800 (TL F6-T2 gate ruling) run in the release step only (QA_RELEASE=1; TL run-time ruling F6-T1c)');
 process.exit(R.done() ? 0 : 1);

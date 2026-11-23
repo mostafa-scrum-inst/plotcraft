@@ -16,7 +16,7 @@ const only = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7).
 // A, C, G and K are unchanged.
 const REL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only'), REL_SECS = ['B', 'D', 'E', 'F'];
 const want0 = (sec) => !only.length || only.includes(sec);
-const want = (sec) => want0(sec) && (!RELONLY || REL_SECS.includes(sec));
+const want = (sec) => want0(sec) && (!RELONLY || REL_SECS.includes(sec)) && (!process.argv.includes('--twins-only') || ['A', 'C', 'G', 'K'].includes(sec));
 const R = collector('F2-T2 questions');
 // Open minor bugs (docs/03-tasks/F2-T2/qa-report.md): listed as KNOWN, do not fail the run. Remove an entry when fixed.
 // (F2-T2 bug 2 was listed here; fixed by the Designer in round 3 and re-tested on 2026-11-20, entry removed.)
@@ -29,7 +29,10 @@ const PHONE = VP['360x640'], LAND = VP['640x360'], TAB = VP['768x1024'], DESK = 
 // Run-time trim (QA batch 13, TL F5-T2 ruling 3): the sections marked FULL run at 360x640 + 1280x800 by default and at
 // every listed viewport with QA_FULL=1 (standing condition: run QA_FULL=1 before each feature review and whenever the
 // code these sweeps guard changes).
-const FULL = (...vps) => (process.env.QA_FULL ? vps : vps.filter((v) => v === PHONE || v === DESK));
+// TL QA_FULL headroom ruling after F6-T2 (median <= 480 s): the 640x360 / 768x1024 twins leave QA_FULL=1 and run in the
+// release step as their own row (--twins-only: only the twin viewports of A, C, G and K; f6-t1-leak.mjs --stream-only).
+const TWINS = process.argv.includes('--twins-only'), TWIN_SECS = ['A', 'C', 'G', 'K'];
+const FULL = (...vps) => (TWINS ? vps.filter((v) => v !== PHONE && v !== DESK) : vps.filter((v) => v === PHONE || v === DESK));
 import { M2, DOT, LEVEL, lab, fmtLen, fmtArea, r1, streetOf, expectFor, northText, northStored, sizeChanges, lOf, READ, syncProblems, stage2Kit, seedPlans, hintProblems, hasArea } from './stage2kit.mjs';
 const { sync, kit } = stage2Kit({ R, session });
 
@@ -41,7 +44,7 @@ const browser = await launch();
 const t0 = Date.now();
 try {
   // ======================= A. Item 1: every control by real touch updates value, readout, preview, summary =======================
-  if (want('A')) for (const vp of (process.env.QA_FULL ? [PHONE, LAND] : [PHONE])) {   // A-16 trim (QA batch 14): 640x360 with QA_FULL=1
+  if (want('A')) for (const vp of (TWINS ? [LAND] : [PHONE])) {   // A-16 trim (QA batch 14): 640x360 in the twins row (release step since F6-T2)
     const V = vp.tag, S = await kit(browser, vp);
     R.check(`${V} A sample loaded by tap is the 6.2 sample`, sampleProblems(await S.state()));
     await sync(S, 'A sample on stage 2');
@@ -467,5 +470,6 @@ try {
   }
 } finally { await browser.close(); }
 R.note(`runtime ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+if (!TWINS) R.note('the 640x360 / 768x1024 twins of A, C, G and K run in the release step (f2-t2-questions.mjs --twins-only; TL QA_FULL headroom ruling after F6-T2)');
 if (!REL) R.note('the 1280x800 passes of B, D, E and F run in the release step only (QA_RELEASE=1, f6-t1-leak.mjs --rows-only; TL ruling F6-T1c)');
 process.exit(R.done() ? 0 : 1);
