@@ -1,0 +1,113 @@
+# F6-T1c implementation notes (FS, branch f6t1c)
+
+**Base:** main d8f0ce7 (f6t1 merged, QA trim, re-timed tables), with a9f30c6 (loaded-build guard set to 1200 ms) merged in.
+
+**Approvals:** plan.md (59f5c99) and plan-review.md were approved by the TL.
+
+**Commits:**
+- e4eea12: W1
+- e79f9fe: R1–R3
+- 4d7afa4: lint
+- 66c5d87: G1 + G2, the Designer's data and goldens (meadow golden 6e228e05)
+
+## 1. What changed
+
+- **W1: hall panes (`core/house.js`, house v 3).**
+  - **Rule.** On each side of every above-ground level, take the side's extent and subtract the union of the room, stair and lift runs (TL Q-F4). The free runs left over get `glazed` panes by the room rule, with `PC.C.OPEN.hallPitch` 3.9 m in place of the room pitch.
+  - **Unchanged.** The door filter and the head clamp apply as before. `house.openings` stays in the key, and the layout golden does not change.
+  - **Counts:**
+
+    | house | openings before | openings after |
+    |---|---|---|
+    | sample | 20 | 24 |
+    | maximum | 22 | 60 |
+
+    Every facade of every level of the maximum house now has openings.
+- **R1: coping and drip edge (`roofBatch`).**
+  - **Drip edge.** The flat or terrace slab box now uses `exteriors.slab` instead of `roof`, and stands `dripOut` 0.04 m proud on every side.
+  - **Coping.** Every parapet ring gets four coping boxes (`copingT` 0.05 thick, `copingOver` 0.03 past both faces), and each stair or lift head gets a cap. The colour is the new `exteriors[*].coping`, with the Designer's hexes.
+- **R3: band strips (`roofBatch`, TL Q1).**
+  - The strips are `deckBand` face-up quads 0.005 m above the slab top (`deckLift` + `bandLift`).
+  - Inside the parapet the band is `deckW` 0.35 wide, ×0.80 at the parapet fading to ×1.
+  - Around each head it is `headW` 0.25 wide, ×0.85 fading to ×1.
+  - The strips are clipped to the deck rectangle, and fully clipped strips are skipped. Heads flush with a footprint corner therefore get fewer than 4 strips.
+  - The decals stay the last `roofBatch` items.
+- **R2: `roofDeck` (TL Q-F1 and Q2).**
+  - **Geometry.** One `BoxBatch({ uv: true })` face-up quad inside the parapet, `deckLift` 0.002 m above the slab top, with world UVs in metres. It is in the `roof` group, so Roof off and the level selector hide it.
+  - **Material.** `mats.deck`: Lambert with `color = exteriors.roof`, no vertex colours.
+  - **Map.** A new `membrane` texgen kind on flat roofs. On usable or terrace roofs it reuses the `paving` texture object (`mats.paving.map`), so there is no second upload.
+  - **Shadows.** It receives shadows and does not cast them.
+  - **Lifetime.** It is created in the scene build, as `mats.tiles` is, so disposal and context-loss restore follow the existing paths.
+
+## 2. Numbers
+
+**Texgen C-3.2** (all kinds at 512, plus the blob, best of 3, alone): 66–77 ms. That is under the TL's 130 ms line, so the check stays in the default run. The number under the gate is in §4.
+
+**Maximum house on real r128:**
+
+| measure | before T1c | after T1c |
+|---|---|---|
+| draw calls (Roof on / off) | 26 / 25 | 27 / 25 |
+| triangles | 19.4k | 22.4k |
+| meshes | 26 | 27 |
+| textures | 4 | 4 (walkable roof) |
+| loaded build, best of 3 | 414–970 | 905 ms (guard 1200 ms) |
+| C-4.8 solo build | 159 ms | 166 ms (budget 400 ms) |
+
+The loaded build is higher because the maximum house now has 60 openings, each made of decal boxes.
+
+**Dist:** 604 890 bytes.
+- The lint tripwire went from 600 000 to 700 000 (TL, CTO).
+- The real budget is now the exported `DIST_BUDGET_BYTES` = 627 302 (547 302 + 80 000, CTO C-1.3). Going over it fails with a message that asks for a CTO review.
+- That leaves about 22.4 kB of headroom.
+
+## 3. Contract changes and readers (A-16)
+
+- **`house.v` 3 and the W1 openings.**
+  - Readers: the house key and hash (with the 3D rebuild that follows it), `tests/unit/openings`, QA f6-t1-model (it takes the hallPitch rule), QA rows that hold v 2, and the Designer's verify scripts.
+  - `tests/three/detail` counts from `house.openings`, so it needs no change.
+- **Roof slab colour and size.** It is now `exteriors.slab` and ±0.04 m outside the footprint.
+  - Readers: `tests/three/roof` (the 'slab' row) and QA f4-t2-model's roof compare.
+- **`exteriors.coping`.** `EXT_KEYS` now has 9 entries.
+  - Readers: `tests/unit/data-tables` and QA f3-t3-data.
+- **`roofBatch` items.** It gains coping boxes and `deckBand` quads ahead of the decals. The parapet top is now plus `copingT`.
+  - Readers: `tests/three/roof` (the parapet top, and the pergola filter now excludes the coping) and the QA roof oracle.
+- **New mesh `roofDeck`** (in the `roof` group, now `roofBatch`, then `roofDeck`, then `roofTiles` when pitched).
+  - Meshes: sample 21, maximum 27, 28 with the highlight; vegetation at 0 % gives 17.
+  - Materials: 13 on flat and terrace roofs.
+  - Textures: 5 on a flat roof (membrane added), 4 on usable or terrace roofs. Lite widths are [256, 256, 256, 64, 256].
+  - Readers: the budget, scene, finder, tour, interior, vegetation and realism tests, view3d-real lite, and the QA mesh, material and texture rows.
+- **`PC.texgen.KINDS`** gains `membrane`.
+  - Readers: texgen.test (golden 9c057960, seams, C-3.2) and QA texture rows.
+- **Lint.** `DIST_MAX_BYTES` is now 700 000, and `DIST_BUDGET_BYTES` / `scanBudget` are new.
+  - Reader: lint.test.
+- **G1 (Designer data).** Once committed, `groundOuter` and the summer meadow become #6A8550, and the spring meadow #6F8A58.
+  - Readers: QA f3-t3-data and the f4-t3 oracle (they get the hexes from the Designer). `data-tables` needs no change, since summer still equals `groundOuter`.
+
+## 4. Tests and mutations
+
+**New tests:**
+- `openings` hall rule: run lengths, even spacing, the stair and lift subtracted, the door filter, the head clamp, sample 24, every side of the maximum house.
+- `detail` R1: coping counts and overhangs, the head caps, the drip edge, decals last, and pitched roofs get none of it.
+- `detail` R3: band height, colours, deckW, clipping, including heads flush with a corner.
+- `detail` R2: the deck's quad, UVs, material, map choice, texture counts and Roof off.
+- `texgen` membrane: golden, seam columns, and the recorded C-3.2 time.
+- `lint`: the budget at −1, 0 and +1, and the tripwire with three inlined.
+- view3d-real: `roofDeck` draws over the slab top at Reset and at rMax, with at most 2 % of pixels unchanged (no z-fight).
+
+**Mutations** (each applied once and reverted; every one is caught):
+
+| mutation | caught by |
+|---|---|
+| deck casts shadows | detail R2 |
+| parapet band ×1 | detail R3 |
+| no clamping to the deck | detail R3 (corner heads) |
+| no drip edge | detail R1 |
+| W1 ignores the lift | openings |
+| terrace makes a second paving texture | detail R2 |
+| membrane not tracked or disposed | detail R2 and realism |
+| `deckLift` 0, the z-fight | view3d-real roofDeck, 1534 / 2187 pixels unchanged at rMax |
+
+## 5. Deviations
+
+- **The R3 band** is strips in `roofBatch` (TL Q1). The membrane seams and the paving joints stop 0.35 m short of the parapet. If the Designer's shots read that as a flat rim, the TL has pre-approved a fallback (Q-F2): the band as vertex colours in `roofDeck`.
