@@ -1,7 +1,7 @@
 /* PC.three.buildShell(house, world, mats): the F4-T1 house shell into the `world` group (A-10, F4-T1 plan §5).
    ground: groundOuter (square of outerK x R, 0.05 m below, with the footprint as a hole: F5-T1 QA B-1), groundPlot (ShapeGeometry of the plot with the footprint as a hole),
    groundCap (plane over the footprint, 0.01 m up; hidden for the basement view). Per level a group "level-<id>"
-   (userData.index) with "slab" (slab box whose top face is the hall tint + one tint quad per room at 0.015 m) and
+   (userData.index) with "slab" (slab box whose top face is the hall tint; F6-T2: the floors are in textured-<level>) and
    "walls" (exterior walls with the entrance gap on the ground front wall, merged partitions along room edges, stair
    and lift as plain 1.2 m boxes, basement pit walls up to ground level). Empty "roof" and "site" groups, filled by
    build-roof.js / build-site.js; build-interior.js adds each level's "furniture" batch (F4-T2).
@@ -193,19 +193,7 @@
       var g = group('level-' + lv.id, world); g.userData.index = lv.index; g.userData.id = lv.id;
       var floorY = lv.baseY + H.slab, top = floorY + H.wallH, slab = new three.BoxBatch(), walls = new three.BoxBatch();
       box(slab, fp.u, fp.u + fp.w, fp.v, fp.v + fp.d, lv.baseY, floorY, E.slab, hall);
-      lv.rooms.forEach(function (r) {
-        slab.addQuad(X(r.u + r.w / 2), floorY + H.tintLift, Z(r.v + r.d / 2), r.w, r.d, mix(RT[r.type], I.wood, I.floorMix));
-      });
-      // F6-T1b C4 floor rings, appended after the tints: 4 trapezoids per room, outer edge tint x ringK, inner x 1
-      lv.rooms.forEach(function (r) {
-        var hex = mix(RT[r.type], I.wood, I.floorMix), k = Math.min(C.ringW, Math.min(r.w, r.d) / 2 - 0.01), o = slab.shade(hex, C.ringK), i = slab.shade(hex, 1);
-        if (k <= 0) return;
-        var a0 = X(r.u), a1 = X(r.u + r.w), b0 = Z(r.v + r.d), b1 = Z(r.v), y = floorY + H.tintLift + C.ringLift;
-        [[[a0, b0], [a1, b0], [a1 - k, b0 + k], [a0 + k, b0 + k]], [[a1, b0], [a1, b1], [a1 - k, b1 - k], [a1 - k, b0 + k]],
-          [[a1, b1], [a0, b1], [a0 + k, b1 - k], [a1 - k, b1 - k]], [[a0, b1], [a0, b0], [a0 + k, b0 + k], [a0 + k, b1 - k]]].forEach(function (q) {
-          slab.addUpQuad(q, y, [o, o, i, i], 'ring');
-        });
-      });
+      // F6-T2 I2: the room floors, the hall floor and the T1b floor rings moved to textured-<level> (buildInterior)
       var u0 = fp.u, u1 = fp.u + fp.w, v0 = fp.v, v1 = fp.v + fp.d;
       if (lv.index < 0) {                         // basement: pit walls from the basement floor to ground level
         box(walls, u0, u1, v0, v0 + t, floorY, 0, E.slab); box(walls, u0, u1, v1 - t, v1, floorY, 0, E.slab);

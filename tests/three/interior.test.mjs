@@ -8,20 +8,36 @@ import { rgbOf, sameRgb } from '../helpers/batch.mjs';
 const st = (f) => (PC) => sampleApproved(PC, f);
 const pieces = (h, id) => h.levels.find((l) => l.id === id).rooms.flatMap((r) => r.furniture.map((p) => ({ ...p, room: r })));
 
-test('one "furniture" batch per level = the model pieces: count, colour (Q18 hex through col), inside its room in T, bottom at floorY + y0', () => {
-  const E = opened(), h = E.house;
+test('F6-T2 furniture by material per level: plain parts (and part-less pieces) in "furniture", planks / weave parts in "textured-<id>" (each face on its whole cell), lamp shades in "lamps-<id>" (+ the gate lamps on G); boxes = the model parts in T, colours through col', () => {
+  const E = opened(), h = E.house, cells = E.PC.three.atlasCells(512);
   for (const lv of h.levels) {
-    const g = E.world.getObjectByName('level-' + lv.id), m = g.children.find((c) => c.name === 'furniture'), it = E.items('furniture', g), ps = pieces(h, lv.id);
-    assert.ok(m); assert.equal(it.length, ps.length); assert.ok(it.every((i) => i.kind === 'box'));
-    const floorY = lv.baseY + 0.2;
-    ps.forEach((p, i) => {
-      const b = it[i], r = p.room;
-      assert.ok(close(b.y0, floorY + p.y0) && close(b.y1, floorY + p.y0 + p.h), `${p.kind} heights`);
-      assert.ok(b.x0 >= E.X(r.u) - 2e-5 && b.x1 <= E.X(r.u + r.w) + 2e-5 && b.z1 <= E.Z(r.v) + 2e-5 && b.z0 >= E.Z(r.v + r.d) - 2e-5, `${p.kind} in ${r.id}`);
-      assert.ok(close(b.x0, E.X(p.u)) && close(b.z1, E.Z(p.v)), `${p.kind} position`);
-      assert.ok(sameRgb(b.side, rgbOf(E.PC, p.color)) && sameRgb(b.top, rgbOf(E.PC, p.color)));
+    const g = E.world.getObjectByName('level-' + lv.id), ps = pieces(h, lv.id), floorY = lv.baseY + 0.2;
+    const want = { plain: [], tex: [], lamp: [] };
+    ps.forEach((p) => {
+      if (!p.parts) want.plain.push(p);
+      else p.parts.forEach((t) => want[t.mat === 'plain' ? 'plain' : t.mat === 'lamp' ? 'lamp' : 'tex'].push({ ...t, room: p.room, kind: p.kind }));
     });
-    assert.ok(m.castShadow && m.receiveShadow);
+    const it = { plain: E.items('furniture', g), tex: E.items('textured-' + lv.id, g).filter((x) => x.kind === 'part'), lamp: E.items('lamps-' + lv.id, g).slice(0, want.lamp.length) };
+    for (const k of ['plain', 'tex', 'lamp']) {
+      assert.equal(it[k].length, want[k].length, `${lv.id} ${k}`);
+      want[k].forEach((p, i) => {
+        const b = it[k][i], r = p.room;
+        assert.ok(close(b.y0, floorY + p.y0) && close(b.y1, floorY + p.y0 + p.h), `${p.kind} heights`);
+        assert.ok(b.x0 >= E.X(r.u) - 2e-5 && b.x1 <= E.X(r.u + r.w) + 2e-5 && b.z1 <= E.Z(r.v) + 2e-5 && b.z0 >= E.Z(r.v + r.d) - 2e-5, `${p.kind} in ${r.id}`);
+        assert.ok(close(b.x0, E.X(p.u)) && close(b.z1, E.Z(p.v)), `${p.kind} position`);
+        assert.ok(sameRgb(b.side, rgbOf(E.PC, p.color)), `${p.kind} colour`);
+      });
+    }
+    const tm = g.children.find((c) => c.name === 'textured-' + lv.id), uv = E.mock.raw(E.mock.raw(tm).geometry).attrs.uv.array;
+    it.tex.forEach((b, i) => {
+      const c = cells[want.tex[i].mat];
+      for (let v = b.first; v < b.first + 24; v++) assert.ok([c.u0, c.u1].some((x) => close(x, uv[2 * v], 1e-9)) && [c.v0, c.v1].some((x) => close(x, uv[2 * v + 1], 1e-9)), 'part face = its whole cell');
+    });
+    const fm = g.children.find((c) => c.name === 'furniture'), lm = g.children.find((c) => c.name === 'lamps-' + lv.id);
+    assert.ok(fm.castShadow && fm.receiveShadow && tm.castShadow && tm.receiveShadow);
+    if (lm) assert.ok(!lm.castShadow && !lm.receiveShadow, 'lamps never cast or receive (CTO 4)');
+    const gate = lv.id === 'G' && h.site.wall && h.site.gate ? 2 : 0;
+    assert.equal(lm ? E.items('lamps-' + lv.id, g).length : 0, want.lamp.length + gate, lv.id + ' lamps + gate lamps');
   }
 });
 
@@ -39,9 +55,9 @@ test('anchors in T (Q14 mirror guard): a "back" piece touches its room\'s back i
 
 test('Q19 sparse has fewer boxes; Q18 keeps every box and changes colours; the level selector hides furniture with its level', () => {
   const full = opened(), sp = opened(st((d) => { d.ans.interior.density = 'sparse'; })), cl = opened(st((d) => { d.ans.interior.style = 'classic'; }));
-  const n = (E) => E.house.levels.reduce((k, l) => k + E.items('furniture', E.world.getObjectByName('level-' + l.id)).length, 0);
+  const n = (E) => E.house.levels.reduce((k, l) => k + E.items('furniture', E.world.getObjectByName('level-' + l.id)).length + E.items('textured-' + l.id, E.world.getObjectByName('level-' + l.id)).filter((x) => x.kind === 'part').length, 0);
   assert.ok(n(sp) < n(full), `sparse ${n(sp)} < full ${n(full)}`);
-  const g = (E) => E.items('furniture', E.world.getObjectByName('level-G'));
+  const g = (E) => E.items('furniture', E.world.getObjectByName('level-G')).concat(E.items('textured-G', E.world.getObjectByName('level-G')).filter((x) => x.kind === 'part'));
   const a = g(full), b = g(cl);
   assert.deepEqual(a.map((i) => [i.x0, i.x1, i.y0, i.y1, i.z0, i.z1]), b.map((i) => [i.x0, i.x1, i.y0, i.y1, i.z0, i.z1]));
   assert.ok(a.some((i, k) => !sameRgb(i.side, b[k].side)), 'colours change');
@@ -55,7 +71,7 @@ test('G6 budget, maximum house with everything (CD-4: 4 x 10 rooms, full, lift, 
   const E = opened(st2), i = E.info(), h = E.house;
   assert.equal(h.levels.reduce((k, l) => k + l.rooms.length, 0), 40);
   assert.ok(h.roof.usable && h.roof.stairHead && h.roof.liftHead && h.site.seating && h.site.pool && h.site.parking && h.site.gate);
-  assert.ok(i.meshCount <= 64); assert.equal(i.meshCount, 27);
+  assert.ok(i.meshCount <= 64); assert.equal(i.meshCount, 40);   // F6-T2: + glazing, 4 x (textured, lamps, glow)
   let shadow = 0; i.scene.traverse((x) => { if ((x.name === 'sun' || x.name === 'hemi') && x.castShadow) shadow++; });
   assert.equal(shadow, 1);
   const sun = i.scene.getObjectByName('sun');
@@ -67,7 +83,7 @@ test('G6 budget, maximum house with everything (CD-4: 4 x 10 rooms, full, lift, 
     const h2 = JSON.parse(JSON.stringify(h)); h2.key = 'budget-' + k;
     E.PC.view3d.close(); E.PC.view3d.open(h2, E.canvas, () => {}); E.raf.flush();
     const t0 = performance.now(); E.timer.flush(); t.push(performance.now() - t0);
-    assert.deepEqual([E.info().meshCount, E.info().builds], [27, 2 + k], 'rebuilt inside the timed step');
+    assert.deepEqual([E.info().meshCount, E.info().builds], [40, 2 + k], 'rebuilt inside the timed step');
   }
   assert.ok(Math.min(...t) < 250, `build ${Math.min(...t).toFixed(1)} ms`);
 });

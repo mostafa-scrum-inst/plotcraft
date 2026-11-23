@@ -16,7 +16,9 @@
     'children', 'traverse', 'getObjectByName', 'castShadow', 'receiveShadow', 'frustumCulled', 'renderOrder', 'lookAt',
     'updateMatrix', 'matrix'];
   var GEO = ['setAttribute', 'setIndex', 'computeVertexNormals', 'dispose'];
-  var MAT = ['color', 'vertexColors', 'transparent', 'opacity', 'side', 'dispose', 'map', 'toneMapped', 'fog', 'depthWrite'];   // F6-T1a: map .. depthWrite
+  var MAT = ['color', 'vertexColors', 'transparent', 'opacity', 'side', 'dispose', 'map', 'toneMapped', 'fog', 'depthWrite',   // F6-T1a: map .. depthWrite
+    'blending'];   // F6-T2 (CTO 1.2d): additive glow
+  var LAMBERT = MAT.concat(['emissive', 'emissiveIntensity']);   // F6-T2 (CTO 1.2): emissive colour + intensity (never an emissiveMap)
   var TEX = ['wrapS', 'wrapT', 'repeat', 'encoding', 'magFilter', 'minFilter', 'generateMipmaps', 'anisotropy', 'needsUpdate', 'dispose'];
   var WHITELIST = {
     THREE: ['REVISION', 'WebGLRenderer', 'Scene', 'Group', 'Object3D', 'Mesh', 'InstancedMesh', 'PerspectiveCamera',
@@ -24,13 +26,15 @@
       'CylinderGeometry', 'ConeGeometry', 'Shape', 'Path', 'ShapeGeometry', 'MeshLambertMaterial', 'MeshBasicMaterial',
       'Vector2', 'Vector3', 'Color', 'Matrix4', 'Quaternion', 'CatmullRomCurve3', 'sRGBEncoding', 'PCFSoftShadowMap',
       'DoubleSide',
+      // F6-T2 (CTO 1.2d): the glow pools blend additively
+      'AdditiveBlending', 'NormalBlending',
       // F6-T1a (TL plan review: every row approved; conformance-checked on real r128 in view3d-real)
       'ACESFilmicToneMapping', 'LinearEncoding', 'RGBAFormat', 'RepeatWrapping', 'LinearFilter', 'LinearMipmapLinearFilter',
       'DataTexture', 'Fog',
       // F6-T1b (plan 6.2 / 6.3): the blob texture clamps
       'ClampToEdgeWrapping'],
     WebGLRenderer: ['setPixelRatio', 'setSize', 'render', 'dispose', 'shadowMap', 'outputEncoding', 'domElement',
-      'toneMapping', 'toneMappingExposure', 'capabilities'],
+      'toneMapping', 'toneMappingExposure', 'capabilities', 'compile', 'setScissor', 'setScissorTest', 'initTexture'],   // F6-T2: compile (the build precompiles the night-only programs)
     'WebGLRenderer.shadowMap': ['enabled', 'type', 'autoUpdate', 'needsUpdate'],   // F6-T1a: on-demand shadow map
     'WebGLRenderer.capabilities': ['maxTextureSize', 'getMaxAnisotropy'],
     DataTexture: TEX,
@@ -51,7 +55,7 @@
     Float32BufferAttribute: ['array', 'needsUpdate'],
     Shape: ['moveTo', 'lineTo', 'closePath', 'holes'],
     Path: ['moveTo', 'lineTo', 'closePath'],
-    MeshLambertMaterial: MAT, MeshBasicMaterial: MAT,
+    MeshLambertMaterial: LAMBERT, MeshBasicMaterial: MAT,
     Vector2: ['x', 'y', 'set'],
     Vector3: ['x', 'y', 'z', 'set', 'copy', 'clone', 'add', 'sub', 'multiplyScalar', 'normalize', 'length', 'distanceTo', 'lerp'],
     Euler: ['x', 'y', 'z'],
@@ -259,7 +263,7 @@
   }
 
   var T = {
-    REVISION: '128', sRGBEncoding: 3001, PCFSoftShadowMap: 2, DoubleSide: 2,
+    REVISION: '128', sRGBEncoding: 3001, PCFSoftShadowMap: 2, DoubleSide: 2, NormalBlending: 1, AdditiveBlending: 2,
     ACESFilmicToneMapping: 4, LinearEncoding: 3000, RGBAFormat: 1023, RepeatWrapping: 1000, ClampToEdgeWrapping: 1001, LinearFilter: 1006, LinearMipmapLinearFilter: 1008,
     Vector2: Ctor('Vector2', function (x, y) { return V2(x, y); }),
     Vector3: Ctor('Vector3', function (x, y, z) {
@@ -410,7 +414,7 @@
 
   /* ---------------- materials ---------------- */
   function material(k, o0) {
-    var op = opts(o0, ['color', 'vertexColors', 'transparent', 'opacity', 'side', 'map', 'toneMapped', 'fog', 'depthWrite'], k);
+    var op = opts(o0, ['color', 'vertexColors', 'transparent', 'opacity', 'side', 'map', 'toneMapped', 'fog', 'depthWrite', 'emissive', 'emissiveIntensity', 'blending'], k);
     var o = base({}, k, [k, 'Material']);
     if ('vertexColors' in op && op.vertexColors !== true && op.vertexColors !== false) fail(k + ': vertexColors must be a boolean (r128: no THREE.VertexColors)');
     if ('color' in op && kind(op.color) !== 'Color') fail(k + ': color must be a THREE.Color (through PC.three.col)');
@@ -419,6 +423,13 @@
     o.vertexColors = !!op.vertexColors; o.transparent = !!op.transparent; o.opacity = 'opacity' in op ? op.opacity : 1; o.side = 'side' in op ? op.side : 0;
     if (!num(o.opacity)) fail(k + ': opacity must be a number');
     if ('map' in op && op.map !== null && kind(op.map) !== 'DataTexture') fail(k + ': map must be a texture or null');
+    if ('emissive' in op && kind(op.emissive) !== 'Color') fail(k + ': emissive must be a THREE.Color (through PC.three.col)');
+    if ('emissive' in op && k !== 'MeshLambertMaterial') fail(k + ': emissive only on Lambert materials here');
+    o.emissive = Col(undefined, true); if ('emissive' in op) raw(o.emissive).copy(op.emissive);
+    o.emissiveIntensity = 'emissiveIntensity' in op ? op.emissiveIntensity : 1;
+    if (!num(o.emissiveIntensity)) fail(k + ': emissiveIntensity must be a number');
+    o.blending = 'blending' in op ? op.blending : 1;
+    if ([1, 2].indexOf(o.blending) < 0) fail(k + ': blending must be NormalBlending or AdditiveBlending');
     o.map = op.map || null; o.toneMapped = 'toneMapped' in op ? op.toneMapped : true; o.fog = 'fog' in op ? op.fog : true; o.depthWrite = 'depthWrite' in op ? op.depthWrite : true;
     ['toneMapped', 'fog', 'depthWrite'].forEach(function (b) { if (typeof o[b] !== 'boolean') fail(k + ': ' + b + ' must be a boolean'); });
     if ([0, 1, 2].indexOf(o.side) < 0) fail(k + ': side must be a side constant');
@@ -430,6 +441,9 @@
       if (key === 'vertexColors' && typeof v !== 'boolean') fail(k + '.vertexColors must be a boolean');
       if (key === 'map' && v !== null && kind(v) !== 'DataTexture') fail(k + '.map must be a texture or null');
       if (key === 'fog' && typeof v !== 'boolean') fail(k + '.fog must be a boolean');
+      if (key === 'emissive' && kind(v) !== 'Color') fail(k + '.emissive must be a Color');
+      if (key === 'emissiveIntensity' && !num(v)) fail(k + '.emissiveIntensity must be a number');
+      if (key === 'blending') fail(k + '.blending is set at creation only');
     });
     M.created.materials.push(o);
     return wrap(o, k);
@@ -500,12 +514,29 @@
       if (arguments.length !== 3 || !num(w) || !num(h) || w <= 0 || h <= 0 || typeof style !== 'boolean') fail('renderer.setSize(w, h, updateStyle) takes two positive numbers and a boolean');
       this.size = [w, h, style]; this.calls.push(['setSize', w, h, style]);
     };
+    hide(o, 'scissor', null); hide(o, 'scissorTest', false); hide(o, 'uploads', 0); hide(o, 'uploaded', []);
+    hide(o, 'inited', []);
+    o.initTexture = function (t) { if (kind(t) !== 'DataTexture') fail('initTexture(texture)'); this.inited.push(t); };
+    o.setScissor = function (x, y, w, h) { if (arguments.length !== 4 || ![x, y, w, h].every(num)) fail('setScissor(x, y, w, h)'); this.scissor = [x, y, w, h]; };
+    o.setScissorTest = function (on) { if (typeof on !== 'boolean') fail('setScissorTest(boolean)'); this.scissorTest = on; };
     o.render = function (scene, camera) {
       if (kind(scene) !== 'Scene') fail('render(scene, camera) needs a Scene');
       if (kind(camera) !== 'PerspectiveCamera') fail('render(scene, camera) needs a PerspectiveCamera');
+      // F6-T2: a draw clipped to a 1 px scissor is the build's upload pass, not a frame: recorded apart (visible names)
+      if (this.scissorTest) {
+        if (!this.scissor || this.scissor[2] !== 1 || this.scissor[3] !== 1) fail('a scissored render is the 1 px upload pass only');
+        var up = []; raw(scene).traverse(function (x) { if (x.name && x.visible !== false) up.push(x.name); });
+        this.uploads++; this.uploaded.push(up); var sm0 = raw(this.shadowMap); if (sm0.needsUpdate) fail('the upload pass draws no shadow map'); return;
+      }
       audit(scene); this.renders++; this.calls.push(['render']);
       var sm = raw(this.shadowMap);
       if (sm.enabled && (sm.autoUpdate || sm.needsUpdate)) { this.shadowRenders++; sm.needsUpdate = false; }
+    };
+    hide(o, 'compiles', 0); hide(o, 'compiled', []);
+    o.compile = function (scene, camera) {   // F6-T2: records which named meshes were visible (would get a program)
+      if (kind(scene) !== 'Scene' || kind(camera) !== 'PerspectiveCamera') fail('compile(scene, camera)');
+      var seen = []; raw(scene).traverse(function (x) { if (x.name && x.visible !== false) seen.push(x.name); });
+      this.compiles++; this.compiled.push(seen);
     };
     o.dispose = function () { this.disposed++; };
     hide(o, '__setter', function (k, v) {

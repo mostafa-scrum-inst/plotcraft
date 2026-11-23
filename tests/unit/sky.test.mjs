@@ -135,3 +135,14 @@ test('F6-T1a fields: skyHorizon = background; skyMid / skyZenith = the key lerp 
     assert.ok(Math.abs(L.exposure - (a.exposure + (b.exposure - a.exposure) * t)) < 1e-12, `${s} ${h} exposure`);
   }
 });
+
+// F6-T2 N1 (Designer plan 2, TL review ruling 1): indoor per key, the key lerp; the other columns are untouched.
+test('F6-T2 indoor: the Designer row at the keys, lerped between, 0 at noon, presets 0 / 0 / 0.175 / 0.8667', () => {
+  const ROW = [[0, 0.6], [4.5, 0.3], [6, 0.2], [7.5, 0], [12, 0], [16, 0], [17, 0], [18, 0.35], [19.5, 1], [21, 1], [24, 0.6]];
+  assert.equal(JSON.stringify(PC.data.sky.keys.map((k) => [k.h, k.indoor])), JSON.stringify(ROW));
+  const at = (h) => PC.sky.compute(h, 'summer', 0).indoor;
+  for (const [h, v] of ROW) assert.ok(Math.abs(at(h) - v) < 1e-12, `h ${h}`);
+  const P = PC.sky.PRESETS;
+  assert.deepEqual([P.morning, P.noon, P.evening, P.night].map((h) => +at(h).toFixed(4)), [0, 0, 0.175, 0.8667]);
+  for (const s of ['spring', 'autumn', 'winter']) assert.equal(PC.sky.compute(22, s, 0).indoor, at(22), s + ': no season blend');
+});

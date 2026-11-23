@@ -17,7 +17,7 @@ test('F6-T1a: the roof group opens shown (PC.C.VIEW3D.roofOnOpen) and is shown o
   E.PC.view3d.setLevel('G'); assert.equal(g.visible, false, 'a single level selected: hidden');
   E.PC.view3d.setLevel('all'); assert.equal(g.visible, true);
   E.PC.view3d.setRoof(false); assert.equal(g.visible, false);
-  assert.equal(g.children.map((c) => c.name).join(), 'roofBatch,roofDeck', 'F6-T1c: + the deck');
+  assert.equal(g.children.map((c) => c.name).join(), 'roofBatch,glazing,roofDeck', 'F6-T1c: + the deck; F6-T2: + glazing');
 });
 
 test('Roof on = a closed exterior: wall bands of every above-ground level from floorY + 1.2 to baseY + pitch, flush, exteriors.wall', () => {
@@ -91,7 +91,7 @@ test('pitched: one gable prism, 30 degrees, ridge along the longer side (both or
     }
     assert.equal(tn.length / 3, 8, 'two quads');
     assert.ok(!it.some((i) => i.kind === 'box' && i.y0 >= h.roof.baseY - 1e-6), 'no slab or parapet under a gable');
-    assert.equal(E.info().textures.length, 5, 'grass, meadow, paving, blob (F6-T1b) + tiles');
+    assert.equal(E.info().textures.length, 6, 'grass, meadow, paving, blob (F6-T1b), interior (F6-T2) + tiles');
   }
 });
 

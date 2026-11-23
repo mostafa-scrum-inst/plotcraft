@@ -80,7 +80,7 @@ test('heads clamped to storeyH - 0.3; basements have none', () => {
 
 test('built houses: v 3 (F6-T1c W1), openings deterministic and in the key; sample counts; max house within the Designer estimate', () => {
   const s = sampleApproved(PC), h = PC.house.build(s), h2 = PC.house.build(sampleApproved(PC));
-  assert.equal(h.v, 3);
+  assert.equal(h.v, 4);   // F6-T2: v 4 (parts)
   assert.deepEqual(plain(h.openings), plain(h2.openings)); assert.equal(h.key, h2.key);
   const strip = JSON.parse(JSON.stringify(h)); strip.key = ''; strip.openings = [];
   assert.notEqual(PC.house.hash(JSON.stringify(strip)), h.key, 'the key covers the openings');

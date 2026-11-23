@@ -129,3 +129,46 @@ test('F6 dist budget (CTO C-1.3, F6-T1c): DIST_BUDGET_BYTES = 547 302 + 80 000; 
   const over = scanBudget('x'.repeat(DIST_BUDGET_BYTES + 1), 'd');
   assert.ok(over.length === 1 && /C-1\.3/.test(over[0]) && /CTO review/.test(over[0]), over[0]);
 });
+
+// CTO F6-T2 §5: the build strips whole-line JS comments (build-strip.mjs). Strings, template literals and regexes that
+// contain `//` or `/*` must come through byte for byte; only real comments that start a line go.
+test('comment strip (CTO F6-T2 §5): whole-line // and /* */ go; strings, templates and regexes holding // or /* stay', async () => {
+  const { stripComments } = await import('../../build-strip.mjs');
+  const keep = [
+    'var url = "http://example.org/a";',
+    "var s = '/* not a comment */';",
+    'var t = `line one',
+    '// inside a template: kept',
+    '  /* also inside the template: kept */',
+    'http://x.y/z`;',
+    'var re = /\\/\\/ x/g, re2 = /\\/\\*/;',
+    'var u = "a\\',
+    '// continued string line: kept";',
+    'var n = 1; // trailing comment: kept (not a whole line)',
+    'var m = 2; /* trailing block: kept */',
+    'var g = `${ "x" /* inside a substitution, not at line start */ }`;',
+  ];
+  const go = ['// whole-line comment', '    // indented whole-line comment', '/* block', ' * spanning lines', ' // a line in the block', ' */', '  /** one-line block */'];
+  const src = [go[0], keep[0], keep[1], go[1], keep[2], keep[3], keep[4], keep[5], ...go.slice(2, 6), keep[6], keep[7], keep[8], go[6], keep[9], keep[10], keep[11], ''].join('\n');
+  const { code, removed } = stripComments(src, 'case.js');
+  assert.equal(code, [...keep, ''].join('\n'));
+  assert.equal(removed, src.length - code.length);
+  // A block that ends mid-line keeps what follows it.
+  assert.equal(stripComments('/* a\n b */ var k = 1;\n', 'b.js').code, 'var k = 1;\n');
+  // The same values before and after the strip.
+  const run = (c) => new Function(c + '\nreturn [url, s, t, re.source, re2.source, u, n, m, g];')();
+  assert.deepEqual(JSON.stringify(run(code)), JSON.stringify(run(src)));
+  // A script that does not parse fails the build, before or after.
+  assert.throws(() => stripComments('var x = ;\n', 'bad.js'), /does not parse before/);
+});
+
+test('comment strip: every manifest script parses after the strip, the built page keeps each file marker, nothing is left to strip', async () => {
+  const { stripComments } = await import('../../build-strip.mjs');
+  const html = readFileSync(new URL('../../dist/index.html', import.meta.url), 'utf8');
+  const man = JSON.parse(readFileSync(new URL('../../src/manifest.json', import.meta.url), 'utf8'));
+  for (const j of man.js) assert.ok(html.includes(`<script>/* ${j.file} */\n`), j.file);
+  const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+  assert.equal(scripts.length, man.js.length);
+  for (const s of scripts) assert.doesNotThrow(() => new Function(s.replace(/<\\\/script/gi, '</script')), s.slice(0, 40));
+  scripts.forEach((s, k) => assert.equal(stripComments(s.replace(/^\/\* [^*]+ \*\/\n/, ''), man.js[k].file).removed, 0, man.js[k].file));
+});

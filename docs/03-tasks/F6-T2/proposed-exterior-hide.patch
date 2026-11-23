@@ -1,0 +1,29 @@
+diff --git a/src/js/three/scene.js b/src/js/three/scene.js
+index 8977509..fbb8675 100644
+--- a/src/js/three/scene.js
++++ b/src/js/three/scene.js
+@@ -309,6 +309,9 @@
+     var ext = S.roof && sel === 'all';
+     S.world.children.forEach(function (g) { g.children.forEach(function (m) {
+       if (m.name.indexOf('glow-') === 0) m.count = ext ? m.userData.ranges.all : m.userData.ranges.pools + m.userData.ranges.spill;
++      // F6-T2 (gate time): the furniture and the textured floors / parts are enclosed by the full walls, the opaque
++      // glazing and the roof in exterior mode, so they are not drawn there (vertex and shadow-pass cost only)
++      if (m.name === 'furniture' || m.name.indexOf('textured-') === 0) m.visible = !ext;
+     }); });
+     shadowsDirty();
+   }
+diff --git a/tests/three/indoor.test.mjs b/tests/three/indoor.test.mjs
+index dd56f35..61aed8a 100644
+--- a/tests/three/indoor.test.mjs
++++ b/tests/three/indoor.test.mjs
+@@ -60,7 +60,10 @@ test('glow-<level> (TL ruling 3): additive instances [pools][spill][patches]; sp
+     assert.equal(g.count, r.all, 'exterior (Roof on, All): every instance');
+     assert.equal(g.geometry, E.world.getObjectByName('blobs').geometry, 'the blobs\' plane (no renderer geometry created by the first night frame)');
+   }
++  const inner = () => h.levels.map((lv) => { const L = E.world.getObjectByName('level-' + lv.id); return [E.mesh('furniture', L), E.mesh('textured-' + lv.id, L)].map((m) => m.visible); });
++  assert.deepEqual(inner(), h.levels.map(() => [false, false]), 'exterior: furniture and textured floors not drawn (enclosed; gate time)');
+   V.setRoof(false);
++  assert.deepEqual(inner(), h.levels.map(() => [true, true]), 'dollhouse: drawn');
+   for (const lv of h.levels) { const g = E.world.getObjectByName('glow-' + lv.id); assert.equal(g.count, g.userData.ranges.pools + g.userData.ranges.spill, lv.id + ' dollhouse: no window patches'); }
+   V.setRoof(true); V.setLevel('G');
+   for (const lv of h.levels) { const g = E.world.getObjectByName('glow-' + lv.id); assert.equal(g.count, g.userData.ranges.pools + g.userData.ranges.spill, 'a level selected: dollhouse'); }

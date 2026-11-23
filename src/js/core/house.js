@@ -7,6 +7,8 @@
    F4-T2: furniture per room (PC.furnish, A-11; colour = the resolved Q18 hex, so Q18 changes colours and the key,
    never the boxes), roof.stairHead / liftHead on a usable roof, site.gate (only with the wall, Q7), seating and the
    north marker (site-outdoor.js). Vegetation (F4-T3) stays empty.
+   F6-T2 (plan 2, I1 / I3): every piece gains parts (null = one box; else boxes inside its envelope, in L, with resolved
+   colours and a mat), colours through the room type's palette; house v 4.
    F6-T1b (plan 6.1, Designer A2, TL Q-T9): house v 2 gains `openings` (PC.house.openings, computed before the key so
    the key covers it): glazed openings (kind 'glazed'), small ones, stair slots and the front door on the exterior walls, in L. */
 (function (PC) {
@@ -18,6 +20,40 @@
     var h = 0x811c9dc5;
     for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
     return ('0000000' + h.toString(16)).slice(-8);
+  }
+
+  // F6-T2 I1 / I3 (Designer plan 3, TL review Q5): the style with the room type's fabric / accent over it.
+  function roomStyle(style, type) { return Object.assign({}, style, (style.rooms || {})[type]); }
+  // A hex's value scaled by k (per channel, rounded, clamped): the part tone steps (k 0.85 .. 1.2).
+  function shade(hex, k) {
+    if (k === 1) return hex;
+    var out = '#';
+    for (var i = 1; i < 7; i += 2) { var c = Math.min(255, Math.round(parseInt(hex.slice(i, i + 2), 16) * k)); out += (c < 16 ? '0' : '') + c.toString(16).toUpperCase(); }
+    return out;
+  }
+  // The direction of a piece's back (z = 1) in frame P: the anchor wall (center pieces: +y along the long side as
+  // PC.furnish turns them, -x when turned), then turned by the row's face ('front' flips; 'left' / 'right' = the
+  // piece's own left / right, a = the back turned clockwise).
+  var BACK = { back: [0, 1], bl: [0, 1], br: [0, 1], front: [0, -1], fl: [0, -1], fr: [0, -1], left: [-1, 0], right: [1, 0] };
+  function backOf(row, alongX) {
+    var b = row.anchor === 'center' ? (alongX ? [0, 1] : [-1, 0]) : BACK[row.anchor], a = [b[1], -b[0]];
+    if (row.face === 'front') return [-b[0], -b[1]];
+    if (row.face === 'left') return [-a[0], -a[1]];
+    if (row.face === 'right') return a;
+    return b;
+  }
+  // The piece's parts in L: each template box [x0, x1, z0, z1, y0, y1, role, k, mat] (fractions; x across, z front to
+  // back) mapped into the placed envelope (u, v, w, d), so every part stays inside it. null without a template.
+  function partsOf(pc, row, key, rs, alongX) {
+    var T = row && row.parts && PC.data.furnitureParts[row.parts];
+    if (!T) return null;
+    var b = backOf(row, alongX), a = [b[1], -b[0]], La = a[0] ? pc.w : pc.d, Lb = b[0] ? pc.w : pc.d;
+    function span(dir, f0, f1, L, lo) { return dir > 0 ? [lo + f0 * L, lo + f1 * L] : [lo + L - f1 * L, lo + L - f0 * L]; }
+    return T.map(function (t) {
+      var ea = span(a[0] || a[1], t[0], t[1], La, a[0] ? pc.u : pc.v), eb = span(b[0] || b[1], t[2], t[3], Lb, b[0] ? pc.u : pc.v);
+      var eu = a[0] ? ea : eb, ev = a[0] ? eb : ea, role = t[6], hex = role === 'main' ? rs[key] : role.charAt(0) === '#' ? role : rs[role];
+      return { u: eu[0], v: ev[0], w: eu[1] - eu[0], d: ev[1] - ev[0], y0: pc.y0 + t[4] * pc.h, h: (t[5] - t[4]) * pc.h, color: shade(hex, t[7]), mat: t[8] };
+    });
   }
   function rect(fp, r) { return r ? { u: fp.u + r.x, v: fp.v + r.y, w: r.w, d: r.h } : null; }
 
@@ -86,6 +122,7 @@
   PC.house = {
     hash: hash,
     openings: openings,
+    parts: partsOf,   // F6-T2 (tests): (piece in L, furniture row, colour key, room style, room alongX) -> parts | null
     build: function (state) {
       var st = PC.stages.status(state);
       if (!st[3].reachable || !st[3].valid) return null;
@@ -104,8 +141,11 @@
         return {
           id: id, name: L.name(id), index: index, baseY: index * pitch,
           rooms: state.plans[id].rooms.map(function (r) {
-            var pieces = PC.furnish.room(r, PC.data.furniture[types[r.id]], a.interior.density).map(function (q) {
-              return { kind: q.kind, u: fp.u + q.x, v: fp.v + q.y, w: q.w, d: q.d, h: q.h, y0: q.y0, color: style[q.color] };
+            var table = PC.data.furniture[types[r.id]], rs = roomStyle(style, types[r.id]);
+            var pieces = PC.furnish.room(r, table, a.interior.density).map(function (q) {
+              var row = table.filter(function (t) { return t.id === q.kind; })[0], pc = { kind: q.kind, u: fp.u + q.x, v: fp.v + q.y, w: q.w, d: q.d, h: q.h, y0: q.y0, color: rs[q.color] };
+              pc.parts = partsOf(pc, row, q.color, rs, r.w >= r.h);
+              return pc;
             });
             return { id: r.id, name: names[r.id], type: types[r.id], u: fp.u + r.x, v: fp.v + r.y, w: r.w, d: r.h, area: r.w * r.h, furniture: pieces };
           }),
@@ -115,7 +155,7 @@
       var top = levels[levels.length - 1].index;
       var copy = function (o) { return o ? JSON.parse(JSON.stringify(o)) : null; };
       var house = {
-        v: 3, key: '',   // F6-T1c: v 3 (W1 hall panes change the derived openings)
+        v: 4, key: '',   // F6-T2: v 4 (furniture parts and room palettes are in the model and the key)
         center: [cu, cv], radius: radius,
         plot: { pts: site.ptsL.map(function (p) { return [p[0], p[1]]; }), area: site.plotArea },
         northDeg: PC.frames.northL(state),

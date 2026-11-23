@@ -23,12 +23,15 @@
      around each head (x headK -> x 1), clipped to the deck;
    - R2: "roofDeck", one face-up quad inside the parapet deckLift over the slab top (world UVs in metres,
      mats.deck: membrane, or the paving map on terrace / usable roofs), receives, does not cast.
-   The decals stay the last roofBatch items. */
+   The decals stay the last roofBatch items.
+   F6-T2 N2 (plan 3, TL ruling 2): the 'glass' quads move to their own mesh "glazing" in the roof group (mats.glazing:
+   Lambert, vertex colours, emissive from build time), receiving shadows without casting; userData.panes lists each
+   pane (level, kind, side, centre in T, size, wall axis and sign) for the glow pools. */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
 
-  function openings(house, b) {
+  function openings(house, b, gl, panes) {
     var O = PC.C.OPEN.decal, fp = house.footprint, E = PC.data.exteriors[house.exterior], SC = PC.data.siteColors;
     var cu = house.center[0], cv = house.center[1], byId = {};
     house.levels.forEach(function (lv) { byId[lv.id] = lv; });
@@ -43,7 +46,7 @@
       function bar(t, y, bw, bh, depth, hex) {   // a box bw along the wall, bh tall, from the plane to depth out
         var c = at(t, depth / 2); b.add(c[0], y, c[1], ax === 2 ? bw : depth, bh, ax === 2 ? depth : bw, hex);
       }
-      function quad(t, y, qw, qh, d, top, bot, kind) { var c = at(t, d); b.addQuadV(c[0], y, c[1], ax, sg, qw, qh, top, bot, kind); }
+      function quad(t, y, qw, qh, d, top, bot, kind, into) { var c = at(t, d); (into || b).addQuadV(c[0], y, c[1], ax, sg, qw, qh, top, bot, kind); }
       var f = O.frame, hw = w / 2;
       if (o.kind === 'door') {
         bar(along, ys + h / 2, w, h, O.leaf, E.door);
@@ -51,7 +54,9 @@
         bar(along - hw - f / 2, ys + h / 2, f, h, O.proud, E.frame); bar(along + hw + f / 2, ys + h / 2, f, h, O.proud, E.frame);
         return;
       }
-      quad(along, ys + h / 2, w, h, O.glass, SC.glassTop, SC.glassBottom, 'glass');
+      quad(along, ys + h / 2, w, h, O.glass, SC.glassTop, SC.glassBottom, 'glass', gl);   // F6-T2 N2: in "glazing"
+      var pc = at(along, O.glass);
+      panes.push({ level: o.level, kind: o.kind, side: o.side, i: panes.length, x: pc[0], y: ys + h / 2, z: pc[1], w: w, h: h, ax: ax, sg: sg });
       var r = O.reveal;   // the reveal band just inside the opening: top, bottom, then the two sides
       quad(along, yh - r / 2, w, r, O.revealD, reveal, reveal, 'reveal'); quad(along, ys + r / 2, w, r, O.revealD, reveal, reveal, 'reveal');
       quad(along - hw + r / 2, ys + h / 2, r, h - 2 * r, O.revealD, reveal, reveal, 'reveal'); quad(along + hw - r / 2, ys + h / 2, r, h - 2 * r, O.revealD, reveal, reveal, 'reveal');
@@ -135,9 +140,12 @@
       dk.addUpQuad([[X(D[0]), Z(D[2])], [X(D[1]), Z(D[2])], [X(D[1]), Z(D[3])], [X(D[0]), Z(D[3])]], top + R.deckLift, [w1, w1, w1, w1], 'deck');
       if (mats.deck) { deck = dk.build(mats.deck, 'roofDeck'); deck.castShadow = false; deck.receiveShadow = true; }
     }
-    openings(house, b);
+    var gl = new three.BoxBatch(), panes = [];
+    openings(house, b, gl, panes);
     var g = world.getObjectByName('roof'), m = b.build(mats.batch, 'roofBatch'), out = [];
     if (m) { g.add(m); out.push(m); }
+    var gm = gl.build(mats.glazing || mats.batch, 'glazing');   // F6-T2 N2 (TL ruling 2): receives, does not cast
+    if (gm) { gm.castShadow = false; gm.receiveShadow = true; gm.userData.panes = panes; g.add(gm); out.push(gm); }
     if (tm) { g.add(tm); out.push(tm); }
     if (deck) { g.add(deck); out.push(deck); }
     return out;

@@ -48,7 +48,7 @@ test('ground: three planes rotated -PI/2 about X at the A-10 offsets; the plot s
   assert.ok(sameRgb([col(outer).r, col(outer).g, col(outer).b], want(E.PC.data.siteColors.groundOuter)));
 });
 
-test('slab: footprint box in the bottom 0.2 m, top face = mix(hall, wood, floorMix), sides = Q10 slab; tints at +0.015', () => {
+test('slab: footprint box in the bottom 0.2 m, top face = mix(hall, wood, floorMix), sides = Q10 slab; F6-T2: no tint quads (the floors are in textured-<level>)', () => {
   for (const [ext, style] of [['sand', 'modern'], ['white', 'classic'], ['terracotta', 'minimal'], ['grey', 'modern']]) {
     const E = built((PC) => sampleApproved(PC, (d) => { d.ans.exterior = ext; d.ans.interior.style = style; }));
     const h = E.house, fp = h.footprint, cu = h.center[0], cv = h.center[1], I = E.PC.data.interiors[style], RT = E.PC.data.roomTints;
@@ -59,14 +59,7 @@ test('slab: footprint box in the bottom 0.2 m, top face = mix(hall, wood, floorM
       assert.ok(near(slab.y0, lv.baseY) && near(slab.y1, lv.baseY + H.slab));
       assert.ok(sameRgb(slab.top, rgbOf(E.PC, E.PC.three.mixHex(RT.hall, I.wood, I.floorMix))), `${ext}/${style} hall on the slab top`);
       assert.ok(sameRgb(slab.side, rgbOf(E.PC, E.PC.data.exteriors[ext].slab)), 'slab sides');
-      const quads = it.filter((x) => x.kind === 'quad');
-      assert.equal(quads.length, lv.rooms.length, 'one tint quad per room, no hall quad');
-      lv.rooms.forEach((r, i) => {
-        const q = quads[i];
-        assert.ok(near(q.y0, lv.baseY + H.slab + 0.015) && near(q.y1, q.y0));
-        assert.ok(near(q.x0, r.u - cu) && near(q.x1, r.u + r.w - cu) && near(q.z0, -(r.v + r.d - cv)) && near(q.z1, -(r.v - cv)), r.id);
-        assert.ok(sameRgb(q.top, rgbOf(E.PC, E.PC.three.mixHex(RT[r.type], I.wood, I.floorMix))), r.id + ' tint');
-      });
+      assert.equal(it.length, 1, 'the slab box only (F6-T2 I2)');
     }
   }
 });
@@ -141,13 +134,16 @@ test('stair and lift identical on every level; basement pit walls (Q10 slab) fro
   assert.equal(E.items('B', 'walls').filter((b) => sameRgb(b.side, rgbOf(E.PC, X.wall))).length, 0, 'no exterior walls in the basement');
 });
 
-test('a moved room moves its tint quad', () => {
+test('a moved room moves its floor tiles (F6-T2: in textured-<level>)', () => {
   const E1 = built(), r = E1.house.levels[0].rooms.find((x) => x.id === 'r6');
   const E2 = built((PC) => {
     const s = sampleApproved(PC), p = s.plans.G.rooms.find((x) => x.id === 'r6');
     PC.plans.applyEdit(s, 'G', { id: 'r6', x: p.x + 0.5, y: p.y, w: p.w - 0.5, h: p.h }); s.plans.G.approved = true;
     return s;
   });
-  const i = E1.house.levels[0].rooms.indexOf(r), q1 = E1.items('G', 'slab').filter((x) => x.kind === 'quad')[i], q2 = E2.items('G', 'slab').filter((x) => x.kind === 'quad')[i];
-  assert.ok(near(q2.x0 - q1.x0, 0.5) && near(q2.x1, q1.x1));
+  const r2 = E2.house.levels[0].rooms.find((x) => x.id === 'r6'), cu = E1.house.center[0];
+  const xs = (E, rr) => E.items('G', 'textured-G').filter((x) => x.kind === 'floor' && x.x0 >= rr.u - cu - 1e-5 && x.x1 <= rr.u + rr.w - cu + 1e-5 && x.z1 <= -(rr.v - E.house.center[1]) + 1e-5 && x.z0 >= -(rr.v + rr.d - E.house.center[1]) - 1e-5);
+  const a = xs(E1, r), b = xs(E2, r2);
+  assert.ok(a.length && b.length);
+  assert.ok(near(Math.min(...b.map((q) => q.x0)) - Math.min(...a.map((q) => q.x0)), 0.5) && near(Math.max(...b.map((q) => q.x1)), Math.max(...a.map((q) => q.x1))));
 });

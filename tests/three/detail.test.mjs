@@ -23,12 +23,14 @@ function faceProblems(E, name, it, want) {
 test('openings: per glazed / small / slot opening one glass quad 0.01 m out of its wall plane with the glassTop -> glassBottom gradient, facing out; 4 reveal quads at 0.02 m in frame x 0.65; the door has a leaf and no glass', () => {
   for (const sf of [null, (PC) => maxHouse(PC)]) {
     const E = opened(sf), h = E.house, PC = E.PC, it = E.items('roofBatch'), fp = h.footprint, D = PC.C.OPEN.decal;
-    const ex = PC.data.exteriors[h.exterior], SC = PC.data.siteColors, glass = it.filter((x) => x.kind === 'glass'), rev = it.filter((x) => x.kind === 'reveal');
+    // F6-T2 N2 (TL ruling 2): the glass quads live in "glazing", the reveals stay in roofBatch
+    const ex = PC.data.exteriors[h.exterior], SC = PC.data.siteColors, glass = E.items('glazing').filter((x) => x.kind === 'glass'), rev = it.filter((x) => x.kind === 'reveal');
+    assert.equal(it.filter((x) => x.kind === 'glass').length, 0, 'no glass left in roofBatch');
     const lit = h.openings.filter((o) => o.kind !== 'door');
     assert.equal(glass.length, lit.length, 'one glass quad per non-door opening');
     assert.equal(rev.length, 4 * lit.length, 'four reveal quads each');
     const planes = { front: [2, 1, E.Z(fp.v)], back: [2, -1, E.Z(fp.v + fp.d)], left: [0, -1, E.X(fp.u)], right: [0, 1, E.X(fp.u + fp.w)] };
-    const g = E.mock.raw(E.mock.raw(E.mesh('roofBatch')).geometry), col = g.attrs.color.array, pos = g.attrs.position.array;
+    const g = E.mock.raw(E.mock.raw(E.mesh('glazing')).geometry), col = g.attrs.color.array, pos = g.attrs.position.array;
     lit.forEach((o, k) => {
       const q = glass[k], [ax, sg, at] = planes[o.side], lv = h.levels.find((l) => l.id === o.level), y0 = lv.baseY + 0.2;
       const plane = ax === 2 ? [q.z0, q.z1] : [q.x0, q.x1];
@@ -37,7 +39,7 @@ test('openings: per glazed / small / slot opening one glass quad 0.01 m out of i
       const span = ax === 2 ? [q.x0 + h.center[0], q.x1 + h.center[0]] : [-q.z1 + h.center[1], -q.z0 + h.center[1]];
       assert.ok(close(span[0], o.a) && close(span[1], o.b), 'a to b along the wall');
       const n = [0, 0, 0]; n[ax] = sg;
-      assert.deepEqual(faceProblems(E, 'roofBatch', q, n), [], 'faces out of the wall');
+      assert.deepEqual(faceProblems(E, 'glazing', q, n), [], 'faces out of the wall');
       for (let i = q.first; i < q.first + 4; i++) {
         const want = pos[3 * i + 1] > (q.y0 + q.y1) / 2 ? rgbOf(PC, SC.glassTop) : rgbOf(PC, SC.glassBottom);
         assert.ok(sameRgb([col[3 * i], col[3 * i + 1], col[3 * i + 2]], want), 'glass gradient head -> sill');
@@ -99,22 +101,34 @@ test('skirts: ground level only, the slab edge and the wall base on all 4 sides 
   }
 });
 
-test('floor rings: 4 trapezoids per room just above its tint, outer edge = tint x ringK, inner = tint; footprint ring: groundRing x footK at the house -> x 1 at w, unshadowing, the ground map', () => {
-  const E = opened(), h = E.house, PC = E.PC, C = PC.C.CONTACT, H = PC.C.HOUSE, I = PC.data.interiors[h.interior.style], RT = PC.data.roomTints;
+test('F6-T2 I2 floors in textured-<level>: the hall (FL.kind.hall, tile after PM Q4) over the footprint, each room tiled on its cell grid (areas add up, UVs inside the cell minus half a texel), the T1b ring as vertex colour (x ringK at the walls -> x 1 at ringW); footprint ring: groundRing x footK at the house -> x 1 at w, unshadowing, the ground map', () => {
+  const E = opened(), h = E.house, PC = E.PC, C = PC.C.CONTACT, H = PC.C.HOUSE, FL = PC.data.floors, RT = PC.data.roomTints, FS = FL[h.interior.style];
+  const e = 0.5 / 512, cells = {};   // the texgen layout inset by half a texel, computed here (not through atlasCells)
+  PC.texgen.cells(512).forEach((c) => { cells[c.name] = { u0: c.u0 + e, v0: c.v0 + e, u1: c.u1 - e, v1: c.v1 - e }; });
   for (const lv of h.levels) {
-    const parent = E.world.getObjectByName('level-' + lv.id), m = E.mesh('slab', parent), it = itemsOf(E.mock, m);
-    const rings = it.filter((x) => x.kind === 'ring'), y = lv.baseY + H.slab + H.tintLift + C.ringLift;
-    assert.equal(rings.length, 4 * lv.rooms.length, lv.id);
-    lv.rooms.forEach((r, ri) => {
-      const tint = rgbOf(PC, PC.three.mixHex(RT[r.type], I.wood, I.floorMix)), x0 = E.X(r.u), x1 = E.X(r.u + r.w), z0 = E.Z(r.v + r.d), z1 = E.Z(r.v);
-      rings.slice(4 * ri, 4 * ri + 4).forEach((q) => {
-        assert.ok(close(q.y0, y) && close(q.y1, y), 'ring height');
+    const parent = E.world.getObjectByName('level-' + lv.id), m = E.mesh('textured-' + lv.id, parent), it = itemsOf(E.mock, m), uv = E.mock.raw(E.mock.raw(m).geometry).attrs.uv.array;
+    const y = lv.baseY + H.slab + H.tintLift, area = (q) => (q.x1 - q.x0) * (q.z1 - q.z0);
+    const hall = it.filter((x) => x.kind === 'hallFloor'), fl = it.filter((x) => x.kind === 'floor');
+    assert.ok(close(hall.reduce((a, q) => a + area(q), 0), h.footprint.w * h.footprint.d, 1e-6), lv.id + ' hall covers the footprint');
+    assert.ok(hall.every((q) => close(q.y0, y)) && fl.every((q) => close(q.y0, y + 0.01)), 'floor heights');
+    const hc = cells[FL.kind.hall];   // PM Q4: the hall takes a neutral non-plank kind
+    assert.notEqual(FL.kind.hall, 'planks', 'hall not planks (PM Q4)');
+    for (const q of hall) for (let i = q.first; i < q.first + 4; i++) { const u = uv[2 * i], w = uv[2 * i + 1]; assert.ok(u >= hc.u0 - 1e-9 && u <= hc.u1 + 1e-9 && w >= hc.v0 - 1e-9 && w <= hc.v1 + 1e-9, lv.id + ' hall uv in its kind cell'); }
+    lv.rooms.forEach((r) => {
+      const kind = FL.kind[r.type], c = cells[kind], hex = rgbOf(PC, PC.three.mixHex(FS[kind], RT[r.type], FL.tint));
+      const x0 = E.X(r.u), x1 = E.X(r.u + r.w), z0 = E.Z(r.v + r.d), z1 = E.Z(r.v), k = Math.min(C.ringW, Math.min(r.w, r.d) / 2 - 0.01);
+      const mine = fl.filter((q) => q.x0 >= x0 - 1e-5 && q.x1 <= x1 + 1e-5 && q.z0 >= z0 - 1e-5 && q.z1 <= z1 + 1e-5);
+      assert.ok(close(mine.reduce((a, q) => a + area(q), 0), r.w * r.d, 1e-6), `${r.id} tiles cover the room`);
+      for (const q of mine) {
+        assert.ok(q.x1 - q.x0 <= PC.data.textures.interior[kind].tileM + 1e-6 && q.z1 - q.z0 <= PC.data.textures.interior[kind].tileM + 1e-6, 'one cell tile at most');
         for (let i = q.first; i < q.first + 4; i++) {
-          const v = vertIn(E, m, i), edge = close(v.p[0], x0) || close(v.p[0], x1) || close(v.p[2], z0) || close(v.p[2], z1);
-          assert.ok(sameRgb(v.c, edge ? scaled(tint, C.ringK) : tint), `${r.id} ring colour`);
+          const v = vertIn(E, m, i), u = uv[2 * i], w = uv[2 * i + 1];
+          assert.ok(u >= c.u0 - 1e-9 && u <= c.u1 + 1e-9 && w >= c.v0 - 1e-9 && w <= c.v1 + 1e-9, `${r.id} uv in its cell`);
+          const dd = Math.min(v.p[0] - x0, x1 - v.p[0], v.p[2] - z0, z1 - v.p[2]), f = C.ringK + (1 - C.ringK) * Math.min(1, dd / k);
+          assert.ok(sameRgb(v.c, scaled(hex, f)), `${r.id} floor colour / ring`);
           assert.ok(v.n[1] > 0.999, 'face up');
         }
-      });
+      }
     });
   }
   const ring = E.mesh('groundRing'), ri = itemsOf(E.mock, ring), fp = h.footprint, w = PC.three.footRingW(h);
@@ -155,7 +169,7 @@ test('blobs: one instanced plane per shrub then per tree at blobY, diameter 2 x 
   PC.view3d.setLook({ hour: 12, season: 'summer' }); assert.equal(b.count, list.length, 'summer: all');
   for (const sf of [null, (P) => maxHouse(P)]) {
     const F = opened(sf); let n = 0;
-    for (const x of F.info().meshes) if (x.material.transparent) n++;
+    for (const x of F.info().meshes) if (x.material.transparent && !/^glow-/.test(x.name)) n++;   // F6-T2: additive glow outside the cap (CTO 1.2d)
     assert.ok(n <= 2, `${n} transparent meshes (TL Q-T5)`);
   }
 });
@@ -211,7 +225,7 @@ test('F6-T1c R1: coping on every parapet ring (4 boxes) and head (1 box each), c
     heads.forEach((r) => assert.ok(cop.some((x) => close(x.x1 - x.x0, r.w + 2 * R.copingOver) && close(x.z1 - x.z0, r.d + 2 * R.copingOver) && close(x.y1 - x.y0, R.copingT)), name + ' head cap'));
     const slab = it.filter((x) => x.kind === 'box' && close(x.y0, h.roof.baseY) && close(x.y1, top));
     assert.ok(slab.length === 1 && sameRgb(slab[0].side, rgbOf(PC, X.slab)) && close(slab[0].x0, E.X(fp.u) - R.dripOut) && close(slab[0].z1, E.Z(fp.v) + R.dripOut), name + ' drip edge');
-    const firstDecal = it.findIndex((x) => x.kind === 'glass');
+    const firstDecal = it.findIndex((x) => x.kind === 'reveal');   // F6-T2: the glass moved to glazing; the reveals lead the decals
     assert.ok(firstDecal > 0 && it.slice(0, firstDecal).every((x) => x.kind !== 'reveal') && it.slice(firstDecal).every((x) => ['glass', 'reveal', 'box'].includes(x.kind)), name + ' decals last');
   }
   const P = roofCase((d) => { d.ans.roofType = 'pitched'; }), it = P.items('roofBatch');
@@ -263,7 +277,7 @@ test('F6-T1c R2: roofDeck = one face-up quad inside the parapet deckLift over th
     const map = raw(raw(d.material).map), paving = raw(raw(E.mesh('paving').material).map);
     if (want === 'paving') assert.equal(map, paving, name + ': the same paving texture object');
     else assert.equal(map.image.data, PC.texgen.get('membrane', 512).data, name + ': membrane');
-    assert.equal(E.info().textures.length, want === 'paving' ? 4 : 5, name + ' textures');
+    assert.equal(E.info().textures.length, want === 'paving' ? 5 : 6, name + ' textures');   // F6-T2: + interior atlas
     E.PC.view3d.setRoof(false); assert.equal(d.parent.visible, false, 'Roof off hides it');
   }
 });

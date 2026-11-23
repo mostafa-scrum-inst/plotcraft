@@ -86,10 +86,11 @@ test('house model: furniture per room in L, colours = the Q18 hex; Q18 changes c
     const p = s.plans[l.id].rooms.find((x) => x.id === r.id);
     const want = F.room(p, PC.data.furniture[r.type], 'full');
     assert.deepEqual(plain(r.furniture.map((q) => [q.kind, q.u, q.v, q.w, q.d, q.h, q.y0])), plain(want.map((q) => [q.kind, fp.u + q.x, fp.v + q.y, q.w, q.d, q.h, q.y0])), r.id);
-    r.furniture.forEach((q, i) => assert.equal(q.color, PC.data.interiors.modern[want[i].color]));
+    const st = Object.assign({}, PC.data.interiors.modern, PC.data.interiors.modern.rooms[r.type]);   // F6-T2 I3: the room palette
+    r.furniture.forEach((q, i) => assert.equal(q.color, st[want[i].color]));
   }
   const c = PC.house.build(sampleApproved(PC, (d) => { d.ans.interior.style = 'classic'; }));
-  const boxes = (x) => x.levels.map((l) => l.rooms.map((r) => r.furniture.map((q) => [q.kind, q.u, q.v, q.w, q.d, q.h, q.y0])));
+  const boxes = (x) => x.levels.map((l) => l.rooms.map((r) => r.furniture.map((q) => [q.kind, q.u, q.v, q.w, q.d, q.h, q.y0, (q.parts || []).map((t) => [t.u, t.v, t.w, t.d, t.y0, t.h, t.mat])])));
   assert.deepEqual(plain(boxes(c)), plain(boxes(h)), 'Q18: boxes deep-equal');
   assert.notDeepEqual(c.levels[0].rooms[0].furniture.map((q) => q.color), h.levels[0].rooms[0].furniture.map((q) => q.color), 'Q18: colours differ');
   assert.notEqual(c.key, h.key);
@@ -100,4 +101,76 @@ test('house model: furniture per room in L, colours = the Q18 hex; Q18 changes c
   let best = Infinity;
   for (let i = 0; i < 3; i++) { const t0 = performance.now(), mh = PC.house.build(m); best = Math.min(best, performance.now() - t0); assert.equal(mh.levels.reduce((n, l) => n + l.rooms.length, 0), 40); }
   assert.ok(best < 50, `maximum house built in ${best.toFixed(1)} ms`);
+});
+
+// F6-T2 I1 / I3 (Designer plan 3; CTO 2.1; TL review Q5): parts from shared templates, inside the envelope; room palettes.
+const PARTS = PC.data.furnitureParts;
+test('F6-T2 part templates: fractions in [0, 1] and ordered, known roles and mats, no coplanar same-facing overlap (no z-fight)', () => {
+  const ROLES = ['main', 'fabric', 'wood', 'accent', 'white', 'metal', 'dark'], MATS = ['plain', 'planks', 'weave', 'lamp'];
+  for (const [name, T] of Object.entries(PARTS)) {
+    for (const t of T) {
+      assert.equal(t.length, 9, name);
+      for (const [i, j] of [[0, 1], [2, 3], [4, 5]]) assert.ok(t[i] >= 0 && t[j] <= 1 && t[j] - t[i] > 0.005, `${name} ${t}`);
+      assert.ok(ROLES.includes(t[6]) || /^#[0-9A-F]{6}$/.test(t[6]), `${name} role ${t[6]}`);
+      assert.ok(t[7] > 0.5 && t[7] < 1.5 && MATS.includes(t[8]), `${name} ${t}`);
+    }
+    // two parts' faces on the same plane, facing the same way, overlapping in area -> z-fight
+    const ov = (a0, a1, b0, b1) => Math.min(a1, b1) - Math.max(a0, b0) > 1e-9;
+    for (let i = 0; i < T.length; i++) for (let j = i + 1; j < T.length; j++) for (let ax = 0; ax < 3; ax++) for (const side of [0, 1]) {
+      const p = T[i], q = T[j], o = [0, 1, 2].filter((k) => k !== ax);
+      if (Math.abs(p[2 * ax + side] - q[2 * ax + side]) > 1e-9) continue;
+      assert.ok(!o.every((k) => ov(p[2 * k], p[2 * k + 1], q[2 * k], q[2 * k + 1])), `${name}: parts ${i} and ${j} share a face (axis ${ax}, side ${side})`);
+    }
+  }
+  const used = new Set(TYPES.flatMap((t) => PC.data.furniture[t].filter((p) => p.parts).map((p) => p.parts)));
+  assert.deepEqual([...used].sort(), Object.keys(PARTS).sort(), 'every template is used');
+});
+
+test('F6-T2 parts in the model: inside the envelope for every type at S / M / L and the 1.5 m rooms, every density; colours resolved', () => {
+  const st = PC.data.interiors.classic;
+  for (const type of TYPES) for (const room of rooms(type)) {
+    const table = PC.data.furniture[type];
+    for (const q of F.room(room, table, 'full')) {
+      const row = table.find((t) => t.id === q.kind);
+      const pc = { kind: q.kind, u: q.x, v: q.y, w: q.w, d: q.d, h: q.h, y0: q.y0 };
+      const parts = PC.house.parts(pc, row, q.color, Object.assign({}, st, st.rooms[type]), room.w >= room.h);
+      if (!row.parts) { assert.equal(parts, null); continue; }
+      assert.equal(parts.length, PARTS[row.parts].length);
+      for (const t of parts) {
+        const at = `${type} ${q.kind} ${room.w.toFixed(2)}x${room.h.toFixed(2)}`;
+        assert.ok(t.u >= pc.u - E && t.u + t.w <= pc.u + pc.w + E && t.v >= pc.v - E && t.v + t.d <= pc.v + pc.d + E, at + ' plan');
+        assert.ok(t.y0 >= pc.y0 - E && t.y0 + t.h <= pc.y0 + pc.h + E && t.y0 + t.h <= 1.1 + E, at + ' height');
+        assert.match(t.color, /^#[0-9A-F]{6}$/);
+      }
+    }
+  }
+});
+
+test('F6-T2 part orientation: the back (z = 1) at the anchor wall, faces turned for chairs; the desk lamp at the back', () => {
+  const s = sampleApproved(PC), h = PC.house.build(s);
+  for (const l of h.levels) for (const r of l.rooms) for (const q of r.furniture) {
+    const row = PC.data.furniture[r.type].find((t) => t.id === q.kind);
+    if (!row.parts || row.anchor === 'center' || row.face) continue;
+    // the template's last box with z1 = 1 (a back part) touches the anchor wall side of the envelope
+    const back = { back: (t) => t.v + t.d, bl: (t) => t.v + t.d, br: (t) => t.v + t.d, front: (t) => -t.v, fl: (t) => -t.v, fr: (t) => -t.v, left: (t) => -t.u, right: (t) => t.u + t.w }[row.anchor];
+    const zs = PARTS[row.parts].map((t) => t[3]), i = zs.indexOf(1), j = zs.indexOf(Math.min(...zs));
+    assert.ok(back(q.parts[i]) >= back(q.parts[j]) - E, `${r.type} ${q.kind}`);
+    assert.ok(Math.abs(back(q.parts[i]) - back({ u: q.u, v: q.v, w: q.w, d: q.d })) < 1e-9, `${r.type} ${q.kind} back on the wall side`);
+  }
+  // dining (maximum house): chairF faces the table (its back at the front, low v), chairL its back at low u
+  const mx = PC.house.build(maxHouse(PC)), dns = mx.levels.flatMap((l) => l.rooms).filter((r) => r.type === 'dining' && r.w >= r.d);
+  assert.ok(dns.length && dns.every((r) => r.furniture.some((q) => q.kind === 'chairF')), 'a dining room with chairF, along u');
+  for (const dn of dns) for (const q of dn.furniture.filter((x) => x.kind === 'chairF' || x.kind === 'chairL')) {
+    const backPart = q.parts[5];   // chair: the back is the 6th box
+    if (q.kind === 'chairF') assert.ok(Math.abs(backPart.v - q.v) < q.d * 0.05 + E, 'chairF back at low v');
+    else assert.ok(Math.abs(backPart.u - q.u) < q.w * 0.05 + E, 'chairL back at low u');
+  }
+});
+
+test('F6-T2 I3 room palettes: room types with an override take it, others the style; Q18 changes colours, never parts', () => {
+  const h = PC.house.build(sampleApproved(PC, (d) => { d.ans.interior.style = 'classic'; })), I = PC.data.interiors.classic;
+  for (const l of h.levels) for (const r of l.rooms) for (const q of r.furniture) {
+    const row = PC.data.furniture[r.type].find((t) => t.id === q.kind), o = I.rooms[r.type] || {};
+    assert.equal(q.color, o[row.color] || I[row.color], `${r.type} ${q.kind}`);
+  }
 });
