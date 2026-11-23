@@ -27,3 +27,8 @@ Keep final replies short: the files you wrote/changed, the verdict (if reviewing
 ## Models (client instruction, 2026-11-20)
 - Every role agent (CTO, PM, Tech Lead, Designer, FS, QA) runs on **Opus 5.5**. The orchestrator alone may run on Fable 5.2.
 - Agents started before this rule ran on Fable 5.2 and hit its usage limit; from 2026-11-20 06:30 each role is restarted as a fresh Opus agent. A fresh agent has no chat memory: it rebuilds context from the files on disk (brief, protocol, stories, architecture, feature plans, the task folders and `docs/status.md`), which is why everything must keep living on disk.
+
+## Addendum (2026-11-23, TL ruling F6-T1c): run-time gate measure
+- The default-run gate is the **median of three quiet runs ≤ 420 s**, with **no single run > 440 s**. "Quiet" = no other agent's full run on the machine at the same time.
+- Each run records the CPU-only `three` step time as a host-speed check.
+- This replaces the earlier "two runs" rule and the one-noise-rerun allowance.
