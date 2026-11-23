@@ -132,3 +132,43 @@ A, B, D, G and H of f1-t2 stay at both sizes. K (keyboard) and G (layout) of f2-
 | Release, stream process (parallel side) | 3 / 3 | 162.0 s |
 
 Both release processes are under the 260 s NOTE line. FS runs the confirm runs.
+
+## Addendum 4: run-time debt after F6-T1c (TL: about 45 s more maximum-house work or pure duplicates; new rows on the stream side)
+
+**New list, `STREAM_ROWS` in f6-t1-leak.mjs** (the interface agreed with FS):
+- `--max-only --stream-only` runs the 200-op stream, then these rows, in the same process.
+- `--max-only` alone runs the stream, then RELEASE_ROWS, then STREAM_ROWS.
+
+**Rows moved out of the default run.** Times are from the default run (work):
+
+| Rows | Default-run time |
+|---|---|
+| f3-t2-editor at 640x360 | 13.8 s |
+| f3-t1-stage3 A / B / C at 640x360, and A / C at 768x1024 | 8.9 s |
+| f3-t3-look at 360x740 / 768x1024 | 2.3 s |
+| f5-t1-view A step 6 (maximum house) | 8.1 s; the release side runs A whole |
+| f4-t3-view D, maximum house with the caps (24 looks) | about 7 s; the release side runs D whole |
+| f4-t2-view E (maximum-house budget) | 4.0 s |
+| f4-t1-view F G6 (maximum house, dpr 3) | 2.3 s; it is added to f4-t1's existing --release-only row on the rows side |
+
+**Check counts are kept** (default + release):
+
+| Suite | Default | Release | Total |
+|---|---|---|---|
+| f3-t2 | 121 | 63 | 184 |
+| f3-t1 | 124 | 81 | 205 |
+| f3-t3 | 150 | 84 | 234 |
+| f4-t2 | 15 | 2 | 17 |
+| f4-t3 | 25 | 1 | 26 |
+
+f5-t1 and f4-t1 keep their checks in full on the release side.
+
+**Measured on the f6t1c copy (44a9f60, the same as main after the merge) with this change, quiet machine:**
+
+| Run | Result | Wall |
+|---|---|---|
+| Default | all green, 10 279 / 0 | **392.1 s** |
+| Rows process | 11 / 11 | **238.7 s** |
+| Stream process (stream 157.4 s + 7 stream rows) | 9 / 9 | **240.7 s** |
+
+Both release processes are under the 260 s NOTE line. FS runs the three-run median gate.

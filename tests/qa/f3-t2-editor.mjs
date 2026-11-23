@@ -20,7 +20,10 @@ const R = collector('F3-T2 editor');
 const session = sessions({ R, shots: SHOTS, noShots });
 const { kit } = stage2Kit({ R, session });
 const VP = Object.fromEntries(VIEWPORTS.map((v) => [v.tag, v]));
-const RUN = [VP['360x640'], VP['640x360'], VP['1280x800']].filter((v) => !only.length || only.includes(v.tag));
+// TL ruling (F6-T1c run-time debt, before the next feature's first gate): the 640x360 pass run in the release step only
+// (QA_RELEASE=1; f6-t1-leak.mjs --stream-only runs this file with --release-only, which runs just those).
+const REL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only');
+const RUN = (RELONLY ? [VP['640x360']] : REL ? [VP['360x640'], VP['640x360'], VP['1280x800']] : [VP['360x640'], VP['1280x800']]).filter((v) => !only.length || only.includes(v.tag));
 const NAMES = { bedroom: 'Bedroom', bathroom: 'Bathroom', kitchen: 'Kitchen', living: 'Living', dining: 'Dining', majlis: 'Majlis', office: 'Office', maid: "Maid's room", storage: 'Storage', laundry: 'Laundry' };
 function myNames(a) { const out = {}, num = (id) => parseInt(id.slice(1), 10);
   for (const lv of Q.levelIds(a)) { const g = {}; for (const r of a.rooms.filter((x) => x.level === lv).sort((p, q) => num(p.id) - num(q.id))) { if (r.master) { out[r.id] = 'Master bedroom'; continue; } (g[r.type] = g[r.type] || []).push(r); }
@@ -221,4 +224,5 @@ try {
   }
 } finally { await browser.close(); }
 R.note(`runtime ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+if (!REL) R.note('the 640x360 pass runs in the release step only (QA_RELEASE=1; TL run-time ruling F6-T1c)');
 process.exit(R.done() ? 0 : 1);

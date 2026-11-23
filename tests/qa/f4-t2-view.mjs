@@ -32,6 +32,9 @@ const t0 = Date.now(), TIMES = [];
 // F6-T1 run-time moves (TL Q-T8, docs/03-tasks/F6-T1/qa-full-moves.md): A roof and B interior at 360x640 run with QA_FULL=1
 // only (their 1280x800 passes stay in the default run).
 const FULL = !!process.env.QA_FULL;
+// TL ruling (F6-T1c run-time debt): E (the maximum-house budget) run(s) in the release step only (QA_RELEASE=1; f6-t1-leak.mjs --stream-only
+// runs this file with --release-only, which runs just E).
+const REL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only');
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const SEAT_TEXT = 'Garden seating does not fit in the yard: it is left out of the 3D scene. Try a lower footprint %, fewer cars or a smaller pool.';
 const RAF = () => { const raf = window.requestAnimationFrame.bind(window); window.__raf = 0; window.requestAnimationFrame = (cb) => { window.__raf++; return raf(cb); }; };
@@ -55,7 +58,7 @@ async function pixels(S) { const buf = await S.page.locator('[data-pc="v3-canvas
 const rawTap = async (S, sel) => { const b = await S.page.evaluate((q) => { const r = document.querySelector(q).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }, sel); if (S.vp.touch) await S.page.touchscreen.tap(...b); else await S.page.mouse.click(...b); await S.settle(); };
 const viewTab = async (S) => { if (await S.shown('v3-tab-view')) await S.act('v3-tab-view'); };
 const pick = (v) => `css:[data-pc="v3-level"] label:has(input[value="${v}"])`;
-async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) return; const t = Date.now(); try { await fn(); } catch (e) { R.check(`${label}: ran to the end`, [String(e && e.stack || e).split('\n').slice(0, 3).join(' | ')]); } TIMES.push(`${label} ${((Date.now() - t) / 1000).toFixed(1)} s`); }
+async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) return; if (RELONLY ? label[0] !== 'E' : !REL && label[0] === 'E') return; const t = Date.now(); try { await fn(); } catch (e) { R.check(`${label}: ran to the end`, [String(e && e.stack || e).split('\n').slice(0, 3).join(' | ')]); } TIMES.push(`${label} ${((Date.now() - t) / 1000).toFixed(1)} s`); }
 // QA's node build of the same state (vm r128): the roof batch's item count
 function nodeRoofItems(state) { const s = Q.plain(state), h = PC.house.build(s); if (!h) return null; const world = new THREE.Group(); world.name = 'world';
   const mats = { batch: new THREE.MeshLambertMaterial({ vertexColors: true }), ground: new THREE.MeshLambertMaterial(), groundOuter: new THREE.MeshLambertMaterial(), poolWater: new THREE.MeshLambertMaterial(), trunk: new THREE.MeshLambertMaterial(), canopy: new THREE.MeshLambertMaterial(), shrub: new THREE.MeshLambertMaterial() };   // F4-T3 vegetation materials (unused before)
@@ -210,4 +213,5 @@ for (const vp of [VP.phone, VP.desk]) await guard(`F undo ${vp.tag}`, async () =
 if (!FULL) R.note('A roof and B interior at 360x640 run with QA_FULL=1 only (TL Q-T8 run-time moves)');
 R.note('sections: ' + TIMES.join(', '));
 R.note(`runtime ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+if (!REL) R.note('E (maximum-house budget) runs in the release step only (QA_RELEASE=1; TL run-time ruling F6-T1c)');
 process.exit(R.done() ? 0 : 1);

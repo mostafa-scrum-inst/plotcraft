@@ -22,7 +22,11 @@ const R = collector('F3-T3 look');
 const session = sessions({ R, shots: SHOTS, noShots });
 const D = loadTables();
 const VP = Object.fromEntries(VIEWPORTS.map((v) => [v.tag, v]));
-const RUN = [VP['360x640'], { tag: '360x740', w: 360, h: 740, touch: true }, VP['640x360'], VP['768x1024'], VP['1280x800']].filter((v) => !only.length || only.includes(v.tag));
+// TL ruling (F6-T1c run-time debt, before the next feature's first gate): the 360x740 and 768x1024 passes run in the release step only
+// (QA_RELEASE=1; f6-t1-leak.mjs --stream-only runs this file with --release-only, which runs just those).
+const REL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only');
+const RUN_ALL = [VP['360x640'], { tag: '360x740', w: 360, h: 740, touch: true }, VP['640x360'], VP['768x1024'], VP['1280x800']], RELV = ['360x740', '768x1024'];
+const RUN = RUN_ALL.filter((v) => (RELONLY ? RELV.includes(v.tag) : REL || !RELV.includes(v.tag))).filter((v) => !only.length || only.includes(v.tag));
 // PM round 7 (goals-and-stories.md, F3-S4)
 const Q18 = { modern: ['Modern', 'Graphite, dark wood, copper'], classic: ['Classic', 'Cream fabric, walnut, brass'], minimal: ['Minimal', 'Pale grey, light oak, sage'] };
 const STY = ['modern', 'classic', 'minimal'], EXT = ['sand', 'white', 'terracotta', 'grey'], KEYS = ['fabric', 'wood', 'accent', 'metal', 'dark'];
@@ -103,4 +107,5 @@ try {
     } catch (e) { R.check(`${V} crashed`, [String(e && e.stack || e)]); await S.ctx.close().catch(() => {}); }
   }
 } finally { await browser.close(); }
+if (!REL) R.note('the 360x740 and 768x1024 passes run in the release step only (QA_RELEASE=1; TL run-time ruling F6-T1c)');
 process.exit(R.done() ? 0 : 1);

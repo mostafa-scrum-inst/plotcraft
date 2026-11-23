@@ -113,13 +113,17 @@ const RELEASE_ROWS = [['f4-t1-view.mjs', '--no-shots', '--release-only'], ['f5-t
   ['f6-t1-model.mjs', '--release-only'], ['f6-t1-view.mjs', '--no-shots', '--release-only'],
   // TL ruling (F6-T1c, part b): 1280x800 logic passes of f2-t2 and f1-t2
   ['f2-t2-questions.mjs', '--no-shots', '--release-only'], ['f1-t2-flows.mjs', '--no-shots', '--release-only']];
+// STREAM_ROWS (TL ruling F6-T1c run-time debt, interface agreed with FS): rows that run in the stream process, after the
+// stream (--stream-only), so each process stays <= 260 s; --max-only alone runs stream, RELEASE_ROWS, then these.
+const STREAM_ROWS = [['f3-t2-editor.mjs', '--no-shots', '--release-only'], ['f3-t1-stage3.mjs', '--no-shots', '--release-only'], ['f3-t3-look.mjs', '--no-shots', '--release-only'],
+  /* f4-t1-view F G6 rides with its existing --release-only row on the rows side */ ['f4-t2-view.mjs', '--no-shots', '--release-only'], ['f4-t3-view.mjs', '--no-shots', '--release-only'], ['f5-t1-view.mjs', '--no-shots', '--release-only']];
 // the rows chain, started before the stream so both run side by side; each child's output is printed whole when it ends
 function runRow(f, a) { return new Promise((res) => { const t = Date.now(), out = [], c = spawn('node', [join(ROOT, 'tests/qa', f), ...a], { cwd: ROOT, env: { ...process.env, QA_RELEASE: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
   c.stdout.on('data', (d) => out.push(d)); c.stderr.on('data', (d) => out.push(d));
   c.on('close', (code) => { process.stdout.write(`--- [release] ${f} ${a.join(' ')} ---\n` + Buffer.concat(out).toString()); res({ f, a, code, s: (Date.now() - t) / 1000 }); }); }); }
 // --max-only alone: the stream, then the rows (serial, one process). run-all (TL, F6-T1c) runs the two sides as two parallel
 // processes: --max-only --stream-only (the stream, no rows) and --max-only --rows-only (the row spawns, no browser here).
-const rowsChain = async () => { const r = []; for (const [f, ...a] of RELEASE_ROWS) r.push(await runRow(f, a)); return r; };
+const rowsChain = async (list) => { const r = []; for (const [f, ...a] of list) r.push(await runRow(f, a)); return r; };
 const browser = ROWS_ONLY && MAXONLY ? null : await launch();
 try {
   let t = Date.now();
@@ -129,12 +133,12 @@ try {
   else R.note('the 200-operation maximum-house stream is its own release step: QA_RELEASE=1 or --max-only, run-all --only leak-max (TL ruling, F6-T1a gate)');
 } finally { if (browser) await browser.close(); }
 if (MAXONLY) {
-  const streamS = ROWS_ONLY ? 0 : (Date.now() - t0) / 1000, rowsT0 = Date.now(), rows = STREAM_ONLY ? [] : await rowsChain(), rowsS = (Date.now() - rowsT0) / 1000;
+  const streamS = ROWS_ONLY ? 0 : (Date.now() - t0) / 1000, rowsT0 = Date.now(), rows = [...(STREAM_ONLY ? [] : await rowsChain(RELEASE_ROWS)), ...(ROWS_ONLY ? [] : await rowsChain(STREAM_ROWS))], rowsS = (Date.now() - rowsT0) / 1000;
   for (const { f, a, code, s: rs } of rows) { TIMES.push(`${f} ${rs.toFixed(1)} s`); R.check(`[release] ${f} ${a.join(' ')} (QA_RELEASE=1): its checks pass (${rs.toFixed(1)} s)`, code === 0 ? [] : [`exit ${code}`]); }
   const all = (Date.now() - t0) / 1000, side = STREAM_ONLY ? '[leak-max] stream' : ROWS_ONLY ? '[release] rows' : '[leak-max] release step (stream + rows, serial)';
   R.note(`${side}: ${all.toFixed(1)} s (stream ${ROWS_ONLY ? '-' : streamS.toFixed(1) + ' s'}, rows ${STREAM_ONLY ? '-' : rowsS.toFixed(1) + ' s'})`);
   if (all > NOTE_S) R.note(`NOTE ${side} took ${all.toFixed(1)} s > ${NOTE_S} s (TL: two NOTE runs in a row go to the TL)`);
-  R.check(`${side}${ROWS_ONLY ? ` (${RELEASE_ROWS.length} release rows)` : STREAM_ONLY ? ' (200-op maximum-house stream)' : ` (200-op maximum-house stream + ${RELEASE_ROWS.length} release rows)`} runs in ${all.toFixed(1)} s <= ${MAX_S} s (TL limit)`, all <= MAX_S ? [] : [`${all.toFixed(1)} s`]);
+  R.check(`${side}${ROWS_ONLY ? ` (${RELEASE_ROWS.length} release rows)` : STREAM_ONLY ? ` (200-op maximum-house stream + ${STREAM_ROWS.length} stream rows)` : ` (200-op maximum-house stream + ${RELEASE_ROWS.length + STREAM_ROWS.length} release rows)`} runs in ${all.toFixed(1)} s <= ${MAX_S} s (TL limit)`, all <= MAX_S ? [] : [`${all.toFixed(1)} s`]);
 }
 R.note(`timings: ${TIMES.join(', ')}; run ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 process.exit(R.done() ? 0 : 1);

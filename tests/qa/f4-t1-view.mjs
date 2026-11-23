@@ -81,7 +81,7 @@ async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) r
 // F6-T1 run-time moves (TL Q-T8, docs/03-tasks/F6-T1/qa-full-moves.md): A 360x640, C 640x360 and D loop 360x640 run
 // in the release step only (QA_RELEASE=1; TL ruling after the 488 s QA_FULL gate: out of QA_FULL=1). --release-only runs
 // just those three (the release step: f6-t1-leak.mjs --max-only). The 1280x800 passes, C 360x640 and the mock stay default.
-const FULL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only'), REL_RE = /^(A 360x640|C 640x360|D loop 360x640)$/;
+const FULL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only'), REL_RE = /^(A 360x640|C 640x360|D loop 360x640|F G6)$/;   // F G6: TL ruling F6-T1c run-time debt (maximum house)
 const browser = await launch();
 
 // ================= A + B: acceptance and Q14 with real r128 =================
@@ -328,7 +328,7 @@ for (const [name, vp, opts] of [['aborted three.js', VP.phone, {}], ['mock failR
 });
 
 // ================= F: G6 on the maximum house at dpr 3 =================
-await guard('F G6', async () => {
+if (FULL) await guard('F G6', async () => {
   const S = await session(browser, VP.phone, { three: 'real', dpr: 3 }), T = 'F 360x640 dpr 3 real';
   await to5(S, "s.plot.pts = [[0, 0], [60, 0], [60, 50], [0, 50]]; s.ans.footprintPct = 40; s.ans.floors = 3; s.ans.basement = true; s.ans.lift = true; s.ans.pairs = []; s.ans.rooms = []; let n = 1; for (const l of ['B', 'G', '1', '2']) for (const ty of ['bedroom', 'bedroom', 'bathroom', 'office', 'storage', 'laundry', 'maid', 'bathroom']) s.ans.rooms.push({ id: 'r' + n++, type: ty, level: l, size: 'S', area: null, master: false }); s.ans.nextRoomId = n;");
   const { s, X } = await expect(S);
@@ -441,6 +441,6 @@ await guard('G controls', async () => {
 });
 
 await browser.close();
-if (!FULL) R.note('A 360x640, C 640x360 and D loop 360x640 run in the release step only (QA_RELEASE=1, f6-t1-leak.mjs --max-only; TL ruling)');
+if (!FULL) R.note('A 360x640, C 640x360, D loop 360x640 and F G6 (maximum house) run in the release step only (QA_RELEASE=1, f6-t1-leak.mjs --max-only; TL ruling)');
 R.note(`browser run ${((Date.now() - t0) / 1000).toFixed(1)} s (${TIMES.join(', ')})`);
 process.exit(R.done() ? 0 : 1);

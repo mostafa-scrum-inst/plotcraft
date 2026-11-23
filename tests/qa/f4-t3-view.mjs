@@ -60,7 +60,10 @@ async function to5(S, mut = '') {
   const ok = await ready(S); await roofTo(S, false);   // F6-T1: reference frames and metrics stay Roof-off, whatever roofOnOpen says (plan §9.3)
   return ok;
 }
-async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) return; const t = Date.now(); try { await fn(); } catch (e) { R.check(`${label}: ran to the end`, [String(e && e.stack || e).split('\n').slice(0, 3).join(' | ')]); } TIMES.push(`${label} ${((Date.now() - t) / 1000).toFixed(1)} s`); }
+// TL ruling (F6-T1c run-time debt): the maximum-house part of D runs in the release step only (QA_RELEASE=1;
+// f6-t1-leak.mjs --stream-only runs this file with --release-only, which runs D whole).
+const REL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only');
+async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) return; if (RELONLY && label[0] !== 'D') return; const t = Date.now(); try { await fn(); } catch (e) { R.check(`${label}: ran to the end`, [String(e && e.stack || e).split('\n').slice(0, 3).join(' | ')]); } TIMES.push(`${label} ${((Date.now() - t) / 1000).toFixed(1)} s`); }
 const PRESET_HOOK = { 8: 'v3-preset-morning', 12: 'v3-preset-noon', 17.5: 'v3-preset-evening', 22: 'v3-preset-night' };
 
 // ---------- the scene's look, read in the page ----------
@@ -344,6 +347,7 @@ if (HAS.look && HAS.scatter) await guard('D extras', async () => {
   await S.shot('D-evening-shadows');
   R.check(`${T}: winter shows no canopy pixels (frame = canopies forced hidden, ${a.n} px differ with them shown); at 17.5 h the trunks and canopies cast shadows that darken the frame (${c.n} px change by > 6 levels, mean luma ${c.dLum.toFixed(2)}${O1 ? `; O-1: ${c30.n} px by > 30 levels, >= 15 000` : ''})`, f);
   // maximum house with the caps: all looks, no create / dispose, mean setLook, the house never clipped by the capped box
+  if (REL) {
   const ok = await to5(S, "s.plot.pts = [[0, 0], [100, 0], [100, 100], [0, 100]]; s.ans.streetEdge = 0; s.ans.footprintPct = 15; s.ans.vegPct = 80; s.ans.floors = 3; s.ans.basement = true; s.ans.lift = true; s.ans.usableRoof = true; s.ans.roofType = 'terrace'; s.ans.pool = { on: true, size: 'L' }; s.ans.parking = { cars: 4, covered: true }; s.ans.extras = { wall: true, gate: 'right', seating: true }; s.ans.pairs = []; s.ans.rooms = []; let n = 1; for (const l of ['B', 'G', '1', '2']) for (const ty of ['bedroom', 'bathroom', 'kitchen', 'living', 'dining', 'majlis', 'office', 'maid', 'storage', 'laundry']) s.ans.rooms.push({ id: 'r' + n++, type: ty, level: l, size: 'S', area: null, master: false }); s.ans.nextRoomId = n;");
   const g = [], times = [], cap = []; const b0 = await snap(S), mem0 = await S.page.evaluate(() => JSON.stringify(PC.debug.scene().renderer.info.memory));
   if (!ok) g.push('not ready');
@@ -360,10 +364,12 @@ if (HAS.look && HAS.scatter) await guard('D extras', async () => {
   R.check(`${T}: maximum house, 100 x 100 m at 80 % (caps): 24 looks, each = my oracle with the same meshes / materials, renderer memory unchanged (no create / dispose), ${b0.meshIds.length} meshes <= 40, setLook mean ${mean.toFixed(2)} ms < 5; the house (to the roof + 1.2 m) inside the shadow box at 6 / 8 / 12 / 17.5 / 18 / 22 h`, cut(g));
   R.note(`D maximum garden shadow box: ${cap.join(', ')}`);
   await S.page.evaluate(() => PC.view3d.setLook({ hour: 18, season: 'summer' })); await ready(S); await S.shot('D-max-18h');
+  }
   await S.end(T);
 });
 
 await browser.close();
 if (!FULL) R.note('A edge hours 0 / 6 / 18 / 24 and E 640x360 / 768x1024 run with QA_FULL=1 only (TL Q-T8 run-time moves)');
 R.note(`sections: ${TIMES.join(', ')}; run ${((Date.now() - t0) / 1000).toFixed(1)} s; sunDir clamp variant ${VARIANT}`);
+if (!REL) R.note('D: the maximum house with the caps (24 looks) runs in the release step only (QA_RELEASE=1; TL run-time ruling F6-T1c)');
 process.exit(R.done() ? 0 : 1);

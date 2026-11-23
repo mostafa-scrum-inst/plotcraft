@@ -12,7 +12,11 @@ import { LEVEL, lab, fmtArea, stage2Kit } from './stage2kit.mjs';
 const SHOTS = join(ROOT, 'tests/qa/shots/F3-T1'); mkdirSync(SHOTS, { recursive: true });
 const noShots = process.argv.includes('--no-shots');
 const only = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7).split(',').filter(Boolean);
-const want = (sec) => !only.length || only.includes(sec);
+const want = (sec) => (!only.length || only.includes(sec)) && (!RELONLY || ['A', 'B', 'C'].includes(sec));
+// TL ruling (F6-T1c run-time debt, before the next feature's first gate): A, B and C at 640x360 / 768x1024 run in the release step only
+// (QA_RELEASE=1; f6-t1-leak.mjs --stream-only runs this file with --release-only, which runs just those).
+const REL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only');
+const VS = (...vs) => vs.filter((v) => { const x = v === LAND || v === TAB; return RELONLY ? x : REL || !x; });
 const R = collector('F3-T1 stage 3');
 // Open minor bugs (docs/03-tasks/F3-T1/qa-report.md): listed as KNOWN, do not fail the run. Remove an entry when fixed.
 
@@ -86,7 +90,7 @@ const browser = await launch();
 const t0 = Date.now();
 try {
   // ======================= A. sample on stage 3 at every viewport (focus items 3, 4) =======================
-  if (want('A')) for (const vp of [PHONE, LAND, TAB, DESK]) {
+  if (want('A')) for (const vp of VS(PHONE, LAND, TAB, DESK)) {
     const V = vp.tag, S = await kit(browser, vp, { keepPlans: true });
     // Load sample produced one Draft plan per level; untouched Drafts never ask (PM round 5)
     { const s = await S.state(); R.check(`${V} A Load sample: Ground and First laid out as Drafts`, ['G', '1'].every((id) => s.plans[id] && !s.plans[id].error && !s.plans[id].approved && !s.plans[id].edited) && sampleProblems(s).length === 0); }
@@ -125,7 +129,7 @@ try {
   }
 
   // ======================= B. no-layout level (focus item 4) =======================
-  if (want('B')) for (const vp of [PHONE, LAND, DESK]) {
+  if (want('B')) for (const vp of VS(PHONE, LAND, DESK)) {
     const V = vp.tag, S = await kit(browser, vp, { keepPlans: true, stage2: false });
     // the TL's case: a single 80 m² room on the First floor
     await S.page.evaluate(() => PC.store.commit((s) => { s.ans.rooms = s.ans.rooms.filter((r) => r.level !== '1'); s.ans.pairs = s.ans.pairs.filter((p) => p.every((id) => s.ans.rooms.some((r) => r.id === id))); s.ans.rooms.push({ id: 'r90', type: 'living', level: '1', size: null, area: 80, master: false }); s.ans.nextRoomId = 91; }));
@@ -144,7 +148,7 @@ try {
   }
 
   // ======================= C. maximum house: four tabs (focus item 4) =======================
-  if (want('C')) for (const vp of [PHONE, LAND, TAB, DESK]) {
+  if (want('C')) for (const vp of VS(PHONE, LAND, TAB, DESK)) {
     const V = vp.tag, S = await kit(browser, vp, { keepPlans: true, stage2: false });
     await S.page.evaluate((src) => PC.store.commit((0, eval)('(' + src + ')')), MAXHOUSE.toString());
     await S.act('btn-next'); await toStage3(S);
@@ -199,4 +203,5 @@ try {
   }
 } finally { await browser.close(); }
 R.note(`runtime ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+if (!REL) R.note('A, B and C at 640x360 / 768x1024 run in the release step only (QA_RELEASE=1; TL run-time ruling F6-T1c)');
 process.exit(R.done() ? 0 : 1);

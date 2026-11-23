@@ -51,7 +51,7 @@ async function to5(S, mut = '') {
     PC.store.commit((s) => { for (const id in s.plans) if (!s.plans[id].error) s.plans[id].approved = true; }, { nav: true }); PC.store.go(4); PC.store.go(5); }, mut);
   return ready(S);
 }
-async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) return; const t = Date.now(); try { await fn(); } catch (e) { R.check(`${label}: ran to the end`, [String(e && e.stack || e).split('\n').slice(0, 3).join(' | ')]); } TIMES.push(`${label} ${((Date.now() - t) / 1000).toFixed(1)} s`); }
+async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) return; if (RELONLY && label[0] !== 'A') return; const t = Date.now(); try { await fn(); } catch (e) { R.check(`${label}: ran to the end`, [String(e && e.stack || e).split('\n').slice(0, 3).join(' | ')]); } TIMES.push(`${label} ${((Date.now() - t) / 1000).toFixed(1)} s`); }
 const viewTab = async (S) => { if (await S.shown('v3-tab-view')) await S.act('v3-tab-view'); };
 const tourTab = async (S) => { if (await S.shown('v3-tab-tour')) await S.act('v3-tab-tour'); };
 const pick = (v) => `css:[data-pc="v3-level"] label:has(input[value="${v}"])`;
@@ -121,6 +121,9 @@ const PXDIFF = ([a, b]) => Promise.all([a, b].map((s) => new Promise((res) => { 
 // F6-T1 run-time moves (TL Q-T8, docs/03-tasks/F6-T1/qa-full-moves.md): the mouse-down and arrow-key cancels and the
 // frame-by-frame flight judgement after the first pick run with QA_FULL=1 only (the wheel cancel and the keyboard pick's
 // recorded flight stay in the default run; every pick still lands on my pose).
+// TL ruling (F6-T1c run-time debt): step 6 of A (the maximum house) runs in the release step only (QA_RELEASE=1;
+// f6-t1-leak.mjs --stream-only runs this file with --release-only, which runs A whole: the sample part, then step 6).
+const REL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only');
 const FULL = !!process.env.QA_FULL, flightMore = (rec, tag, o) => (FULL ? flightProblems(rec, tag, o).f : []);
 const OBS = [], LAP = []; let lapT = Date.now(); const lap = (n) => { const t = Date.now(); LAP.push(`${n} ${((t - lapT) / 1000).toFixed(1)}`); lapT = t; };
 const MAXMUT = "s.plot.pts = [[0, 0], [60, 0], [60, 50], [0, 50]]; s.ans.streetEdge = 0; s.ans.footprintPct = 40; s.ans.floors = 3; s.ans.basement = true; s.ans.lift = true; s.ans.usableRoof = true; s.ans.roofType = 'terrace'; s.ans.pool = { on: true, size: 'L' }; s.ans.parking = { cars: 4, covered: true }; s.ans.extras = { wall: true, gate: 'right', seating: true }; s.ans.pairs = []; s.ans.rooms = []; let n = 1; for (const l of ['B', 'G', '1', '2']) for (const ty of ['bedroom', 'bathroom', 'kitchen', 'living', 'dining', 'majlis', 'office', 'maid', 'storage', 'laundry']) s.ans.rooms.push({ id: 'r' + n++, type: ty, level: l, size: 'S', area: null, master: false }); s.ans.nextRoomId = n;";
@@ -231,6 +234,7 @@ await guard('A 1280x800', async () => {
   R.check(`${T}: "All", another level, Reset view, "Go to room…" (Roof on: check 2), a Q18 rebuild and a context restore each clear the highlight (disposed: geometry count back to the no-selection count), the caption and the select (Reset / rebuild / restore also stop the flight); leaving stage 5 mid-flight stops the flight for good`, cut(cl));
   lap('leave');
   // 6. the maximum house in the same page: 40 rooms, a basement pick (landed), a second-floor pick, mesh budget
+  if (REL) {
   const T2 = 'A 1280x800 maximum house', m = [];
   await to5(S, MAXMUT); await tourTab(S);
   const hm = await S.page.evaluate(HOUSE), Lm = await S.page.evaluate(LIMITS), gm = F.myGroups(hm), sm = await S.page.evaluate(SELECT), m0 = (await S.page.evaluate(STATE)).meshes;
@@ -270,6 +274,7 @@ await guard('A 1280x800', async () => {
     if (r.magIn > 0 || r.mag === 0) leak.push(`level ${lv}, Roof ${roof ? 'on' : 'off'}, ${side ? 'low side' : 'Reset'}: ${r.magIn} groundOuter px inside the footprint (${r.mag} in all)`); }
   m.push(...cut(leak, 4));
   R.check(`${T2}: 40 options in 4 groups; a basement pick opens the ground (level B, groundCap hidden) at phi 15 degrees with the levels above hidden, the eye line into the pit, the highlight in the real r128 frame, and lands on my pose; a second-floor pick follows the rules; meshes ${m0} + 1 = 22 <= 40; groundOuter never inside the footprint (B, All, G, 2 with Roof off / on, Reset and a low side pose: 8 views, B-1 class)`, cut(m));
+  }
   await S.end(T);
 });
 
@@ -302,4 +307,5 @@ for (const o of OBS) R.note(o);
 if (process.env.QA_LAPS) R.note(`laps: ${LAP.join(', ')}`);
 if (!FULL) R.note('the mouse-down / arrow-key cancels and the per-frame flight judgement after the first pick run with QA_FULL=1 only (TL Q-T8)');
 R.note(`sections: ${TIMES.join(', ')}; run ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+if (!REL) R.note('A step 6 (the maximum house) runs in the release step only (QA_RELEASE=1; TL run-time ruling F6-T1c)');
 process.exit(R.done() ? 0 : 1);
