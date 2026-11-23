@@ -15,7 +15,7 @@
 //   QA_RELEASE=1 or --only leak-max                 also the release step, after the pool: QA's 200-op maximum-house
 //                                                  leak stream plus QA's STREAM_ROWS, and the release rows
 //                                                  (tests/qa/f6-t1-leak.mjs --max-only --stream-only / --rows-only / --rows3-only),
-//                                                  three processes in parallel (F6-T2: + --rows3-only), each limit 300 s (NOTE above 260 s);
+//                                                  three processes, one at a time (F6-T2: + --rows3-only; RELEASE_JOBS=N), each limit 300 s (NOTE above 260 s);
 //                                                  times and wall time reprinted at the end
 //   --write-durations                              after a green full run, rewrite tests/durations.json (commit it
 //                                                  with the run)
@@ -110,13 +110,19 @@ const failed = soloFailed.concat(await pool(longestFirst(browser)));
 // wall time are printed again at the end like the C-4.8 line.
 if (process.env.QA_RELEASE || words.includes('leak-max')) {
   const leak = join(here, 'qa', 'f6-t1-leak.mjs'), t = Date.now();
-  const parts = [['leak-max stream', '--stream-only'], ['release rows', '--rows-only'], ['sample stream + rows3', '--rows3-only']];
-  console.log(`\n=== release step: ${parts.map((p) => p[0]).join(' + ')}, in parallel (own processes, after the pool) ===`);
-  const runs = await Promise.all(parts.map(([name, flag]) => new Promise((res) => {
+  // F6-T2 gate: three processes, one at a time by default (RELEASE_JOBS=N for more). On this 4-core machine three side
+  // by side read 347-378 s each (the 200-op stream's picks timed out under that load) and two at a time 287 / 297 s
+  // (NOTE), against 203-225 s solo; CTO §6.2 wants each <= 260 s
+  const parts = [['release rows', '--rows-only'], ['leak-max stream', '--stream-only'], ['sample stream + rows3', '--rows3-only']];
+  const RJ = Math.max(1, +(process.env.RELEASE_JOBS || 1));
+  console.log(`\n=== release step: ${parts.map((p) => p[0]).join(' + ')}, ${RJ} at a time (own processes, after the pool) ===`);
+  const one = ([name, flag]) => new Promise((res) => {
     const t0 = Date.now(), child = spawn(process.execPath, [leak, '--max-only', flag, '--no-shots'], { cwd: root, env: Object.assign({}, process.env, { QA_RELEASE: '1' }), stdio: ['ignore', 'pipe', 'pipe'] });
     let out = ''; child.stdout.on('data', (d) => { out += d; }); child.stderr.on('data', (d) => { out += d; });
     child.on('close', (code) => res({ name, flag, code, out, sec: (Date.now() - t0) / 1000 }));
-  })));
+  });
+  const runs = new Array(parts.length); let next = 0;
+  await Promise.all(Array.from({ length: Math.min(RJ, parts.length) }, async () => { while (next < parts.length) { const k = next++; runs[k] = await one(parts[k]); } }));
   for (const r of runs) {
     const label = `release qa/f6-t1-leak.mjs --max-only ${r.flag}`, over = r.sec > 300;
     console.log(`\n=== ${label} ===`); process.stdout.write(r.out);
@@ -124,7 +130,7 @@ if (process.env.QA_RELEASE || words.includes('leak-max')) {
     soloLines.push(`  [leak-max] release step, ${r.name}: ${r.sec.toFixed(1)} s, limit 300 s, ${r.code === 0 ? 'checks passed' : 'checks FAILED'}${over ? ' — OVER the limit' : r.sec > 260 ? ' — NOTE above 260 s: TL review' : ''}`);
     if (r.code !== 0 || over) failed.push(label);
   }
-  soloLines.push(`  [leak-max] release step wall time: ${((Date.now() - t) / 1000).toFixed(1)} s (${parts.length} processes in parallel)`);
+  soloLines.push(`  [leak-max] release step wall time: ${((Date.now() - t) / 1000).toFixed(1)} s (${parts.length} processes, ${RJ} at a time)`);
 }
 if (soloLines.length) console.log('\n' + soloLines.join('\n'));
 if (failed.length) console.log('\nfailed: ' + failed.join(', '));
