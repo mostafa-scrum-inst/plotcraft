@@ -65,3 +65,20 @@ VERDICT: APPROVED
 - **QA's run:** a + b moved about 41 s of work. QA's quiet default run took 411.7 s. The release processes took 235.1 s (rows) and 162.0 s (stream). No check was lost.
 - **Gate:** still open until FS's two quiet confirm runs are in.
 - **Release rows process:** at 235 s it has 25 s left under the 260 s NOTE line. The next feature that moves rows there must split it or re-balance it.
+
+## Addendum 2 (gate ruling, f6t1c 54b7455): final
+- **FS runs:** five quiet runs, all green: 417.4, 441.3, 427.6, 409.7 and 430.0 s.
+  - Wall time tracks pool work at 0.355 in every run. The CPU-only `three` step swings with it (15.0–17.6 s), and steal time was 14–18 s per run.
+  - So host speed causes about ±20 s of the spread.
+- **The runs on the new table do not meet the gate on any honest measure.** Their mean is 427 s and their median about 429 s. Picking the two best runs is not the measure.
+- **The run-time line still holds, but it protects test iteration, not the product.** The product code is approved (findings 2–8), so this miss does not hold back the merge and publish.
+- **Ruling:**
+  1. **T1c may merge to main and publish now.** The run-time overage (median about 429 s) is recorded as test-infra debt.
+  2. **Before the first gate of the next feature, on main:** QA moves about 45 s more maximum-house work, or other pure duplicates, out of the default run. FS rebalances the two release processes so each stays ≤ 260 s; the stream process, at 162 s, takes the new rows.
+  3. **New gate measure, project-wide, from the next gate:**
+     - three quiet default runs;
+     - the median ≤ 420 s, with no run over 440 s;
+     - the `three` step time recorded for each run as a host-speed reference.
+     This replaces "two runs" and the one-re-run noise rule. The orchestrator should add it to TEAM-PROTOCOL.md.
+
+VERDICT: APPROVED
