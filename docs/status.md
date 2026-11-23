@@ -331,3 +331,4 @@
 - [TL] F6-T2 QA rows 175d20d accepted (exterior-hide rows, third release process 129.5 s, stream 181 s); condition: 10-op sample real-r128 leak smoke stays in default run.
 - [TL] F6-T2 default leak smoke in (QA b2477cb, 10 ops, 4.9–6.7 s); condition met.
 - [QA] F6-T2 default trim 2: f4-t1 A2 (Q10 rebuilds + Q14 3D) and D loop desk, f4-t2-view A roof desk to rows3; f4-t2-s0-ui 1280x800 to rows side; f4-t1 release row moved rows -> rows3. About 46 s solo out of default; rows3 208 s, rows 225 s solo.
+- [QA] F6-T2 5ccfd2b: smoke mutations caught (undisposed removal 26 > 24; mesh leak 31 vs 26). Three QA_FULL + QA_RELEASE runs green, no flake: 1091.8 / 1141.0 / 1144.9 s; release wall 615.3 / 644.9 / 666.5 s (RELEASE_JOBS 1); QA_FULL part 476.5 / 496.1 / 478.4 s (run 2 over 480: NOTE to TL); C-4.8 71 / 59 / 58 ms. Functional sign-off given; QA_FULL time to TL.
