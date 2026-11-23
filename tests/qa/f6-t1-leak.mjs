@@ -108,7 +108,11 @@ async function probeRun(browser, label, mut, n, seed, vp = VP_FULL) {
 // parallel processes; --stream-only / --rows-only run one side). The whole step stays <= 300 s (NOTE above 260 s on the longer side). It runs in every implementation-review gate (with QA_FULL) and at release.
 const RELEASE_ROWS = [['f4-t1-view.mjs', '--no-shots', '--release-only'], ['f5-t3-view.mjs', '--no-shots', '--release-only'], ['f4-t2-s0-ui.mjs', '--no-shots', '--only=640x360'],
   // TL default-run trim (docs/03-tasks/F6-T1/qa-default-trim.md rows 1-7): the desktop / landscape twins moved out of the default run
-  ['f2-t3-site-rooms.mjs', '--no-shots', '--release-only'], ['f1-t3-plot.mjs', '--no-shots', '--release-only'], ['f1-t1-layout.mjs', '--no-shots', '--release-only']];
+  ['f2-t3-site-rooms.mjs', '--no-shots', '--release-only'], ['f1-t3-plot.mjs', '--no-shots', '--release-only'], ['f1-t1-layout.mjs', '--no-shots', '--release-only'],
+  // TL ruling (F6-T1c default run 426 s): the maximum-house parts of the T1c rows
+  ['f6-t1-model.mjs', '--release-only'], ['f6-t1-view.mjs', '--no-shots', '--release-only'],
+  // TL ruling (F6-T1c, part b): 1280x800 logic passes of f2-t2 and f1-t2
+  ['f2-t2-questions.mjs', '--no-shots', '--release-only'], ['f1-t2-flows.mjs', '--no-shots', '--release-only']];
 // the rows chain, started before the stream so both run side by side; each child's output is printed whole when it ends
 function runRow(f, a) { return new Promise((res) => { const t = Date.now(), out = [], c = spawn('node', [join(ROOT, 'tests/qa', f), ...a], { cwd: ROOT, env: { ...process.env, QA_RELEASE: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
   c.stdout.on('data', (d) => out.push(d)); c.stderr.on('data', (d) => out.push(d));

@@ -170,7 +170,11 @@ function decalProblems(tag, s, h) {
 
 const fo = [], fd = [], counts = [];
 let skipped = 0;
-for (const [tag, mut] of CASES) {
+// TL ruling (F6-T1c default run 426 s): the maximum house runs in the release step only (QA_RELEASE=1; --release-only runs
+// just it, from f6-t1-leak.mjs --rows-only); the sample, the named cases and the fuzz houses stay in the default run
+const REL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only'), isMax = (t) => t.startsWith('maximum house');
+const RUN_CASES = CASES.filter(([t]) => (RELONLY ? isMax(t) : REL || !isMax(t)));
+for (const [tag, mut] of RUN_CASES) {
   const s = make(mut), h = PC.house.build(s);
   if (!h) { if (tag.startsWith('fuzz')) { skipped++; continue; } fo.push(`${tag}: no house`); continue; }
   if (want('O')) {
@@ -184,9 +188,9 @@ if (want('O')) {
   // the key follows the openings: a change that moves only an opening-relevant edge changes the key
   const a = PC.house.build(make()), b = PC.house.build(make((s) => { s.ans.exterior = s.ans.exterior === 'sand' ? 'white' : 'sand'; }));
   if (a.key === b.key) fo.push('the key does not change with the exterior (control)');
-  R.check(`O openings (plan §6.1, my rules) on ${CASES.length} houses: on a room edge of their side, kind by room type, sizes / sill / head (<= storeyH - 0.3), 0.6 m end and door clearances, glazed count and even spacing, one slot per stair edge, one door at the entrance, sorted, no basement, deterministic`, cut(fo));
-  R.note(`O counts: ${counts.filter((c) => !c.startsWith('fuzz')).join('; ')}; fuzz ${CASES.length - 9 - skipped} houses built (${skipped} without a model)`);
+  R.check(`O openings (plan §6.1, my rules) on ${RUN_CASES.length} houses: on a room edge of their side, kind by room type, sizes / sill / head (<= storeyH - 0.3), 0.6 m end and door clearances, glazed count and even spacing, one slot per stair edge, one door at the entrance, sorted, no basement, deterministic`, cut(fo));
+  R.note(`O counts: ${counts.filter((c) => !c.startsWith('fuzz')).join('; ')}; fuzz ${RUN_CASES.filter(([t]) => t.startsWith('fuzz')).length - skipped} houses built (${skipped} without a model)`);
 }
-if (want('D')) R.check(`D roofBatch decals: one glass quad per pane on the outer wall plane 0.01 m proud (glassTop above / glassBottom below), 4 reveal quads each, the door leaf in exteriors.door across the entrance, nothing more than 0.09 m outside the footprint (${CASES.length} houses)`, cut(fd));
+if (want('D')) R.check(`D roofBatch decals: one glass quad per pane on the outer wall plane 0.01 m proud (glassTop above / glassBottom below), 4 reveal quads each, the door leaf in exteriors.door across the entrance, nothing more than 0.09 m outside the footprint (${RUN_CASES.length} houses)`, cut(fd));
 R.note(`run ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 process.exit(R.done() ? 0 : 1);

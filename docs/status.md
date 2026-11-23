@@ -311,4 +311,4 @@
 - [TL] F6-T1c dist tripwire 600000→700000 approved (C-1.3 627 kB budget unchanged, ~22 kB left; CTO informed).
 - [TL] CTO condition on dist: DIST_BUDGET_BYTES 627302 named constant + boundary test in T1c; FS told.
 - [TL] QA_FULL trim 2 accepted (b29b95a, 450.9 s); release step → two parallel processes in T1c (NOTE 260/limit 300 each), NOTE 290 s until then.
-- [QA] F6-T1c rows (version-aware, marker PC.C.ROOF.copingT / PC.C.OPEN.hallPitch): coping table, G1 meadow, W1 hall-window oracle (house v 3), drip edge / coping / roofDeck / deck bands (deckLift 0.01), roofDeck on real r128, mesh counts 21/27/28; f6-t1-leak --stream-only / --rows-only for the TL's parallel release step (260 s NOTE per process). Green on f6t1c a4f62da and on f6t1.
+- [QA] F6-T1c default-run trim (TL a + b): max-house parts of f6-t1-view B/D and f6-t1-model, f2-t2 B/D/E/F and f1-t2 C/E/F/I at 1280x800 into the release rows process; f6t1c copy default 411.7 s green, release rows 235.1 s / stream 162.0 s.

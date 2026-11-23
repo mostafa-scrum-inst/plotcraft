@@ -11,7 +11,12 @@ import * as Q from './f2-t1-ref.mjs';
 const SHOTS = join(ROOT, 'tests/qa/shots/F2-T2'); mkdirSync(SHOTS, { recursive: true });
 const noShots = process.argv.includes('--no-shots');
 const only = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7).split(',').filter(Boolean);
-const want = (sec) => !only.length || only.includes(sec);
+// TL ruling (F6-T1c default run 426 s, part b): the 1280x800 passes of B, D, E and F run in the release step only
+// (QA_RELEASE=1; f6-t1-leak.mjs --rows-only runs this file with --release-only, which runs just those). 360x640 keeps them;
+// A, C, G and K are unchanged.
+const REL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only'), REL_SECS = ['B', 'D', 'E', 'F'];
+const want0 = (sec) => !only.length || only.includes(sec);
+const want = (sec) => want0(sec) && (!RELONLY || REL_SECS.includes(sec));
 const R = collector('F2-T2 questions');
 // Open minor bugs (docs/03-tasks/F2-T2/qa-report.md): listed as KNOWN, do not fail the run. Remove an entry when fixed.
 // (F2-T2 bug 2 was listed here; fixed by the Designer in round 3 and re-tested on 2026-11-20, entry removed.)
@@ -120,7 +125,7 @@ try {
   }
 
   // ======================= B. Item 3: bad input =======================
-  if (want('B')) for (const vp of [PHONE, DESK]) {
+  if (want('B')) for (const vp of (RELONLY ? [DESK] : REL ? [PHONE, DESK] : [PHONE])) {
     const V = vp.tag, S = await kit(browser, vp, { max5: true });
     // [typed text, unit, expected stored metres or null = refused]; written from 4.1 (0-20 m) and R4, not from the code
     const CASES = [['', 'm', null], ['abc', 'm', null], ['1e2', 'm', null], ['0x10', 'm', null], ['-1', 'm', null], ['25', 'm', null], ['20.01', 'm', null], ['1.2.3', 'm', null], ['3,5,1', 'm', null], ['- 2', 'm', null],
@@ -220,7 +225,7 @@ try {
   }
 
   // ======================= D. Item 6: conflicts and warnings through the UI =======================
-  if (want('D')) for (const vp of [PHONE, DESK]) {
+  if (want('D')) for (const vp of (RELONLY ? [DESK] : REL ? [PHONE, DESK] : [PHONE])) {
     const V = vp.tag;
     const blockedNext = async (L, blocked) => { const b = await S.bar(); R.check(`${V} D ${L}: Next ${blocked ? 'disabled' : 'enabled'}`, b.next === !blocked ? [] : [JSON.stringify(b)]); };
     let S = await kit(browser, vp, { max5: true });
@@ -280,7 +285,7 @@ try {
   }
 
   // ======================= E. Item 7: R5 with seeded valid plans =======================
-  if (want('E')) for (const vp of [PHONE, DESK]) {
+  if (want('E')) for (const vp of (RELONLY ? [DESK] : REL ? [PHONE, DESK] : [PHONE])) {
     const V = vp.tag;
     let S = await kit(browser, vp, { max5: true }); await seedPlans(S); await sync(S, 'E seeded');
     const names = (t) => ['Ground floor', 'First floor'].every((n) => t.includes(n));
@@ -369,7 +374,7 @@ try {
   // A-16 trim (F4-T1 QA round): 768x1024 removed here. Twin: tests/e2e/questions.spec.mjs defaultsAndGroups at 768x1024
   // (groups, progress, defaults, Continue, persistence) and gateAndRiders at 768x1024 (Skip / snap riders), as named by
   // the F3-T3 trim. F keeps 360x640 and 1280x800.
-  if (want('F')) for (const vp of [PHONE, DESK]) {
+  if (want('F')) for (const vp of (RELONLY ? [DESK] : REL ? [PHONE, DESK] : [PHONE])) {
     const V = vp.tag;
     let S = await kit(browser, vp, { plot: [[0, 0], [20, 0], [20, 20], [0, 20]] });
     R.check(`${V} F hand-made plot: no banner on stage 2`, (await S.banners()).length === 0);
@@ -462,4 +467,5 @@ try {
   }
 } finally { await browser.close(); }
 R.note(`runtime ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+if (!REL) R.note('the 1280x800 passes of B, D, E and F run in the release step only (QA_RELEASE=1, f6-t1-leak.mjs --rows-only; TL ruling F6-T1c)');
 process.exit(R.done() ? 0 : 1);
