@@ -12,9 +12,10 @@
 //                                                  build-time step (tests/solo/build-time.mjs); its number is reprinted
 //                                                  at the end; --write-durations under QA_FULL=1 writes
 //                                                  tests/durations-full.json, which orders QA_FULL runs
-//   QA_RELEASE=1 or --only leak-max                 also the release step: QA's 200-op maximum-house leak stream
-//                                                  (tests/qa/f6-t1-leak.mjs --max-only), own process, after the pool,
-//                                                  limit 300 s (NOTE above 260 s), its time reprinted at the end
+//   QA_RELEASE=1 or --only leak-max                 also the release step, after the pool: QA's 200-op maximum-house
+//                                                  leak stream and the release rows (tests/qa/f6-t1-leak.mjs --max-only
+//                                                  --stream-only / --rows-only), two processes in parallel, each limit
+//                                                  300 s (NOTE above 260 s); times and wall time reprinted at the end
 //   --write-durations                              after a green full run, rewrite tests/durations.json (commit it
 //                                                  with the run)
 //
@@ -98,18 +99,28 @@ if (process.env.QA_FULL && want('--e2e') && (!words.length || words.some((w) => 
 }
 if (browser.length) console.log(`\n${browser.length} browser file(s), ${jobs} at a time`);
 const failed = soloFailed.concat(await pool(longestFirst(browser)));
-// Release step (TL ruling, F6-T1a): the 200-operation leak stream on the maximum house runs in its own process, after
-// the pool, with QA_RELEASE=1 or --only leak-max (at release, and when src/js/three/** or the leak suite changes).
-// Its own limit is 300 s (NOTE above 260 s, TL); its time is printed again at the end like the C-4.8 line.
+// Release step (TL ruling, F6-T1a; split in two parallel processes, TL F6-T1c): after the pool, with QA_RELEASE=1 or
+// --only leak-max (at release, and when src/js/three/** or the leak suite changes), QA's tests/qa/f6-t1-leak.mjs runs
+// as two processes side by side: the 200-operation maximum-house stream (--stream-only) and the rows moved out of the
+// default and QA_FULL runs (--rows-only). Each has its own limit of 300 s (NOTE above 260 s, TL); each time and the
+// wall time are printed again at the end like the C-4.8 line.
 if (process.env.QA_RELEASE || words.includes('leak-max')) {
-  const label = 'release qa/f6-t1-leak.mjs --max-only', t = Date.now();
-  console.log(`\n=== ${label} (own process, after the pool) ===`);
-  const r = spawnSync(process.execPath, [join(here, 'qa', 'f6-t1-leak.mjs'), '--max-only', '--no-shots'], { cwd: root, encoding: 'utf8', env: Object.assign({}, process.env, { QA_RELEASE: '1' }) });
-  process.stdout.write((r.stdout || '') + (r.stderr || ''));
-  const sec = (Date.now() - t) / 1000, over = sec > 300;
-  soloLines.push(`  [leak-max] release step: ${sec.toFixed(1)} s, limit 300 s, ${r.status === 0 ? 'checks passed' : 'checks FAILED'}${over ? ' — OVER the limit' : sec > 260 ? ' — NOTE above 260 s: TL review' : ''}`);
-  console.log(`(${label}: ${r.status === 0 && !over ? 'ok' : 'FAILED' + (over ? ', over 300 s' : ', exit ' + r.status)}, ${secs(Date.now() - t)})`);
-  if (r.status !== 0 || over) failed.push(label);
+  const leak = join(here, 'qa', 'f6-t1-leak.mjs'), t = Date.now();
+  const parts = [['leak-max stream', '--stream-only'], ['release rows', '--rows-only']];
+  console.log(`\n=== release step: ${parts.map((p) => p[0]).join(' + ')}, in parallel (own processes, after the pool) ===`);
+  const runs = await Promise.all(parts.map(([name, flag]) => new Promise((res) => {
+    const t0 = Date.now(), child = spawn(process.execPath, [leak, '--max-only', flag, '--no-shots'], { cwd: root, env: Object.assign({}, process.env, { QA_RELEASE: '1' }), stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = ''; child.stdout.on('data', (d) => { out += d; }); child.stderr.on('data', (d) => { out += d; });
+    child.on('close', (code) => res({ name, flag, code, out, sec: (Date.now() - t0) / 1000 }));
+  })));
+  for (const r of runs) {
+    const label = `release qa/f6-t1-leak.mjs --max-only ${r.flag}`, over = r.sec > 300;
+    console.log(`\n=== ${label} ===`); process.stdout.write(r.out);
+    console.log(`(${label}: ${r.code === 0 && !over ? 'ok' : 'FAILED' + (over ? ', over 300 s' : ', exit ' + r.code)}, ${r.sec.toFixed(1)} s)`);
+    soloLines.push(`  [leak-max] release step, ${r.name}: ${r.sec.toFixed(1)} s, limit 300 s, ${r.code === 0 ? 'checks passed' : 'checks FAILED'}${over ? ' — OVER the limit' : r.sec > 260 ? ' — NOTE above 260 s: TL review' : ''}`);
+    if (r.code !== 0 || over) failed.push(label);
+  }
+  soloLines.push(`  [leak-max] release step wall time: ${((Date.now() - t) / 1000).toFixed(1)} s (two processes in parallel)`);
 }
 if (soloLines.length) console.log('\n' + soloLines.join('\n'));
 if (failed.length) console.log('\nfailed: ' + failed.join(', '));
