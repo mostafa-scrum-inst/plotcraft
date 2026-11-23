@@ -70,11 +70,11 @@ A new key field `indoor` (0–1), blended like the others (A-13). I recommend th
 - **Mesh:** one InstancedMesh of face-up or wall-facing quads per level.
   - Map: the existing **`blob` texture** (radial (1 − r)^1.5), so there is no new texture.
   - Material: `AdditiveBlending`, `depthWrite: false`, no shadows. Colour **#FFB870** × `poolK` × indoor, set in applyLook.
-- **Instance order** sets what each mode draws through `count`, the same pattern as the blobs in winter:
-  1. Ground spill outside lit windows on level G: a 2.0 × 1.4 m quad on the ground in front of each lit ground-floor pane, `poolK` 0.12. Shown in both modes.
-  2. Floor pools: one per lamp, diameter 2.2 m centred on the lamp, `poolK` 0.20; one per habitable room without a lamp, diameter 0.6 × min(w, d), centred, `poolK` 0.14. Dollhouse mode only.
-  3. Lit-window patches: a quad 0.01 m outside each **lit** pane, pane-sized + 0.1 m, `poolK` 0.35. Exterior mode only.
-  - Exterior mode: count = 1 + 3. Dollhouse: count = 1 + 2. FS sets the ranges at build; applyLook and the Roof switch only change `count` and `visible`.
+- **Instance order** (TL Q3: `count` shows only the first instances) sets what each mode draws, the same pattern as the blobs in winter:
+  1. Floor pools: one per lamp, diameter 2.2 m centred on the lamp, `poolK` 0.20; one per habitable room without a lamp, diameter 0.6 × min(w, d), centred, `poolK` 0.14.
+  2. Ground spill outside lit windows on level G: a 2.0 × 1.4 m quad on the ground in front of each lit ground-floor pane, `poolK` 0.12.
+  3. Lit-window patches: a quad 0.01 m outside each **lit** pane, pane-sized + 0.1 m, `poolK` 0.35.
+  - Dollhouse mode: count = 1 + 2. Exterior mode: count = all; the closed house's depth test hides the floor pools. FS sets the ranges at build; applyLook and the Roof switch only change `count` and `visible`.
 - **Which panes are lit:** seeded per opening from `house.key`.
   - Habitable and hall panes: 75 % lit.
   - Service rooms ('small'): 40 %.
@@ -131,7 +131,7 @@ A new key field `indoor` (0–1), blended like the others (A-13). I recommend th
 - **Height changes:** bed 1.0, tvUnit 1.1, majlis seats 0.7, side tables 0.95. All stay ≤ 1.1 m.
 
 ### I2 Floors and rugs: one interior atlas on a `textured-<level>` mesh
-- **Atlas** `interior`: 512², a 2 × 2 grid of 256² cells, each 240 px of tileable content plus 8 px of wrapped padding, so bilinear sampling and the first mip levels never bleed. All cells are neutral grey (C-3.3).
+- **Atlas** `interior`: 512², a 2 × 2 grid of 256² cells, each 240 px of tileable content plus 8 px of wrapped padding, so bilinear sampling and the first mip levels never bleed. All cells are neutral grey (C-3.3). TL Q6: the four cells' mean grey values stay within ±0.05 of each other (target 0.86–0.90; carpet base 0.85 is raised to 0.88), so far-mip bleed cannot be seen; texgen.test asserts it.
 
 | cell | spec | tileM |
 |---|---|---|
