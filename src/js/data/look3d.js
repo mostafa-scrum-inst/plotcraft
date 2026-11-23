@@ -48,7 +48,7 @@
       rooms: { bedroom: { fabric: '#DCD9D2', accent: '#8FA698' }, majlis: { fabric: '#B9A48A', accent: '#6F8A7A' }, dining: { fabric: '#E0DDD6' }, office: { fabric: '#9AA3A8', accent: '#C8A878' } } }
   };
   PC.data.indoor = {
-    glazing: { hex: '#FFB866', k: 0.9 }, lift: { hex: '#FFB070', k: 0.08 }, lamp: { hex: '#FFD9A8', k: 1.4, color: '#F2EBDD', gate: 0.25 },
+    glazing: { hex: '#FFB866', k: 0.9 }, lift: { hex: '#FFC08A', k: 0.06 }, lamp: { hex: '#FFD9A8', k: 1.4, color: '#F2EBDD', gate: 0.25 },
     pool: { hex: '#FFB870', lampK: 0.20, roomK: 0.14, spillK: 0.12, patchK: 0.35, lampD: 2.2, roomD: 0.6, spillW: 2.0, spillD: 1.4, patchOut: 0.01, patchPad: 0.1 },
     litShare: { glazed: 0.75, small: 0.4, slot: 1 }
   };
@@ -58,7 +58,7 @@
     modern: { planks: '#8A6E55', tile: '#B9B7B2', carpet: '#6B5A4C' },
     classic: { planks: '#9A6A44', tile: '#D8CBB4', carpet: '#7A2F2C' },
     minimal: { planks: '#C9AE86', tile: '#E3E1DC', carpet: '#A89C88' },
-    tint: 0.12,
+    tint: 0.2,
     rug: { lift: 0.01, living: [0.55, 0.5, 2.4, 1.7], bed: [1.6, 1.0], diningPad: 0.6, accentMix: 0.5 }
   };
   PC.data.roomTints = {
