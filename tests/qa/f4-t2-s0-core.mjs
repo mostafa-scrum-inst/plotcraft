@@ -23,7 +23,11 @@ import { HOSTS, myAccess } from './f4-t2-ref.mjs';
 
 const R = collector('F4-T2 Step 0 core');
 const only = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7).split(',').filter(Boolean);
-const want = (s) => !only.length || only.includes(s);
+// TL QA_FULL headroom ruling after F6-T2: the larger seeded samples (A 300, B 400 / 250, retry hunt 15) leave QA_FULL=1
+// and run in the release step (--big-only, stream side): only A and B, the same seeded streams, generate skipped on the
+// prefix the default run already judges (A i < 120, B i < 80: the full run's i >= 80 differ from the default's high-fill tail)
+const BIG = process.argv.includes('--big-only');
+const want = (s) => (!only.length || only.includes(s)) && (!BIG || ['A', 'B'].includes(s));
 const PC = Q.loadPC();
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const TOL = 0.011, MIN = 1.5, MAXR = 10;
@@ -62,9 +66,9 @@ const ms = (f) => { const a = process.hrtime.bigint(), v = f(); return [v, Numbe
 if (want('A')) {
   R.check('A PC.C.MAX_ROOMS_PER_LEVEL is 10 and MAX_PAIRS_PER_LEVEL stays 6 (CD-4)', PC.C.MAX_ROOMS_PER_LEVEL === 10 && PC.C.MAX_PAIRS_PER_LEVEL === 6);
   const r = rng(4210), pr = [], st = { n: 0, ok: 0, by: { 9: [0, 0], 10: [0, 0] }, worst: 0 };
-  for (let i = 0, NA = process.env.QA_FULL ? 300 : 120; i < NA; i++) {   // run-time trim (QA batch 13): 120 by default, QA_FULL=1 for 300
+  for (let i = 0, NA = BIG ? 300 : 120; i < NA; i++) {   // run-time trim (QA batch 13): 120 by default, 300 in the release step (--big-only)
     const W = 9 + Math.round(r() * 22) / 2, D = 9 + Math.round(r() * 22) / 2, n = 9 + (i % 2), p = programme(r, W, D, { min: n, max: n, fillLo: 0.4, fillHi: 0.9 });
-    if (p.rooms.length !== n) continue;
+    if (p.rooms.length !== n || (BIG && i < 120)) continue;
     let out, t; try { [out, t] = ms(() => PC.layout.generate(inpOf(p))); } catch (e) { pr.push(`#${i}: generate threw ${e.message}`); continue; }
     st.n++; st.worst = Math.max(st.worst, t); st.by[n][0]++;
     if (!out.ok) continue; st.ok++; st.by[n][1]++;
@@ -103,9 +107,10 @@ if (want('B')) {
     const r = rng(8086), diff = [], st = { n: 0, ok: 0, none: 0, retried: 0, tNew: 0, tOld: 0, byN: {} };
     // run-time trim (F5-T2 headroom, QA batch 13): 140 programmes by default (the last 60 at high fill); QA_FULL=1 runs the
     // original 400 (last 150). The stream is the same seeded one, so the default is a prefix-shaped subset of the full run.
-    const NB = process.env.QA_FULL ? 400 : 140, HI = process.env.QA_FULL ? 250 : 80;
+    const NB = BIG ? 400 : 140, HI = BIG ? 250 : 80;
     for (let i = 0; i < NB; i++) {   // the last ones at 85-110 % fill, where the first pass fails and the retry range decides
       const hi = i >= HI, W = 6 + Math.round(r() * 28) / 2, D = 6 + Math.round(r() * 28) / 2, p = programme(r, W, D, hi ? { max: 8, fillLo: 0.85, fillHi: 1.1 } : { max: 8, fillLo: 0.3, fillHi: 1.05 }), inp = inpOf(p);
+      if (BIG && i < 80) continue;
       const [a, ta] = ms(() => PC.layout.generate(inp)), [b, tb] = ms(() => OLD.layout.generate(inp));
       st.n++; st.tNew += ta; st.tOld += tb; st.byN[p.rooms.length] = (st.byN[p.rooms.length] || 0) + 1;
       if (JSON.stringify(a) !== JSON.stringify(b)) diff.push(`#${i} (${W} x ${D}, ${p.rooms.length} rooms ${p.rooms.map((x) => x.area).join('/')}, ${p.stairs ? p.stairPos + (p.lift ? '+lift' : '') : 'no stairs'}): new ${JSON.stringify(a).slice(0, 120)} vs old ${JSON.stringify(b).slice(0, 120)}`);
@@ -114,7 +119,7 @@ if (want('B')) {
     R.check(`B ${st.n} seeded programmes of 1-8 rooms (sizes ${Object.entries(st.byN).map(([k, v]) => k + ':' + v).join(' ')}): Step 0 generate === pre-Step-0 generate, byte for byte (${st.ok} laid out, ${st.retried} of them only by the retry range 0.75-1.25, ${st.none} no layout)`, diff.slice(0, 5));
     // retry hunt: programmes whose first pass fails and whose retry succeeds (rare in the stream), each compared with the old file
     { const r2 = rng(9091), d2 = []; let found = 0, tried = 0;
-      for (; tried < 20000 && found < (process.env.QA_FULL ? 15 : 10); tried++) { const W = 6 + Math.round(r2() * 20) / 2, D = 6 + Math.round(r2() * 20) / 2, p = programme(r2, W, D, { max: 8, fillLo: 0.85, fillHi: 1.0 }), inp = inpOf(p);
+      for (; tried < 20000 && found < (BIG ? 15 : 10); tried++) { const W = 6 + Math.round(r2() * 20) / 2, D = 6 + Math.round(r2() * 20) / 2, p = programme(r2, W, D, { max: 8, fillLo: 0.85, fillHi: 1.0 }), inp = inpOf(p);
         const a = PC.layout.generate(inp); if (!a.ok || firstOnly(PC, inp).ok) continue; found++;
         const b = OLD.layout.generate(inp); if (JSON.stringify(a) !== JSON.stringify(b)) d2.push(`retry case (${W} x ${D}, ${p.rooms.map((x) => x.area).join('/')}): differs`); }
       R.note(`B retry hunt: ${found} retry-only layouts in ${tried} tries`); R.check(`B retry range: ${found} programmes laid out only by the retry (0.75-1.25), found in ${tried} tries: Step 0 === pre-Step-0 byte for byte`, found >= 10 ? d2 : d2.concat(`only ${found} retry cases found`)); }

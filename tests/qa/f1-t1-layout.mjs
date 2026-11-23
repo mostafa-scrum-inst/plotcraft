@@ -74,7 +74,10 @@ const v3settle = (page) => page.evaluate(() => new Promise((res) => { if (!(PC.h
 // 1280x800 the layout scenarios s5-building, x-banners, s5-light and s5-tour run in the release step only (QA_RELEASE=1;
 // f6-t1-leak.mjs --max-only runs this file with --release-only, which runs just those). 360x640 keeps every scenario.
 const REL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only'), RELSCN = ['s5-building', 'x-banners', 's5-light', 's5-tour'];
-const scnRun = (vp, name) => { const twin = ['640x360', '1280x800'].includes(vp.tag) && RELSCN.includes(name); return RELONLY ? twin : REL || !twin; };
+// TL QA_FULL headroom ruling after F6-T2: the 768x1024 tablet pass (all scenarios, stepper, strips) leaves QA_FULL=1 and
+// runs in this suite's --release-only row (rows side); the default and QA_FULL runs keep 360x640, 640x360 and 1280x800
+const TAB = (vp) => vp.tag === '768x1024';
+const scnRun = (vp, name) => { if (TAB(vp)) return RELONLY || only === vp.tag; const twin = ['640x360', '1280x800'].includes(vp.tag) && RELSCN.includes(name); return RELONLY ? twin : REL || !twin; };
 const browser = await launch();
 try {
   // ================= markup contract (once, pristine document) =================
@@ -165,9 +168,9 @@ try {
   }
 
   // ================= layout per viewport and scenario =================
-  // run-time trim (QA batch 13, TL F5-T2 ruling 3): 768x1024 only with QA_FULL=1 (standing condition: before each feature
+  // run-time trim (QA batch 13, TL F5-T2 ruling 3): 768x1024 only with QA_FULL=1 (since F6-T2: in --release-only) (standing condition: before each feature
   // review and whenever shell / layout CSS changes); 360x640, 640x360 and 1280x800 by default
-  for (const vp of VIEWPORTS.filter((v) => process.env.QA_FULL || v.tag !== '768x1024' || only === v.tag)) {
+  for (const vp of VIEWPORTS.filter((v) => RELONLY || v.tag !== '768x1024' || only === v.tag)) {
     if (only && vp.tag !== only) continue;
     metrics[vp.tag] = {};
     for (const [name, stage, setup, flags = {}] of SCENARIOS) {
@@ -226,7 +229,7 @@ try {
       await ctx.close();
     }
     // stepper in every position (states: done / current / locked)
-    if (!RELONLY) for (let n = 1; n <= 5; n++) {
+    if (!RELONLY || TAB(vp)) for (let n = 1; n <= 5; n++) {
       const { ctx, page } = await openPage(browser, vp); await page.evaluate(INPAGE); await page.evaluate((n) => __qa.S.stage(n), n);
       R.check(`${vp.tag} stepper one line with stage ${n} current`, await page.evaluate(() => __qa.C.stepper()));
       R.check(`${vp.tag} stage ${n}: step states are visually distinct (icon or style per state)`, await page.evaluate((n) => { const f = []; for (let i = 1; i <= 5; i++) { const b = __qa.q('step-' + i), cs = getComputedStyle(b); const done = __qa.rendered(b.querySelector('.pc-step__i-done')), lock = __qa.rendered(b.querySelector('.pc-step__i-lock')); if (i < n && !done) f.push(`step ${i} done without check icon`); if (i > n && b.classList.contains('is-locked') && !lock) f.push(`step ${i} locked without lock icon`); if (i > n && !b.classList.contains('is-locked') && lock) f.push(`step ${i} reachable but shows a lock`);   /* real stages (F3-T1, F3-T2) open later steps */ if (i === n) { if (done || lock) f.push(`current step ${i} shows a state icon`); if (cs.borderBottomColor === 'rgba(0, 0, 0, 0)') f.push('current step has no underline'); if (!__qa.rendered(b.querySelector('.pc-step__label'))) f.push('current step has no label'); } } return f; }, n));
@@ -235,7 +238,7 @@ try {
     }
     // sample strip on the build's strip stages ([1,3,4] until F4-T2 Step 0.7, [1,3] after; marker PC.ui.shell.STRIP_STAGES / PC.C.STRIP_STAGES): stage must still fit
     const STRIPS = await (async () => { const { ctx, page } = await openPage(browser, vp); const r = await page.evaluate(() => (PC.ui && PC.ui.shell && PC.ui.shell.STRIP_STAGES) || PC.C.STRIP_STAGES || [1, 3, 4]); await ctx.close(); return r.slice(); })();
-    if (!RELONLY) for (const n of STRIPS) {
+    if (!RELONLY || TAB(vp)) for (const n of STRIPS) {
       const { ctx, page } = await openPage(browser, vp); await page.evaluate(INPAGE); await page.evaluate((n) => { __qa.S.stage(n); __qa.q('sample-strip').hidden = false; if (n === 1) __qa.q('start-panel').hidden = true; if (n === 3) __qa.S.planTabs([['Ground', 'approved', true], ['First', 'approved', false]]); __qa.S.paint(); }, n);
       const T = `${vp.tag} strip on stage ${n}`;
       R.check(`${T} no page scroll`, await page.evaluate(() => __qa.C.pageScroll()));

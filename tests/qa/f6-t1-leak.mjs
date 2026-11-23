@@ -120,6 +120,8 @@ const RELEASE_ROWS = [['f5-t3-view.mjs', '--no-shots', '--release-only'], ['f4-t
   ['f2-t2-questions.mjs', '--no-shots', '--release-only'], ['f1-t2-flows.mjs', '--no-shots', '--release-only']];
 // ROWS3 (TL F6-T1c run-time debt; TL F6-T2 gate ruling: out of the stream process into the third one, --rows3-only, after
 // the sample stream); --max-only alone runs the stream, RELEASE_ROWS, the sample stream, then these.
+// STREAM_ROWS (TL QA_FULL headroom ruling after F6-T2): rows that run after the 200-op stream in the --stream-only process
+const STREAM_ROWS = [['f2-t2-questions.mjs', '--no-shots', '--twins-only'], ['f4-t2-s0-core.mjs', '--big-only']];
 const ROWS3 = [['f4-t1-view.mjs', '--no-shots', '--release-only'] /* TL F6-T2 gate ruling: from the rows side (A2, D loop desk added) */, ['f3-t2-editor.mjs', '--no-shots', '--release-only'], ['f3-t1-stage3.mjs', '--no-shots', '--release-only'], ['f3-t3-look.mjs', '--no-shots', '--release-only'],
   /* f4-t1-view F G6 rides with its existing --release-only row on the rows side */ ['f4-t2-view.mjs', '--no-shots', '--release-only'], ['f4-t3-view.mjs', '--no-shots', '--release-only'], ['f5-t1-view.mjs', '--no-shots', '--release-only']];
 // the rows chain, started before the stream so both run side by side; each child's output is printed whole when it ends
@@ -167,12 +169,12 @@ try {
   else if (!MAXONLY) R.note('the 50-op sample stream runs in the third release process (f6-t1-leak.mjs --max-only --rows3-only; TL F6-T2 gate ruling, CTO §6.2): a duplicate of the 200-op maximum-house stream');
 } finally { if (browser) await browser.close(); }
 if (MAXONLY) {
-  const streamS = ROWS_ONLY ? 0 : (Date.now() - t0) / 1000, rowsT0 = Date.now(), rows = [...(STREAM_ONLY || ROWS3_ONLY ? [] : await rowsChain(RELEASE_ROWS)), ...(ROWS_ONLY || STREAM_ONLY ? [] : await rowsChain(ROWS3))], rowsS = (Date.now() - rowsT0) / 1000;
+  const streamS = ROWS_ONLY ? 0 : (Date.now() - t0) / 1000, rowsT0 = Date.now(), rows = [...(STREAM_ONLY || ROWS3_ONLY ? [] : await rowsChain(RELEASE_ROWS)), ...(ROWS_ONLY || STREAM_ONLY ? [] : await rowsChain(ROWS3)), ...(ROWS_ONLY || ROWS3_ONLY ? [] : await rowsChain(STREAM_ROWS))], rowsS = (Date.now() - rowsT0) / 1000;
   for (const { f, a, code, s: rs } of rows) { TIMES.push(`${f} ${rs.toFixed(1)} s`); R.check(`[release] ${f} ${a.join(' ')} (QA_RELEASE=1): its checks pass (${rs.toFixed(1)} s)`, code === 0 ? [] : [`exit ${code}`]); }
   const all = (Date.now() - t0) / 1000, side = STREAM_ONLY ? '[leak-max] stream' : ROWS_ONLY ? '[release] rows' : ROWS3_ONLY ? '[release] rows3' : '[leak-max] release step (stream + rows, serial)';
   R.note(`${side}: ${all.toFixed(1)} s (${ROWS3_ONLY ? 'sample stream' : 'stream'} ${ROWS_ONLY ? '-' : streamS.toFixed(1) + ' s'}, rows ${STREAM_ONLY ? '-' : rowsS.toFixed(1) + ' s'})`);
   if (all > NOTE_S) R.note(`NOTE ${side} took ${all.toFixed(1)} s > ${NOTE_S} s (TL: two NOTE runs in a row go to the TL)`);
-  R.check(`${side}${ROWS_ONLY ? ` (${RELEASE_ROWS.length} release rows)` : STREAM_ONLY ? ' (200-op maximum-house stream)' : ROWS3_ONLY ? ` (50-op sample stream + ${ROWS3.length} rows)` : ` (200-op maximum-house stream + 50-op sample stream + ${RELEASE_ROWS.length + ROWS3.length} release rows)`} runs in ${all.toFixed(1)} s <= ${MAX_S} s (TL limit)`, all <= MAX_S ? [] : [`${all.toFixed(1)} s`]);
+  R.check(`${side}${ROWS_ONLY ? ` (${RELEASE_ROWS.length} release rows)` : STREAM_ONLY ? ` (200-op maximum-house stream + ${STREAM_ROWS.length} stream rows)` : ROWS3_ONLY ? ` (50-op sample stream + ${ROWS3.length} rows)` : ` (200-op maximum-house stream + 50-op sample stream + ${RELEASE_ROWS.length + ROWS3.length + STREAM_ROWS.length} release rows)`} runs in ${all.toFixed(1)} s <= ${MAX_S} s (TL limit)`, all <= MAX_S ? [] : [`${all.toFixed(1)} s`]);
 }
 R.note(`timings: ${TIMES.join(', ')}; run ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 process.exit(R.done() ? 0 : 1);

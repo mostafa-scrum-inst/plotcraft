@@ -205,3 +205,20 @@ Both release processes are under the 260 s NOTE line. FS runs the three-run medi
   - stream side: about 181 s.
   - When the three run in parallel, they will be slower. FS re-times.
 - **Timing-sensitive checks:** none of the moved rows has one. The f4-t3 setLook check stays in the default run.
+
+## Addendum 7: after F6-T2, QA_FULL-only duplicates cut by at least 20 s (TL ruling)
+
+Every check is kept. Each row below now runs once per gate in the release step instead of in the QA_FULL pool.
+
+| row | from | to | solo time (main copy) |
+|---|---|---|---|
+| f2-t2-questions twins (A, C, G, K at 640x360 / 768x1024 / landscape): QA_FULL keeps 360x640 and 1280x800 | QA_FULL | stream side (`--no-shots --twins-only`) | 24 s, 239 checks |
+| f4-t2-view A roof and B interior at 360x640 (desktop twins stay in QA_FULL) | QA_FULL | rows3 (f4-t2-view --release-only) | in its 37 s row |
+| f4-t3-view E 640x360 and 768x1024 (the edge hours stay in QA_FULL) | QA_FULL | rows3 (f4-t3-view --release-only) | in its 20 s row |
+| f1-t1-layout 768x1024 pass (scenes, stepper, strip) | QA_FULL | rows side (f1-t1-layout --release-only) | in its 34 s row, 592 checks |
+| f4-t2-s0-core A/B large samples (A 300, B 400 with 250 high, retry hunt 15). QA_FULL now runs the default 120 / 140 / 80 / 10; `--big-only` runs only the extra cases | QA_FULL | stream side (`--big-only`) | 24.2 s (QA_FULL s0-core 34.2 → 22.9 s) |
+
+- **Before (5ccfd2b):** QA_FULL part 476.5 / 496.1 / 478.4 s, median 478.4 s.
+- **After (three QA_FULL + QA_RELEASE runs):** QA_FULL part (run-all total minus release wall time) 457.9 / 454.5 / 464.2 s, median 457.9 s: **−20.5 s** on the median, −24.8 s on the mean.
+- **Release step:** wall time 724.2 / 736.0 / 743.4 s (was about 651 s; under the 800 s line). Rows 243.0 / 247.1 / 248.0 s, stream 253.9 / 253.8 / 253.7 s, rows3 227.3 / 235.1 / 241.8 s; all ≤ 260 s, no NOTE. The stream side is close to 260 s, so the next move goes to rows3.
+- **Flake seen:** run 1 failed e2e/questions.spec.mjs 768x1024 "back to the sample answers" (north stayed 90 after q-north-reset following the compass drag); runs 2 and 3 passed. This spec and src are unchanged by this cut, so it is a load race; reported to FS and TL.
