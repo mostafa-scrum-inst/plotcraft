@@ -217,12 +217,19 @@ await guard('A 1280x800', async () => {
   // 5. clearing (each from a fresh pick, flight still running)
   const cl = [], someRoom = groups[0].rooms[2].id;
   await viewTab(S);
+  // TL F6-T2 gate ruling (dollhouse-heavy duplicates): the default run keeps "All" and "Go to room…" (the disposal check);
+  // another level, Reset view, the rebuild and the context restore clear the same highlight and run in the release step
+  const CLEAR_REL = ['another level', 'Reset view', 'a rebuild (Q18 while open)', 'a context restore'];
   for (const [name, act] of [['"All"', () => S.act(pick('all'))], ['another level', () => S.act(pick(groups[1].level))], ['Reset view', () => S.act('v3-reset')],
     ['"Go to room…"', () => S.page.selectOption('[data-pc="v3-room"]', '')], ['a rebuild (Q18 while open)', async () => { const b0 = (await S.page.evaluate(STATE)).builds; await S.page.evaluate(() => PC.store.commit((s) => { s.ans.interior.style = s.ans.interior.style === 'modern' ? 'classic' : 'modern'; })); await S.until(() => S.page.evaluate((b) => PC.debug.scene().builds > b, b0), 5000); await ready(S); if ((await S.page.evaluate(STATE)).builds <= b0) cl.push('Q18: no rebuild'); }],
     ['a context restore', async () => { const b0 = (await S.page.evaluate(STATE)).builds; await S.page.evaluate(() => { const gl = PC.debug.scene().renderer.getContext(); window.__lc = gl.getExtension('WEBGL_lose_context'); window.__lc.loseContext(); }); await S.until(() => S.page.evaluate(() => PC.debug.scene().lost), 3000); await S.page.evaluate(() => window.__lc.restoreContext()); await S.until(() => S.page.evaluate((b) => PC.debug.scene().builds > b, b0), 5000); await ready(S); }]]) {
+    if (!REL && CLEAR_REL.includes(name)) continue;
+    // F6-T2 TL gate ruling: furniture / textured-* are hidden in exterior mode, so they reach the GPU on the first dollhouse
+    // frame; the no-selection baseline is taken right before this pick (the same room was picked in the rows above)
+    let geomsBase = geomsNone; if (name === '"Go to room…"') { await S.page.evaluate(() => PC.debug.scene().renderNow()); geomsBase = (await S.page.evaluate(STATE)).geoms; }
     await chooseIn(S, someRoom); await S.settle(); const a = await S.page.evaluate(STATE); if (a.caption === null) { cl.push(`${name}: setup pick not shown`); continue; }
     await act(); await S.settle(); const b = await S.page.evaluate(STATE); cl.push(...clearedProblems(b, name));
-    if (name === '"Go to room…"') { await S.page.evaluate(() => PC.debug.scene().renderNow()); const gg = (await S.page.evaluate(STATE)).geoms; if (gg !== geomsNone) cl.push(`"Go to room…": renderer geometries ${gg}, ${geomsNone} with no selection (the cleared highlight not disposed)`); }
+    if (name === '"Go to room…"') { await S.page.evaluate(() => PC.debug.scene().renderNow()); const gg = (await S.page.evaluate(STATE)).geoms; if (gg !== geomsBase) cl.push(`"Go to room…": renderer geometries ${gg}, ${geomsBase} with no selection before the pick (the cleared highlight not disposed)`); }
     if (/Reset|rebuild|restore/.test(name) && b.flying) cl.push(`${name}: still flying`);
     lap(name); }
   await recStop(S);
@@ -231,7 +238,8 @@ await guard('A 1280x800', async () => {
   await chooseIn(S, someRoom); await S.page.waitForTimeout(300); await S.page.evaluate(() => PC.store.go(4)); await S.settle(); const p4 = await S.page.evaluate(() => PC.view3d.pose());
   await S.page.evaluate(() => PC.store.go(5)); await ready(S); await S.page.waitForTimeout(300); const p5 = await S.page.evaluate(() => ({ p: PC.view3d.pose(), f: PC.view3d.flying() })); await recStop(S);
   if (p5.f || F.poseDist(p4, p5.p) > 1e-6) cl.push(`leaving stage 5 mid-flight: flying ${p5.f} on return, pose moved ${F.poseDist(p4, p5.p).toFixed(3)} m`);
-  R.check(`${T}: "All", another level, Reset view, "Go to room…" (Roof on: check 2), a Q18 rebuild and a context restore each clear the highlight (disposed: geometry count back to the no-selection count), the caption and the select (Reset / rebuild / restore also stop the flight); leaving stage 5 mid-flight stops the flight for good`, cut(cl));
+  if (!REL) R.note('A clearing: another level, Reset view, the Q18 rebuild and the context restore run in the release step (TL F6-T2 gate ruling)');
+  R.check(`${T}: ${REL ? '' : '(default: "All" and "Go to room…" only) '}"All", another level, Reset view, "Go to room…" (Roof on: check 2), a Q18 rebuild and a context restore each clear the highlight (disposed: geometry count back to the no-selection count), the caption and the select (Reset / rebuild / restore also stop the flight); leaving stage 5 mid-flight stops the flight for good`, cut(cl));
   lap('leave');
   // 6. the maximum house in the same page: 40 rooms, a basement pick (landed), a second-floor pick, mesh budget
   if (REL) {

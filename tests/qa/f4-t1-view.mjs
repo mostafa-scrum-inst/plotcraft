@@ -81,7 +81,7 @@ async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) r
 // F6-T1 run-time moves (TL Q-T8, docs/03-tasks/F6-T1/qa-full-moves.md): A 360x640, C 640x360 and D loop 360x640 run
 // in the release step only (QA_RELEASE=1; TL ruling after the 488 s QA_FULL gate: out of QA_FULL=1). --release-only runs
 // just those three (the release step: f6-t1-leak.mjs --max-only). The 1280x800 passes, C 360x640 and the mock stay default.
-const FULL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only'), REL_RE = /^(A 360x640|C 640x360|D loop 360x640|F G6)$/;   // F G6: TL ruling F6-T1c run-time debt (maximum house)
+const FULL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only'), REL_RE = /^(A 360x640|C 640x360|C 1280x800|D loop 360x640|F G6)$/;   // C 1280x800: TL F6-T2 gate ruling (duplicate of C 360x640)   // F G6: TL ruling F6-T1c run-time debt (maximum house)
 const browser = await launch();
 
 // ================= A + B: acceptance and Q14 with real r128 =================
@@ -270,7 +270,7 @@ async function gestures(vp) {
   await S.layout(`${T} stage 5 after gestures`);
   await S.end(T);
 }
-for (const vp of [VP.phone, ...(FULL ? [VP.land] : []), VP.desk]) await guard(`C ${vp.tag}`, () => gestures(vp));
+for (const vp of [VP.phone, ...(FULL ? [VP.land, VP.desk] : [])]) await guard(`C ${vp.tag}`, () => gestures(vp));   // desk: release step (TL F6-T2 gate ruling)
 
 // ================= D: render loop (real r128) =================
 for (const vp of [VP.desk, ...(FULL ? [VP.phone] : [])]) await guard(`D loop ${vp.tag}`, async () => {   // 360x640 added in Round 1 (F4T1-1 re-test: the stage-4 strip case)

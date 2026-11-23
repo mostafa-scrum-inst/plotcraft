@@ -172,3 +172,17 @@ f5-t1 and f4-t1 keep their checks in full on the release side.
 | Stream process (stream 157.4 s + 7 stream rows) | 9 / 9 | **240.7 s** |
 
 Both release processes are under the 260 s NOTE line. FS runs the three-run median gate.
+
+## Addendum 5: F6-T2 gate, third release process (TL ruling after 400383c, CTO §6.2 a–e)
+
+| row | from | to | solo time (f6t2 400383c copy) |
+|---|---|---|---|
+| f6-t1-leak 50-op sample stream, 960x600 (a duplicate of the 200-op maximum-house stream) | default | rows3 | 36 s |
+| f4-t1-view C 1280x800 gestures (a duplicate of C 360x640) | default | rows side (f4-t1-view --release-only) | about 5 s |
+| f5-t1-view A clearing: another level, Reset view, Q18 rebuild, context restore (the default run keeps "All" and "Go to room…", which carries the disposal check) | default | rows3 (f5-t1-view --release-only) | about 9 s |
+| the six former stream rows (f3-t2-editor, f3-t1-stage3, f3-t3-look, f4-t2-view, f4-t3-view, f5-t1-view) | stream side | rows3 | 93 s |
+
+- **Interface:** `f6-t1-leak.mjs --max-only --rows3-only` runs the sample stream, then ROWS3. `--stream-only` is now the 200-op stream alone. `--rows-only` is unchanged. `--max-only` on its own runs everything serially. A default run (no flag) no longer opens a browser in f6-t1-leak; `--sample` runs the sample stream by hand.
+- **rows3 measured:** 129.5 s on the f6t2 400383c copy (sample stream 36.6 s, rows 92.8 s).
+- **Timing-sensitive checks:** rows3 has none. The leak "slowest operation" is a note only.
+- **Expected effects:** the stream side drops to about 274 − 93 ≈ 181 s. The default pool loses about 50 s of solo time, roughly 100 s of pool-step time in the 3-job pool. FS re-times.

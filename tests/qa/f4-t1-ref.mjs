@@ -132,6 +132,10 @@ export const T1B = (D) => Object.values(D.exteriors || {}).some((e) => e && e.fr
 // F6-T2 marker: the floors table (plan I2). My constants (Designer plan I2 cell table, T1b plan §6.2 ring, FS S2 / PM Q4
 // heights): hall floor at floor + tintLift, room floors 0.01 above it, rugs 0.01 above those; tiles on the world L grid.
 export const T2 = (D) => !!(D.floors && D.floors.kind);
+// F6-T2 TL gate ruling (plan-review addendum, 6a37669): furniture and textured-* are hidden in exterior mode (Roof on, level
+// All) and drawn in the dollhouse. Marker until FS lands it: scene.js hides them by name (QA_SRC copies respected).
+export const EXT_HIDE = (() => { try { return /['"]furniture['"][^\n]*textured-[^\n]*visible\s*=\s*!\s*ext/.test(readFileSync(join(process.env.QA_SRC || join(ROOT, 'src'), 'js/three/scene.js'), 'utf8')); } catch (e) { return false; } })();
+const INNER = (n) => n === 'furniture' || /^textured-/.test(n);
 export const TILE_M = { planks: 1.2, tile: 1.2, carpet: 0.5 }, RING_W = 0.3, RING_K = 0.9, FLOOR_STEP = 0.01, RUG_LIFT = 0.01, ROOM_INSET = 0.15;
 // textured-<level> floors against my oracle: the hall covers the footprint, each room is tiled exactly by its own quads
 // (area, inside the room, each quad inside one tileM cell of the L grid), vertex colour = my mix x my ring factor.
@@ -249,8 +253,12 @@ export function shellProblems(sum, X, D, opts = {}) {
     // visibility (level selector): level k shown iff k <= selected index (All: every level)
     if (opts.level) {
       const sel = X.levels.find((l) => l.id === opts.level), topI = sel ? sel.index : Infinity, want = L.index <= topI;
+      // exterior mode = Roof on with All: the roof group is shown (EXT_HIDE: the enclosed interior is not drawn there)
+      const ext = opts.level === 'all' && sum.some((m) => m.group === 'roof' && m.visible);
+      const wantOf = (m) => (EXT_HIDE && INNER(m.name) ? want && !ext : want);
       // F6-T2 N4: glow-<id> is shown only at indoor > 0, so it may be hidden on a shown level, never shown on a hidden one
-      if (ms.some((m) => (/^glow-/.test(m.name) ? m.visible && !want : m.visible !== want))) P.push(`level ${opts.level}: ${L.id} visible ${ms.map((m) => m.visible)} want ${want}`);
+      if (EXT_HIDE && ms.some((m) => INNER(m.name) && m.visible !== wantOf(m))) P.push(`level ${opts.level}${ext ? ' (exterior: Roof on, All)' : ''}: ${L.id} furniture / textured visible ${ms.filter((m) => INNER(m.name)).map((m) => m.visible)} want ${want && !ext}`);
+      else if (ms.some((m) => (/^glow-/.test(m.name) ? m.visible && !want : m.visible !== wantOf(m)))) P.push(`level ${opts.level}: ${L.id} visible ${ms.map((m) => m.visible)} want ${want}`);
     }
   }
   // ground: plot shape with the footprint hole, cap over the footprint (hidden in the basement view), outer plane below

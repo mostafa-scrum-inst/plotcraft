@@ -29,6 +29,10 @@ const SEED = arg('seed', 20261122), OPS = arg('ops', 50);
 // step, in its own process: QA_RELEASE=1 or --max-only runs only that stream (limit 300 s, NOTE above 260 s, per process when run-all splits the stream and the rows); every other run only the sample.
 const MAXONLY = !!process.env.QA_RELEASE || process.argv.includes('--max-only') || process.argv.includes('--leak-max'), MAX_S = 300, NOTE_S = 260;   // TL (3db2b02 accepted): the release step <= 300 s; TL ruling before the F6-T1c gate: the stream and the release rows run as two parallel processes, NOTE above 260 s on the longer of the two (two in a row go to the TL)
 const STREAM_ONLY = process.argv.includes('--stream-only'), ROWS_ONLY = process.argv.includes('--rows-only');
+// TL F6-T2 gate ruling (CTO §6.2 a-e): a third release process, --max-only --rows3-only: the 50-op sample stream (moved
+// out of the default run: a duplicate of the 200-op maximum-house stream) and then ROWS3 (the former stream rows plus the
+// dollhouse-heavy duplicate rows QA moved). No timing-sensitive check runs in it. The stream side is the 200-op stream alone.
+const ROWS3_ONLY = process.argv.includes('--rows3-only');
 const session = sessions({ R, shots: join(ROOT, 'tests/qa/shots/F6-T1'), noShots: true });
 const t0 = Date.now(), TIMES = [];
 const cut = (a, n = 8) => a.slice(0, n).concat(a.length > n ? [`... ${a.length} in all`] : []);
@@ -114,9 +118,9 @@ const RELEASE_ROWS = [['f4-t1-view.mjs', '--no-shots', '--release-only'], ['f5-t
   ['f6-t1-model.mjs', '--release-only'], ['f6-t1-view.mjs', '--no-shots', '--release-only'],
   // TL ruling (F6-T1c, part b): 1280x800 logic passes of f2-t2 and f1-t2
   ['f2-t2-questions.mjs', '--no-shots', '--release-only'], ['f1-t2-flows.mjs', '--no-shots', '--release-only']];
-// STREAM_ROWS (TL ruling F6-T1c run-time debt, interface agreed with FS): rows that run in the stream process, after the
-// stream (--stream-only), so each process stays <= 260 s; --max-only alone runs stream, RELEASE_ROWS, then these.
-const STREAM_ROWS = [['f3-t2-editor.mjs', '--no-shots', '--release-only'], ['f3-t1-stage3.mjs', '--no-shots', '--release-only'], ['f3-t3-look.mjs', '--no-shots', '--release-only'],
+// ROWS3 (TL F6-T1c run-time debt; TL F6-T2 gate ruling: out of the stream process into the third one, --rows3-only, after
+// the sample stream); --max-only alone runs the stream, RELEASE_ROWS, the sample stream, then these.
+const ROWS3 = [['f3-t2-editor.mjs', '--no-shots', '--release-only'], ['f3-t1-stage3.mjs', '--no-shots', '--release-only'], ['f3-t3-look.mjs', '--no-shots', '--release-only'],
   /* f4-t1-view F G6 rides with its existing --release-only row on the rows side */ ['f4-t2-view.mjs', '--no-shots', '--release-only'], ['f4-t3-view.mjs', '--no-shots', '--release-only'], ['f5-t1-view.mjs', '--no-shots', '--release-only']];
 // the rows chain, started before the stream so both run side by side; each child's output is printed whole when it ends
 function runRow(f, a) { return new Promise((res) => { const t = Date.now(), out = [], c = spawn('node', [join(ROOT, 'tests/qa', f), ...a], { cwd: ROOT, env: { ...process.env, QA_RELEASE: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -125,21 +129,24 @@ function runRow(f, a) { return new Promise((res) => { const t = Date.now(), out 
 // --max-only alone: the stream, then the rows (serial, one process). run-all (TL, F6-T1c) runs the two sides as two parallel
 // processes: --max-only --stream-only (the stream, no rows) and --max-only --rows-only (the row spawns, no browser here).
 const rowsChain = async (list) => { const r = []; for (const [f, ...a] of list) r.push(await runRow(f, a)); return r; };
-const browser = ROWS_ONLY && MAXONLY ? null : await launch();
+const SAMPLE = MAXONLY ? ROWS3_ONLY || (!STREAM_ONLY && !ROWS_ONLY) : process.argv.includes('--sample');   // default run: moved (--sample runs it by hand)
+const browser = (ROWS_ONLY && MAXONLY) || (!MAXONLY && !SAMPLE) ? null : await launch();
 try {
   let t = Date.now();
-  if (!MAXONLY) { await probeRun(browser, '960x600 real sample', '', OPS, SEED, VP_DEF); TIMES.push(`sample ${((Date.now() - t) / 1000).toFixed(1)} s`); }
-  if (MAXONLY && !ROWS_ONLY) { t = Date.now(); await probeRun(browser, '1280x800 real maximum house (release step)', MAXMUT, 200, SEED + 1); const s = (Date.now() - t) / 1000; TIMES.push(`maximum house ${s.toFixed(1)} s`);
+  if (MAXONLY && !ROWS_ONLY && !ROWS3_ONLY) { t = Date.now(); await probeRun(browser, '1280x800 real maximum house (release step)', MAXMUT, 200, SEED + 1); const s = (Date.now() - t) / 1000; TIMES.push(`maximum house ${s.toFixed(1)} s`);
     R.note(`[leak-max] the 200-operation maximum-house stream ran in ${s.toFixed(1)} s`); }
-  else R.note('the 200-operation maximum-house stream is its own release step: QA_RELEASE=1 or --max-only, run-all --only leak-max (TL ruling, F6-T1a gate)');
+  else if (!MAXONLY) R.note('the 200-operation maximum-house stream is its own release step: QA_RELEASE=1 or --max-only, run-all --only leak-max (TL ruling, F6-T1a gate)');
+  t = Date.now();
+  if (SAMPLE) { await probeRun(browser, '960x600 real sample', '', OPS, SEED, VP_DEF); TIMES.push(`sample ${((Date.now() - t) / 1000).toFixed(1)} s`); }
+  else if (!MAXONLY) R.note('the 50-op sample stream runs in the third release process (f6-t1-leak.mjs --max-only --rows3-only; TL F6-T2 gate ruling, CTO §6.2): a duplicate of the 200-op maximum-house stream');
 } finally { if (browser) await browser.close(); }
 if (MAXONLY) {
-  const streamS = ROWS_ONLY ? 0 : (Date.now() - t0) / 1000, rowsT0 = Date.now(), rows = [...(STREAM_ONLY ? [] : await rowsChain(RELEASE_ROWS)), ...(ROWS_ONLY ? [] : await rowsChain(STREAM_ROWS))], rowsS = (Date.now() - rowsT0) / 1000;
+  const streamS = ROWS_ONLY ? 0 : (Date.now() - t0) / 1000, rowsT0 = Date.now(), rows = [...(STREAM_ONLY || ROWS3_ONLY ? [] : await rowsChain(RELEASE_ROWS)), ...(ROWS_ONLY || STREAM_ONLY ? [] : await rowsChain(ROWS3))], rowsS = (Date.now() - rowsT0) / 1000;
   for (const { f, a, code, s: rs } of rows) { TIMES.push(`${f} ${rs.toFixed(1)} s`); R.check(`[release] ${f} ${a.join(' ')} (QA_RELEASE=1): its checks pass (${rs.toFixed(1)} s)`, code === 0 ? [] : [`exit ${code}`]); }
-  const all = (Date.now() - t0) / 1000, side = STREAM_ONLY ? '[leak-max] stream' : ROWS_ONLY ? '[release] rows' : '[leak-max] release step (stream + rows, serial)';
-  R.note(`${side}: ${all.toFixed(1)} s (stream ${ROWS_ONLY ? '-' : streamS.toFixed(1) + ' s'}, rows ${STREAM_ONLY ? '-' : rowsS.toFixed(1) + ' s'})`);
+  const all = (Date.now() - t0) / 1000, side = STREAM_ONLY ? '[leak-max] stream' : ROWS_ONLY ? '[release] rows' : ROWS3_ONLY ? '[release] rows3' : '[leak-max] release step (stream + rows, serial)';
+  R.note(`${side}: ${all.toFixed(1)} s (${ROWS3_ONLY ? 'sample stream' : 'stream'} ${ROWS_ONLY ? '-' : streamS.toFixed(1) + ' s'}, rows ${STREAM_ONLY ? '-' : rowsS.toFixed(1) + ' s'})`);
   if (all > NOTE_S) R.note(`NOTE ${side} took ${all.toFixed(1)} s > ${NOTE_S} s (TL: two NOTE runs in a row go to the TL)`);
-  R.check(`${side}${ROWS_ONLY ? ` (${RELEASE_ROWS.length} release rows)` : STREAM_ONLY ? ` (200-op maximum-house stream + ${STREAM_ROWS.length} stream rows)` : ` (200-op maximum-house stream + ${RELEASE_ROWS.length + STREAM_ROWS.length} release rows)`} runs in ${all.toFixed(1)} s <= ${MAX_S} s (TL limit)`, all <= MAX_S ? [] : [`${all.toFixed(1)} s`]);
+  R.check(`${side}${ROWS_ONLY ? ` (${RELEASE_ROWS.length} release rows)` : STREAM_ONLY ? ' (200-op maximum-house stream)' : ROWS3_ONLY ? ` (50-op sample stream + ${ROWS3.length} rows)` : ` (200-op maximum-house stream + 50-op sample stream + ${RELEASE_ROWS.length + ROWS3.length} release rows)`} runs in ${all.toFixed(1)} s <= ${MAX_S} s (TL limit)`, all <= MAX_S ? [] : [`${all.toFixed(1)} s`]);
 }
 R.note(`timings: ${TIMES.join(', ')}; run ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 process.exit(R.done() ? 0 : 1);
