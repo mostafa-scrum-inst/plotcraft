@@ -177,3 +177,69 @@ These run in view3d-real, in the 1280x800 max-house scene.
 - or to move more 3D rows to the release step.
 
 **QA_FULL and release-step runs:** not run, since the default gate is unresolved. QA measured the leak-max stream side at **274 s**, over the 260 s NOTE line and under 300 s.
+
+## After the TL gate ruling and the CTO conditions: gate MET
+
+### Exterior hide (400383c)
+
+- **What hides:** `furniture` and `textured-<level>` are not drawn when the roof group is shown, that is Roof on AND level All.
+  - Glazing, glow and lamps stay, so the windows still read as lit at night.
+  - It composes with the level selector and the Basement rule; the mock level x Roof matrix test covers it.
+  - Every switch marks the shadow map.
+- **Upload at build, behind "Building…":**
+  - `renderer.initTexture(atlas)`;
+  - one draw clipped to a 1 px scissor, with the interior and the glow shown and no shadow pass.
+
+  initTexture, setScissor and setScissorTest are on the mock whitelist and pass the r128 conformance check.
+- **Real r128 (view3d-real, default run):**
+  - The first Roof-off frame after an exterior build is ≤ 2x a steady dollhouse frame: 178 vs 182 ms solo, 326 vs 387 ms under QA_FULL load.
+  - Renderer memory stays at 36 / 7 geometries / textures across that frame.
+- **Mutations caught:**
+  - furniture hidden in the dollhouse (mock);
+  - the Roof toggle used as the trigger instead of the roof's visibility (mock);
+  - no upload draw (mock);
+  - no initTexture (mock);
+  - no upload at all (real: memory 28 / 6 -> 36 / 7).
+- **Pixels, before and after** (`furniture` / `textured-*` drawn against hidden, exterior mode, 30 poses: 5 azimuths x phiMin / mid / phiMax x 12 h / 22 h at rMin, 1280x800):
+
+  | house | min | median | max |
+  |---|---|---|---|
+  | max | 5 px | 36 px | 846 px |
+  | sample | 2 px | 15 px | 462 px |
+
+  Out of 883k px, all changes are at the shadow-map edge terms along the walls; no interior shows.
+- **Budget, max house at Reset:** calls / triangles 28 / 19 752 at 12 h and 32 / 19 952 at 22 h (were 36 / 40 520 and 40 / 40 720).
+
+### Other changes
+
+- **view3d-real:** checks (a)–(e) (lit panes, highlight, seams, budget record) run with QA_FULL=1 only, at 5f5d0d5. The first-Roof-off check (f) and the outdoor ground luma stay in the default run.
+- **Loaded-build guard:** 1500 ms (8a0aab9). C-4.8 solo, best of 3, reads 55–71 ms against the CTO's 250 ms T2 budget.
+- **QA rows picked from main:**
+  - 175d20d, the exterior-hide rows and rows3 (ff2fa74);
+  - b2477cb, the default leak smoke (93d2c90);
+  - 567ebf4, trim 2 (485d72e).
+- **Release step:** three processes (--rows-only, --stream-only, --rows3-only), run **one at a time** by default; `RELEASE_JOBS=N` runs more (922b498). The measurements:
+
+  | arrangement | per-process times |
+  |---|---|
+  | three in parallel | 347–378 s each, and the 200-op stream's picks failed "not ready after 12 s" under that load |
+  | two at a time | 297 / 287 s (NOTE) + 203 s |
+  | solo | 203–226 s |
+
+### Gate
+
+| run | wall | three step |
+|---|---|---|
+| re-time (`--write-durations`) | 435.5 s | 24.9 s |
+| default 1 | 416.3 s | 23.8 s |
+| default 2 | 415.1 s | 23.7 s |
+| default 3 | 429.9 s | 23.3 s |
+
+- **Default runs:** median **416.3 s**, within 420 s; no run over 440 s.
+- **QA_FULL=1 QA_RELEASE=1 `--write-durations`:** green in 1118.1 s.
+  - QA_FULL part: **467.5 s**, within 480 s.
+  - C-4.8 solo: 63 ms (88, 63, 66).
+  - Texgen C-3.2 best of 3: 87.7 ms.
+  - Release, one at a time: rows **225.8 s**, stream **205.2 s**, rows3 **219.6 s**, all within 260 s. Release wall time 650.6 s.
+- durations.json (33fe4c0) and durations-full.json (0c5371f) are re-timed.
+- QA's three QA_FULL runs for sign-off are still outstanding (CTO §6.2).
