@@ -73,3 +73,32 @@ every stage, and CD-7 is still open.
   - f1-t1: 10.7 s
 - The release step is under the 260 s NOTE line.
 - **QA_FULL:** the moved rows no longer run under QA_FULL=1 alone, so its time goes down.
+
+## Addendum 2: QA_FULL trim before the F6-T1c gate (TL: at least 30 s of QA_FULL work into the release step)
+
+All moved rows are duplicated viewport passes, and every check is kept.
+
+**Rows moved from QA_FULL=1 into the release step:**
+- f2-t3: B, F and M at 640x360 / 768x1024.
+- f1-t3: I, L and N at 768x1024 / 640x360.
+- These are about 33 s of QA_FULL work: +17.7 s and +15.1 s in the QA_FULL pool, and +16.9 s and +15.2 s measured in the release step.
+
+**Release step NOTE line:** raised from 260 s to 280 s (TL). The limit stays at 300 s.
+
+**Measured on the f6t1 copy (7c12dcc), quiet machine:**
+
+| Run | Result | Wall |
+|---|---|---|
+| Release step | 9 of 9 | **280.8 s** (limit 300; 0.8 s over the 280 s NOTE line, so a NOTE) |
+| `QA_FULL=1` | 11 839 / 1 | **450.9 s**, down from 474.9 s |
+
+- **Release-step breakdown:**
+  - maximum-house stream: 124.4 s
+  - f4-t1: 20.7 s
+  - f5-t3: 38.7 s
+  - f4-t2-s0-ui: 16.9 s
+  - f2-t3: 38.3 s
+  - f1-t3: 30.6 s
+  - f1-t1: 10.8 s
+- **The one QA_FULL failure:** FS's in-pool guard in e2e view3d-real, "maximum house build ≤ 800 ms": 821 ms, best of 3. It is a load-sensitive guard (C-4.8 solo: 146 ms), and on f6t1c FS has raised it to 1200 ms. It is not a QA row.
+- **Risk:** the stream varies between 118 and 124 s, so the release step sits on the 280 s NOTE line.

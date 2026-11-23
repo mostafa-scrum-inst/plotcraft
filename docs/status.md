@@ -308,3 +308,4 @@
 - [TL] Default trim result accepted (97b812f): 411.9 / 413.1 s, release 246.1 s, no check lost; f6t1 merge needs one quiet confirm run ≤ 420 s after FS re-times.
 - [TL] Post-merge timing: confirm 411.2 s; loaded-build guard 800→1200 ms (CTO informed); QA moves ≥ 30 s QA_FULL→release before T1c gate, release NOTE 280 s.
 - [TL] CTO accepted 1200 ms guard (trip → solo rerun before calling noise); FS told.
+- [QA] QA_FULL trim (TL, before F6-T1c gate): f2-t3 B/F/M and f1-t3 I/L/N extra viewports into the release step (NOTE line 280 s): QA_FULL 450.9 s (was 474.9), release step 280.8 s (9/9, NOTE by 0.8 s).

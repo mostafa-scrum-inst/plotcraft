@@ -26,8 +26,8 @@ import * as H from './f4-t1-ref.mjs';
 const arg = (k, d) => { const a = process.argv.find((x) => x.startsWith(`--${k}=`)); return a ? Number(a.slice(k.length + 3)) : d; };
 const SEED = arg('seed', 20261122), OPS = arg('ops', 50);
 // TL ruling (F6-T1a gate, QA_FULL 545.6 s): the 200-op maximum-house stream (175 s) leaves QA_FULL=1 and is its own release
-// step, in its own process: QA_RELEASE=1 or --max-only runs only that stream (limit 300 s, NOTE above 260 s); every other run only the sample.
-const MAXONLY = !!process.env.QA_RELEASE || process.argv.includes('--max-only') || process.argv.includes('--leak-max'), MAX_S = 300, NOTE_S = 260;   // TL (3db2b02 accepted): the release step <= 300 s, a NOTE above 260 s (two in a row go to the TL)
+// step, in its own process: QA_RELEASE=1 or --max-only runs only that stream (limit 300 s, NOTE above 280 s); every other run only the sample.
+const MAXONLY = !!process.env.QA_RELEASE || process.argv.includes('--max-only') || process.argv.includes('--leak-max'), MAX_S = 300, NOTE_S = 280;   // TL (3db2b02 accepted): the release step <= 300 s, a NOTE above 280 s (was 260; TL, QA_FULL trim before F6-T1c) (two in a row go to the TL)
 const session = sessions({ R, shots: join(ROOT, 'tests/qa/shots/F6-T1'), noShots: true });
 const t0 = Date.now(), TIMES = [];
 const cut = (a, n = 8) => a.slice(0, n).concat(a.length > n ? [`... ${a.length} in all`] : []);
@@ -111,7 +111,7 @@ try {
   else R.note('the 200-operation maximum-house stream is its own release step: QA_RELEASE=1 or --max-only, run-all --only leak-max (TL ruling, F6-T1a gate)');
 } finally { await browser.close(); }
 // The release step also carries the rows the TL moved out of QA_FULL=1 after the 488 s gate (F6-T1a): each in its own
-// process with QA_RELEASE=1, after the stream. The whole step stays <= 300 s (NOTE above 260 s). It runs in every implementation-review gate (with QA_FULL) and at release.
+// process with QA_RELEASE=1, after the stream. The whole step stays <= 300 s (NOTE above 280 s). It runs in every implementation-review gate (with QA_FULL) and at release.
 const RELEASE_ROWS = [['f4-t1-view.mjs', '--no-shots', '--release-only'], ['f5-t3-view.mjs', '--no-shots', '--release-only'], ['f4-t2-s0-ui.mjs', '--no-shots', '--only=640x360'],
   // TL default-run trim (docs/03-tasks/F6-T1/qa-default-trim.md rows 1-7): the desktop / landscape twins moved out of the default run
   ['f2-t3-site-rooms.mjs', '--no-shots', '--release-only'], ['f1-t3-plot.mjs', '--no-shots', '--release-only'], ['f1-t1-layout.mjs', '--no-shots', '--release-only']];
