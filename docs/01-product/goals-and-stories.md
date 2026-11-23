@@ -3,6 +3,12 @@
 Owner: PM. Source: `docs/00-brief.md`. Status: approved by the CTO (round 2); round 3 edits made at the F1 feature review; round 4 edits apply the client's binding decisions `docs/01-product/client-decisions.md` (CD-1 to CD-3); round 5 edits made at the F2 feature review; rounds 6 and 7 fix user-facing texts at the F3-T2 and F3-T3 plan reviews; round 8 edits made at the F3 feature review; round 9 fixes the stage-5 level selector labels at the F4-T1 plan review; round 10 applies CD-4 / CD-5 and answers the F4-T2 plan questions; round 11 records the default-camera decision and the vegetation-shortfall warning at the F4-T3 start; round 12 fixes the room-finder caption and dropdown state at the F5-T1 plan; round 13 answers the F5-T2 tour questions; round 14 gives the F5-T3a saving texts and labels; round 15 answers the F6-T1 Roof-on-at-open questions.
 This document says **what** and **how we know it works**. How it is built is the Tech Lead's call.
 
+## Changes in round 17 (2026-11-23, F6-T2 floor materials, designer-plan Q4; no story IDs changed)
+
+| Item | Decision |
+|---|---|
+| 3D floors: real materials (planks / tile / carpet) with a 0.2 tint of the room colour (CD-8) | **Approved** on the T2 shots (`docs/03-tasks/F6-T2/designer-plan-review.md`, addendum 2), with one data change: the **hall** moves off planks to a neutral non-plank floor, so circulation still reads as hall (F3-S1). Living / dining / bedroom / office share planks: accepted, since walls, furniture, the 0.2 tint and the finder / tour caption tell them apart. F4-S1 wording now reads "floor material and tint, furniture and/or a label". 2D plan colours are unchanged; 3D floors no longer copy them. |
+
 ## Changes in round 16 (2026-11-22, F6-T1b: a lower Reset camera; no story IDs or criteria changed)
 
 | Item | Decision |
@@ -504,7 +510,7 @@ Draw the land as a polygon with live measurements; includes the stage navigation
 - A "Roof" toggle (default off) shows the Q9 roof per 3.3 when the level selector is "All"; flat, pitched and terrace are visibly different, and a usable roof shows its stair head. With the roof on the house is shown closed: exterior walls run up to the roof, which never floats (round 10).
 - Selecting Basement opens the ground inside the footprint so basement rooms are visible from above (3.2).
 - Each room has a fixed set of block furniture for its type (e.g. bed in bedroom, counter in kitchen, sofa in living, table in dining, floor seating in majlis, desk in office, fixtures in bathroom, shelves in storage, machines in laundry). Q18 changes colours/finishes only; Q19 "sparse" shows visibly fewer pieces than "full". Furniture stays inside its room.
-- Stairs (and lift if chosen) are visible; exterior colours follow Q10; rooms are distinguishable by type (floor tint and/or a label).
+- Stairs (and lift if chosen) are visible; exterior colours follow Q10; rooms are distinguishable by type (floor material and tint, furniture and/or a label; round 17).
 - Outdoor: vegetation covers roughly the effective vegetation % of the plot (up to the G6 cap of 120 trees and 200 shrubs, about 1 020 m², round 11) and never sits inside the building, parking or pool; parking spaces match Q15 (covered shows a canopy) and sit between the building and the street edge; the pool appears if Q16 is yes at its 4.3 size, behind or beside the building; boundary wall, gate (on the street edge at the Q17 position; only with the wall, round 10) and garden seating appear per Q17; the main entrance faces the street edge; a north marker reflects Q5. Items left out by an F2-S3 warning are absent.
 - While the scene is being built a "Building…" state is shown; if 3D cannot start (WebGL or three.js unavailable) an in-page message explains it and the 2D stages remain usable.
 

@@ -59,7 +59,7 @@ It works on phones, tablets and desktops, by touch, mouse or keyboard. Your work
 
 **3D view**
 - **The default view looks at the house from the street,** so the pool sits behind the house. One drag shows it.
-- **Rooms in 3D are told apart by floor colour,** not by name labels. Names show in "Go to room" and on the tour.
+- **Rooms in 3D have realistic floors** (wood, tile or carpet with a hint of the room colour) and their own furniture, but no name labels. Rooms with the same floor (living, dining, bedrooms, office) are told apart by walls and furniture, and their names show in "Go to room" and on the tour. The 3D floor colours no longer match the 2D plan colours.
 - **Very large gardens are drawn thinner than asked:** at most 120 trees and 200 shrubs, about 1 020 m² of planting. There is no message.
 - **Raising the vegetation % can swap some shrubs for trees;** existing trees never move.
 - **The sun is approximate,** not real solar data, as the app says.
