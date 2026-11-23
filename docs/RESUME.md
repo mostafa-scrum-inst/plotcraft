@@ -63,6 +63,12 @@ Everything lives on disk under /home/claude/plotcraft (cloud sessions: /home/use
 - run-all longest-first (tests/durations.json); default run 398.8 s, QA_FULL=1 450.4 s on aaaddae, 0 failures (docs/04-feature-reviews/qa-full-gate.md).
 - F4.md and F5.md: PM APPROVED; CTO VERDICT: CHANGES REQUESTED only for the CD-6 phone gate (no code change). Closing table per gate option in the CTO sections (2c63a0a).
 
+## Batches 16-17 result: F6-T1 realism (CD-8, client brief "too far from realistic")
+- T1a textures/tone mapping/sky/fog/street/on-demand shadows; T1b resetPhi 62, window+door decals, contact darkening, blob shadows, lumpy trees, winter meadow, Designer light retune; T1c roof coping/drip/roofDeck/parapet band, meadow #6A8550, hall windows (house v3). TL: CD-8 complete for MVP. Deferred: roof tank/AC (R4), pitched eaves (R5), tinted far meadow (G2b, needs CTO).
+- App v8 (T1a+b) and v9 (T1c) same URL; testing docs https://claude.ai/artifact/QrufpUQDKXSzyVP6rtiAGr and https://claude.ai/artifact/BLm3YEvaVGGgwaHrU38GmG.
+- Gate now: median of 3 quiet default runs <= 420 s, none > 440 (TEAM-PROTOCOL addendum). Main 6968d00: 401.8/406.5/408.9 s. QA_FULL ~464 s. Release step = 2 parallel processes (stream 243.5 s, rows 239.7 s; NOTE 260, limit 300) - ~16 s room each; next moves need a third process or real cuts. dist ~22 kB under the 627,302-byte C-1.3 budget.
+- CD-7 phone check can run on v9; F5-T3b etc. as below.
+
 ## Waiting on the client: phone-gate decision card (sent 2026-11-22)
 - Option 1 (name phone checker, rec): record CD-6 a-c answers -> F4 APPROVED; run F5-T3b on findings -> QA incl. QA_FULL=1 -> republish -> F5 APPROVED.
 - Option 2 (desktop Chrome via Claude in Chrome): check published URL (three.js loads from cdnjs in iframe, stage 5 draws, 0 console errors, mouse orbit/zoom/pan, level, Roof, room pick, tour start/stop, screenshots) -> both APPROVED with risk recorded; F5-T3b items -> limits.
