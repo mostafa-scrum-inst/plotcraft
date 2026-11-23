@@ -9,6 +9,12 @@
 - e79f9fe: R1–R3
 - 4d7afa4: lint
 - 66c5d87: G1 + G2, the Designer's data and goldens (meadow golden 6e228e05)
+- ec12a64: `deckLift` 0.002 to 0.01 (z-fight fix)
+- a4f62da, cb8521f: QA merges (b29b95a, 2b8cfa1: T1c rows, `--stream-only` / `--rows-only`)
+- a5a6193: run-all release step as two parallel processes
+- re-timed `durations.json` and `durations-full.json` (b12e8c4)
+
+**Designer:** signed off all of T1c after the deck fix (44bf589, 03bc9b1).
 
 ## 1. What changed
 
@@ -27,13 +33,13 @@
   - **Drip edge.** The flat or terrace slab box now uses `exteriors.slab` instead of `roof`, and stands `dripOut` 0.04 m proud on every side.
   - **Coping.** Every parapet ring gets four coping boxes (`copingT` 0.05 thick, `copingOver` 0.03 past both faces), and each stair or lift head gets a cap. The colour is the new `exteriors[*].coping`, with the Designer's hexes.
 - **R3: band strips (`roofBatch`, TL Q1).**
-  - The strips are `deckBand` face-up quads 0.005 m above the slab top (`deckLift` + `bandLift`).
+  - The strips are `deckBand` face-up quads 0.013 m above the slab top (`deckLift` + `bandLift`).
   - Inside the parapet the band is `deckW` 0.35 wide, ×0.80 at the parapet fading to ×1.
   - Around each head it is `headW` 0.25 wide, ×0.85 fading to ×1.
   - The strips are clipped to the deck rectangle, and fully clipped strips are skipped. Heads flush with a footprint corner therefore get fewer than 4 strips.
   - The decals stay the last `roofBatch` items.
 - **R2: `roofDeck` (TL Q-F1 and Q2).**
-  - **Geometry.** One `BoxBatch({ uv: true })` face-up quad inside the parapet, `deckLift` 0.002 m above the slab top, with world UVs in metres. It is in the `roof` group, so Roof off and the level selector hide it.
+  - **Geometry.** One `BoxBatch({ uv: true })` face-up quad inside the parapet, `deckLift` 0.01 m above the slab top (first 0.002, which z-fought the slab top and made the Designer's corner patch; fixed in ec12a64), with world UVs in metres. It is in the `roof` group, so Roof off and the level selector hide it.
   - **Material.** `mats.deck`: Lambert with `color = exteriors.roof`, no vertex colours.
   - **Map.** A new `membrane` texgen kind on flat roofs. On usable or terrace roofs it reuses the `paving` texture object (`mats.paving.map`), so there is no second upload.
   - **Shadows.** It receives shadows and does not cast them.
@@ -93,7 +99,7 @@ The loaded build is higher because the maximum house now has 60 openings, each m
 - `detail` R2: the deck's quad, UVs, material, map choice, texture counts and Roof off.
 - `texgen` membrane: golden, seam columns, and the recorded C-3.2 time.
 - `lint`: the budget at −1, 0 and +1, and the tripwire with three inlined.
-- view3d-real: `roofDeck` draws over the slab top at Reset and at rMax, with at most 2 % of pixels unchanged (no z-fight).
+- view3d-real: `roofDeck` draws over the slab top at Reset and at rMax, counting only pixels whose first raycast hit is the deck, with at most 0.1 % unchanged (no z-fight).
 
 **Mutations** (each applied once and reverted; every one is caught):
 
@@ -107,7 +113,31 @@ The loaded build is higher because the maximum house now has 60 openings, each m
 | terrace makes a second paving texture | detail R2 |
 | membrane not tracked or disposed | detail R2 and realism |
 | `deckLift` 0, the z-fight | view3d-real roofDeck, 1534 / 2187 pixels unchanged at rMax |
+| `deckLift` 0.002 (the shipped bug) | view3d-real roofDeck after the first-hit filter, 13 / 3291 pixels unchanged (limit 0.1 %) |
 
 ## 5. Deviations
 
 - **The R3 band** is strips in `roofBatch` (TL Q1). The membrane seams and the paving joints stop 0.35 m short of the parapet. If the Designer's shots read that as a flat rim, the TL has pre-approved a fallback (Q-F2): the band as vertex colours in `roofDeck`.
+
+## 6. Gate (quiet machine, f6t1c)
+
+| step | result | limit |
+|---|---|---|
+| node | 546 / 0 | |
+| lint | clean; dist 604 890 bytes, about 22.4 kB under `DIST_BUDGET_BYTES` 627 302 | tripwire 700 000 |
+| default run, old table | 417.7 s green | 420 s |
+| default run, re-timed table | 426.2 s, 426.5 s green | **420 s: not met (open item)** |
+| QA_FULL `--write-durations` | 464.0 s green | 480 s |
+| C-4.8 solo build | 148 ms (203, 160, 148) | 400 ms, review line 380 |
+| loaded build, maximum house | 746 ms in QA_FULL; 736 to 905 ms across runs | guard 1200 ms, did not trip |
+| texgen C-3.2 best of 3 | 63 to 77 ms | 130 ms line, stays in the default run |
+| release step, stream process | 159.0 s | 300 s, NOTE above 260 |
+| release step, rows process | 189.0 s | 300 s, NOTE above 260 |
+| release step wall time | 189.0 s (in parallel) | |
+
+**Open item: default run time.** The post-trim baseline on main is 411.2 s, and the cap is +5 s. Measured runs come to 426 s, which is +15 s and over the 420 s gate. Pool work grew by about 40 s (1164.3 to 1204.7 s):
+- qa/run-f6-t1: +13.5 s (QA's new T1c rows, f6-t1-view D and f6-t1-model W1).
+- Maximum-house suites: +2 to +6 s each (f5-t2 +6.2, f4-t3 +6.1, e2e/shell +4.9, f4-t2 +4.6, f1-t2 +2.8, view3d-real +2.4, edges +2.2). The maximum house went from 22 to 60 openings, so every build costs more.
+- The three step: +2.5 s.
+
+The TL decides which moves to make (for example, moving T1c rows into the release step or a QA trim).
