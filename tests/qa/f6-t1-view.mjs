@@ -31,7 +31,11 @@ if (!noShots) mkdirSync(shots, { recursive: true });
 const session = sessions({ R, shots, noShots });
 const t0 = Date.now(), TIMES = [];
 const cut = (a, n = 8) => a.slice(0, n).concat(a.length > n ? [`... ${a.length} in all`] : []);
-async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) return; const t = Date.now(); try { await fn(); } catch (e) { R.check(`${label}: ran to the end`, [String(e && e.stack || e).split('\n').slice(0, 3).join(' | ')]); } TIMES.push(`${label} ${((Date.now() - t) / 1000).toFixed(1)} s`); }
+// TL ruling (F6-T1c default run 426 s): B (maximum-house budgets) and the maximum-house part of D run in the release step
+// only (QA_RELEASE=1; f6-t1-leak.mjs --rows-only runs this file with --release-only, which runs just those). The sample
+// budgets (S) and the sample deck cases stay in the default run.
+const REL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only');
+async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) return; if (RELONLY ? !'BD'.includes(label[0]) : !REL && label[0] === 'B') return; const t = Date.now(); try { await fn(); } catch (e) { R.check(`${label}: ran to the end`, [String(e && e.stack || e).split('\n').slice(0, 3).join(' | ')]); } TIMES.push(`${label} ${((Date.now() - t) / 1000).toFixed(1)} s`); }
 
 const READY = () => { const i = PC.debug.scene(), q = (h) => document.querySelector(`[data-pc="${h}"]`); return (i.active && !i.lost && !i.building && i.builds > 0 && q('v3-building').hidden && !i.frame && !i.dirty) || !q('v3-unavailable').hidden; };
 async function ready(S, ms = 12000) { const ok = await S.until(() => S.page.evaluate(READY), ms); await S.settle(); return ok; }
@@ -151,7 +155,7 @@ if (T1C) await guard('D deck', async () => {
       ['flat sample', "s.ans.roofType = 'flat'; s.ans.usableRoof = false;", 1, 'own', 5, 21],
       ['usable terrace sample', "s.ans.roofType = 'terrace'; s.ans.usableRoof = true;", 1, 'paving', 4, null],
       ['pitched sample', "s.ans.roofType = 'pitched'; s.ans.usableRoof = false;", 0, null, null, null],
-      ['maximum house', MAXMUT, 1, 'paving', null, 27]]) {
+      ['maximum house', MAXMUT, 1, 'paving', null, 27]].filter(([n]) => (RELONLY ? n === 'maximum house' : REL || n !== 'maximum house'))) {
       if (!(await to5(S, mut))) { f.push(`${name}: not ready`); continue; }
       const r = await probe(), st = await S.page.evaluate(() => PC.store.get().ans.exterior), E = T3.exteriors[st || 'sand'];
       if (r.deck.length !== deckWant) { f.push(`${name}: ${r.deck.length} roofDeck meshes (${deckWant})`); continue; }
@@ -163,10 +167,11 @@ if (T1C) await guard('D deck', async () => {
         if (!d.hasMap || (mapWant === 'paving') !== d.samePaving) f.push(`${name}: roofDeck map ${d.hasMap ? (d.samePaving ? 'the paving texture object' : 'its own texture') : 'none'} (${mapWant === 'paving' ? 'the paving texture object' : 'its own membrane texture'})`);
       }
     }
-    R.check(`${T}: flat sample one roofDeck (Lambert, exteriors.roof, own membrane map, 5 scene textures, 21 meshes), usable terrace on the paving texture object (4 textures), pitched none, maximum house 27 meshes; receives, does not cast`, f);
+    R.check(`${T}${RELONLY ? ' (release step: maximum house)' : ''}: flat sample one roofDeck (Lambert, exteriors.roof, own membrane map, 5 scene textures, 21 meshes), usable terrace on the paving texture object (4 textures), pitched none, maximum house 27 meshes; receives, does not cast`, f);
     await S.end(T);
   } finally { await browser.close(); }
 });
 
+if (!REL) R.note('B (maximum-house budgets) and the maximum house of D run in the release step only (QA_RELEASE=1, f6-t1-leak.mjs --rows-only; TL ruling F6-T1c)');
 R.note(`timings: ${TIMES.join(', ')}; run ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 process.exit(R.done() ? 0 : 1);

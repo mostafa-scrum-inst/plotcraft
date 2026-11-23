@@ -15,6 +15,11 @@ const R = collector('F1-T2 flows');
 // gating table), skipAndEdit (E), drafts (F, G: autosave, Resume, Start new, sample over a draft) and focusAndTaps (H:
 // keyboard) at 768x1024 touch; the same behaviours by touch stay here at 360x640.
 const MAIN = VIEWPORTS.filter((v) => !['640x360', '768x1024'].includes(v.tag) && (!only || v.tag === only)); // 360x640 touch, 1280x800 mouse
+// TL ruling (F6-T1c default run 426 s, part b): the 1280x800 passes of C, E and F and of I run in the release step only
+// (QA_RELEASE=1; f6-t1-leak.mjs --rows-only runs this file with --release-only, which runs just those). The 360x640 pass
+// keeps every section in the default run; A, B, D, G, H stay at both sizes.
+const REL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only'), RELS = ['C', 'E', 'F'];
+const run = (sec, vp) => (RELONLY ? vp.tag === '1280x800' && RELS.includes(sec) : REL || vp.tag !== '1280x800' || !RELS.includes(sec));
 const LAND = VIEWPORTS.find((v) => v.tag === '640x360');
 
 const session = sessions({ R, shots: SHOTS, noShots });
@@ -41,7 +46,7 @@ try {
     const V = vp.tag;
 
     // ============ A. fresh load ============
-    { const s = await session(browser, vp);
+    if (!RELONLY) { const s = await session(browser, vp);
       R.check(`${V} A fresh: state is the 4.1 defaults`, defaultProblems(await s.state()));
       R.check(`${V} A fresh: only stage 1 shown`, (await s.stages()) === '1');
       R.check(`${V} A fresh: stepper = current + 4 locked`, (await s.steps()) === 'CLLLL' ? [] : [await s.steps()]);
@@ -60,7 +65,7 @@ try {
       await s.end(`${V} A`); }
 
     // ============ B. locked steps explain themselves; Next disabled does nothing ============
-    { const s = await session(browser, vp);
+    if (!RELONLY) { const s = await session(browser, vp);
       for (const n of [2, 3, 4, 5]) {
         await s.act('step-' + n); await s.settle();
         R.check(`${V} B tap locked step ${n}: stays on stage 1, toast says why`, (await s.state()).stage === 1 && (await s.stages()) === '1' && eq(await s.toasts(), ['Draw and close the plot first']) ? [] : [`stage=${(await s.state()).stage} toasts=${JSON.stringify(await s.toasts())}`]);
@@ -77,7 +82,7 @@ try {
       await s.end(`${V} B`); }
 
     // ============ C. sample: one tap; Next / Back / step navigation loses nothing ============
-    { const s = await session(browser, vp);
+    if (run('C', vp)) { const s = await session(browser, vp);
       await s.act('btn-sample'); await s.settle();
       R.check(`${V} C sample loads with one tap and no confirmation on an empty project`, !(await s.dialogOpen()));
       const st0 = await s.state();
@@ -110,7 +115,7 @@ try {
       await s.end(`${V} C`); }
 
     // ============ D. full gating table with all five stages opened by the test (MAX_BUILT is 2 in this build) ============
-    { const s = await session(browser, vp);
+    if (!RELONLY) { const s = await session(browser, vp);
       await s.act('btn-sample');
       // Seeded plans carry the real level signature (PC.sig.level): since F2-T1 a plan with any other sig is stale and can
       // never make stage 3 valid. (Edit made by FS in F2-T1, reviewed and confirmed by QA on 2026-11-20: it changes only how
@@ -149,7 +154,7 @@ try {
       await s.end(`${V} D`); }
 
     // ============ E. Skip to 3D and "unmodified sample" ============
-    { const s = await session(browser, vp);
+    if (run('E', vp)) { const s = await session(browser, vp);
       await s.act('btn-sample'); const st0 = await s.state();
       R.check(`${V} E exactly one Skip button in the document`, (await s.page.locator(sel('btn-skip3d')).count()) === 1);
       await s.act('btn-skip3d'); await s.settle(); let st = await s.state();
@@ -185,7 +190,7 @@ try {
         const changes = { vegPct: (d) => { d.ans.vegPct = 30; }, north: (d) => { d.ans.north = 90; }, ceiling: (d) => { d.ans.ceilingH = 3.3; }, roof: (d) => { d.ans.roofType = 'terrace'; }, exterior: (d) => { d.ans.exterior = 'white'; }, cars: (d) => { d.ans.parking.cars = 1; }, pool: (d) => { d.ans.pool.on = false; }, wall: (d) => { d.ans.extras.wall = false; }, interior: (d) => { d.ans.interior.style = 'classic'; }, footprint: (d) => { d.ans.footprintPct = 30; }, setback: (d) => { d.ans.setbacks.front = 4; }, room: (d) => { d.ans.rooms[0].size = 'M'; }, vertex: (d) => { d.plot.pts[2] = [20, 31]; } };
         for (const k in changes) { fresh(); S.commit(changes[k]); if (S.get().sampleClean) f.push(k + ' kept the flag'); } fresh(); return f; }));
       await s.end(`${V} E`); }
-    { // Skip with all stages open and plans present approves every level and reaches stage 5
+    if (run('E', vp)) { // Skip with all stages open and plans present approves every level and reaches stage 5
       const s = await session(browser, vp); await s.act('btn-sample');
       await s.page.evaluate(() => { PC.stages.MAX_BUILT = 5; const p = { sig: 'qa', rooms: [], unmet: [], edited: false, approved: false, error: null }; PC.store.commit((st) => { st.plans = { G: { ...p, sig: PC.sig.level(st, 'G') }, 1: { ...p, sig: PC.sig.level(st, '1') } }; }, { nav: true }); });
       await s.act('btn-skip3d'); await s.settle(); const st = await s.state();
@@ -193,7 +198,7 @@ try {
       await s.end(`${V} E2`); }
 
     // ============ F. draft autosave, resume, start new ============
-    { const s = await session(browser, vp);
+    if (run('F', vp)) { const s = await session(browser, vp);
       await s.act('btn-sample');
       R.check(`${V} F draft written automatically after loading the sample`, await s.waitDraft((d) => d && d.state && d.state.plot.pts.length === 5));
       const w = JSON.parse(await s.raw()), stA = await s.state();
@@ -251,7 +256,7 @@ try {
       await s.end(`${V} F`); }
 
     // ============ G. sample over an existing draft / project asks first ============
-    { const s = await session(browser, vp);
+    if (!RELONLY) { const s = await session(browser, vp);
       await s.act('btn-sample'); await s.act('unit-ft'); await s.waitDraft((d) => d && d.state.ans.unit === 'ft'); const saved = await s.raw();
       await s.reload(); await s.act('btn-sample'); await s.settle();
       R.check(`${V} G sample over a pending draft asks for confirmation`, (await s.dialogOpen()) && (await s.text('dialog-title')) === 'Load the sample project?' && /replaces/i.test(await s.text('dialog-text')) ? [] : ['no dialog']);
@@ -264,7 +269,7 @@ try {
       await s.end(`${V} G`); }
 
     // ============ H. keyboard-only pass ============
-    { const s = await session(browser, vp);
+    if (!RELONLY) { const s = await session(browser, vp);
       const tabTo = async (hook, max = 60) => { for (let i = 0; i < max; i++) { await s.page.keyboard.press('Tab'); if ((await s.focus()) === hook) return true; } return false; };
       R.check(`${V} H Tab reaches "Load sample project"`, await tabTo('btn-sample'));
       await s.page.keyboard.press('Enter'); await s.settle();
@@ -308,7 +313,7 @@ try {
     'v2: edgeOv missing': mut((d) => { delete d.state.ans.edgeOv; }) });
   const V1KEY = 'plotcraft.draft.v1';
   const asV1 = (fn) => mut((d) => { d.v = 1; d.state.v = 1; delete d.state.ans.edgeOv; if (fn) fn(d); });
-  for (const vp of VIEWPORTS.filter((v) => ['360x640', '1280x800'].includes(v.tag) && (!only || v.tag === only))) {
+  for (const vp of VIEWPORTS.filter((v) => (RELONLY ? ['1280x800'] : REL ? ['360x640', '1280x800'] : ['360x640']).includes(v.tag) && (!only || v.tag === only))) {
     const s = await session(browser, vp);
     await s.setRaw(GOOD); await s.reload(); R.check(`${vp.tag} I control: a valid stored draft is offered`, await s.shown('resume-box'));
     if (PAGE.V >= 2) {
@@ -353,7 +358,7 @@ try {
 
   // ============ J. localStorage unavailable or throwing: the app must work fully (360x640 and 1280x800) ============
   // A-16 trim (QA batch 14): J's seven storage modes at 360x640 by default; 1280x800 too with QA_FULL=1 (release gate)
-  for (const vp of VIEWPORTS.filter((v) => (process.env.QA_FULL ? ['360x640', '1280x800'] : ['360x640']).includes(v.tag) && (!only || v.tag === only))) {
+  for (const vp of VIEWPORTS.filter((v) => !RELONLY && (process.env.QA_FULL ? ['360x640', '1280x800'] : ['360x640']).includes(v.tag) && (!only || v.tag === only))) {
     for (const mode of ['getter-throws', 'undefined', 'null', 'all-throw', 'set-throws', 'late-fail', 'get-throws']) {
       const s = await session(browser, vp, { init: [STORAGE_MODES[mode]] }); const T = `${vp.tag} J storage ${mode}`;
       const noStore = !mode.startsWith('late');
@@ -373,13 +378,13 @@ try {
       await s.end(T);
     }
   }
-  { // an existing draft + writes failing (quota full): what happens to the draft?
+  if (!RELONLY) { // an existing draft + writes failing (quota full): what happens to the draft?
     const s = await session(browser, VIEWPORTS[0]); await s.setRaw(GOOD); await s.ctx.addInitScript(STORAGE_MODES['set-throws']); await s.reload();
     const offered = await s.shown('resume-box'); R.note(`storage full with an existing draft: resume offered = ${offered}, note shown = ${await s.shown('note-nosave')}, draft still stored = ${(await s.raw()) === GOOD}`);
     await s.end('360x640 J quota with existing draft'); }
 
   // ============ K. toasts: at most two, same text does not stack ============
-  { const s = await session(browser, VIEWPORTS[0]);
+  if (!RELONLY) { const s = await session(browser, VIEWPORTS[0]);
     for (let i = 0; i < 5; i++) await s.act('step-2');
     R.check('360x640 K five taps on a locked step show one toast', (await s.toasts()).length === 1 ? [] : [JSON.stringify(await s.toasts())]);
     await s.page.evaluate(() => { PC.ui.toast('Second message'); PC.ui.toast('Third message that is rather long so that it has to wrap onto a second line on a phone'); }); await s.settle();
@@ -389,7 +394,7 @@ try {
     await s.end('360x640 K'); }
 
   // ============ L. dialog queue and double activation ============
-  { const s = await session(browser, VIEWPORTS[0]); await s.setRaw(GOOD); await s.reload();
+  if (!RELONLY) { const s = await session(browser, VIEWPORTS[0]); await s.setRaw(GOOD); await s.reload();
     const r = await s.page.evaluate(() => { const b = document.querySelector('[data-pc="btn-sample"]').getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; });
     await s.page.touchscreen.tap(r[0], r[1]); await s.page.touchscreen.tap(r[0], r[1]); await s.settle();
     const open = await s.dialogOpen(), st = await s.state();
@@ -400,10 +405,11 @@ try {
     await s.end('360x640 L'); }
 
   // ============ M. short landscape sanity (layout of live states) ============
-  if (!only) { const s = await session(browser, LAND); await s.setRaw(GOOD); await s.reload();
+  if (!only && !RELONLY) { const s = await session(browser, LAND); await s.setRaw(GOOD); await s.reload();
     await s.layout('640x360 M resume offer'); await s.act('btn-startnew'); await s.settle(); await s.layout('640x360 M dialog', { dialog: true }); await s.shot('M-dialog'); await s.act('dialog-cancel');
     await s.act('btn-resume'); await s.settle(); await s.layout('640x360 M sample with strip'); await s.shot('M-sample-strip');
     R.check('640x360 M strip (Skip) visible and hittable in the action bar row', await s.page.evaluate(() => { const b = document.querySelector('[data-pc="btn-skip3d"]'), r = b.getBoundingClientRect(), hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return hit && b.contains(hit) ? [] : ['Skip not hittable']; }));
     await s.end('640x360 M'); }
 } finally { await browser.close(); }
+if (!REL) R.note('the 1280x800 passes of C, E, F and I run in the release step only (QA_RELEASE=1, f6-t1-leak.mjs --rows-only; TL ruling F6-T1c)');
 process.exit(R.done() ? 0 : 1);

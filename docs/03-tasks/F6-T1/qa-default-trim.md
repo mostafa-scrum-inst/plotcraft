@@ -102,3 +102,33 @@ All moved rows are duplicated viewport passes, and every check is kept.
   - f1-t1: 10.8 s
 - **The one QA_FULL failure:** FS's in-pool guard in e2e view3d-real, "maximum house build ≤ 800 ms": 821 ms, best of 3. It is a load-sensitive guard (C-4.8 solo: 146 ms), and on f6t1c FS has raised it to 1200 ms. It is not a QA row.
 - **Risk:** the stream varies between 118 and 124 s, so the release step sits on the 280 s NOTE line.
+
+## Addendum 3: F6-T1c default-run trim (TL ruling a + b)
+
+The f6t1c default run took 426 s. Most of the growth comes from W1's extra openings in the existing real-r128 suites.
+
+**(a) Maximum-house parts moved to the release rows process:**
+- f6-t1-view B, the maximum-house budgets. The sample budgets in S stay in the default run.
+- The maximum house of f6-t1-view D.
+- The maximum house of f6-t1-model.
+
+**(b) Duplicated 1280x800 logic passes moved to the release rows process.** Their 360x640 passes stay in the default run:
+
+| Row | Measured |
+|---|---|
+| f2-t2 B, D, E, F at 1280x800 | 16.4 s |
+| f1-t2 C, E, F and I at 1280x800 | 19.1 s |
+
+A, B, D, G and H of f1-t2 stay at both sizes. K (keyboard) and G (layout) of f2-t2 are unchanged. Check counts are kept:
+- f2-t2: 476 default + 158 release = 634.
+- f1-t2: 432 + 152 = 584.
+
+**Measured on the f6t1c copy (e86f33a + this change), quiet machine:**
+
+| Run | Result | Wall |
+|---|---|---|
+| Default | all green, 10 513 / 0 | **411.7 s** |
+| Release, rows process (parallel side) | 11 / 11 | 235.1 s |
+| Release, stream process (parallel side) | 3 / 3 | 162.0 s |
+
+Both release processes are under the 260 s NOTE line. FS runs the confirm runs.
