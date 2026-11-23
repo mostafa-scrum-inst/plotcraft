@@ -141,3 +141,22 @@ The loaded build is higher because the maximum house now has 60 openings, each m
 - The three step: +2.5 s.
 
 The TL decides which moves to make (for example, moving T1c rows into the release step or a QA trim).
+
+**After the QA trim 341d187** (merged as 336435b, table re-timed in 54b7455), all runs green:
+
+| run | table | wall | pool work | three step |
+|---|---|---|---|---|
+| d1 (the writing run) | old | 417.4 s | 1177.6 s | 15.4 s |
+| d2 | new | 441.3 s | 1246.4 s | 16.4 s |
+| d3 | new | 427.6 s | 1198.9 s | 17.6 s |
+| d4 | new | 409.7 s | 1156.9 s | 15.0 s |
+| d5 | new | 430.0 s | 1212.4 s | 16.0 s |
+
+- Wall time is 0.354 to 0.355 of pool work in every run, so the ordering is fine.
+- The spread comes from the machine: the CPU-only three step moves with the pool work.
+
+**TL ruling (impl-review.md, Addendum 2):**
+- T1c is approved without further confirm runs.
+- The new project gate is the median of three quiet runs ≤ 420 s, with no run over 440 s, and the three step recorded for each run.
+- QA moves about 45 s more maximum-house work out of the default run. FS rebalances the release processes, with the moved rows on the stream side and each process ≤ 260 s.
+- Both happen on main, before the next feature's first gate.
