@@ -41,3 +41,9 @@ VERDICT: APPROVED
 - The lint `DIST_MAX_BYTES` tripwire (the inlined three.js check) goes from 600 000 to 700 000. T1c brings the dist to 604 890 bytes.
 - C-1.3, dist ≤ 627 kB, remains the budget and is unchanged. T1c leaves about 22 kB of it. The CTO was informed.
 - CTO condition: the C-1.3 line becomes the exported `DIST_BUDGET_BYTES = 627302`, with a message pointing to a CTO review and a boundary test, landing in T1c. The kB check has existed since T1a.
+
+## Addendum: T1c run time (TL, 2026-11-23)
+- **Measured:** default runs took 426.2 s and 426.5 s, +15 s over the 411.2 s baseline. Of that, 13.5 s comes from QA's new T1c rows and the rest is the W1 cost on maximum-house suites.
+- **Ruling (a):** QA moves the maximum-house parts of its T1c rows into the release rows process. The sample-house checks stay in the default run.
+- **Gate:** the gate stays at 420 s. The target is two quiet runs ≤ 415 s.
+- **Accepted:** the per-suite W1 cost.

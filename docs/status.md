@@ -311,4 +311,7 @@
 - [TL] F6-T1c dist tripwire 600000→700000 approved (C-1.3 627 kB budget unchanged, ~22 kB left; CTO informed).
 - [TL] CTO condition on dist: DIST_BUDGET_BYTES 627302 named constant + boundary test in T1c; FS told.
 - [TL] QA_FULL trim 2 accepted (b29b95a, 450.9 s); release step → two parallel processes in T1c (NOTE 260/limit 300 each), NOTE 290 s until then.
-- [QA] F6-T1c default-run trim (TL a + b): max-house parts of f6-t1-view B/D and f6-t1-model, f2-t2 B/D/E/F and f1-t2 C/E/F/I at 1280x800 into the release rows process; f6t1c copy default 411.7 s green, release rows 235.1 s / stream 162.0 s.
+- [TL] F6-T1c default 426 s → ruling (a): QA moves max-house T1c rows to release rows process; gate stays 420 s, target ≤ 415 s.
+- [TL] F6-T1c impl review — APPROVED conditional on two quiet default runs ≤ 420 s after QA move (D + max-house B, then duplicates); CD-8 complete for MVP; evening far haze is PM/client judgement.
+- [TL] F6-T1c QA trim 341d187 accepted (411.7 s, release rows 235 s / stream 162 s); awaiting FS two confirm runs.
+- [TL] F6-T1c impl review final — APPROVED for merge/publish; default run median ~429 s recorded as debt: QA ~45 s more moves + FS release rebalance before next feature gate; new gate = median of 3 quiet runs ≤ 420 s, none > 440 s.
