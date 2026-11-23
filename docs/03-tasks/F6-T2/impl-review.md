@@ -66,3 +66,16 @@ VERDICT: APPROVED
   - if that wall time exceeds 800 s, QA cuts duplicates before anything else is added;
   - `RELEASE_JOBS` > 1 is never used for a gate.
 - **Indoor real checks under QA_FULL only:** if anything in `src/js/three/**`, `data/look3d.js`, `data/sky.js` or `data/furniture.js` changes after the last QA_FULL run, a fresh QA_FULL run is required before merge or publish.
+
+## Addendum 2: QA sign-off (5ccfd2b), condition met
+- **Runs:** three QA_FULL runs, green, with no flakes.
+- **Smoke mutations:** both caught.
+- **C-4.8 solo:** 58–71 ms.
+- **Release wall:** 615–667 s. Every process stayed ≤ 232 s.
+- **QA_FULL part:** 476.5, 496.1 and 478.4 s. I apply the default gate's measure to QA_FULL from now on: median ≤ 480 s, no run over 500 s. The median is 478.4 s, so the gate is met. There is no headroom left.
+- **Ruling:**
+  - F6-T2 may merge and publish.
+  - Before the next feature's first gate, QA cuts at least 20 s of QA_FULL-only duplicates on main.
+- **CD-7 phone check:** it must include 22 h with Roof off, as the CTO requires.
+
+VERDICT: APPROVED
