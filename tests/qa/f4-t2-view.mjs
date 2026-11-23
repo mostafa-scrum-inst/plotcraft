@@ -58,7 +58,8 @@ async function pixels(S) { const buf = await S.page.locator('[data-pc="v3-canvas
 const rawTap = async (S, sel) => { const b = await S.page.evaluate((q) => { const r = document.querySelector(q).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }, sel); if (S.vp.touch) await S.page.touchscreen.tap(...b); else await S.page.mouse.click(...b); await S.settle(); };
 const viewTab = async (S) => { if (await S.shown('v3-tab-view')) await S.act('v3-tab-view'); };
 const pick = (v) => `css:[data-pc="v3-level"] label:has(input[value="${v}"])`;
-async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) return; if (RELONLY ? label[0] !== 'E' : !REL && label[0] === 'E') return; const t = Date.now(); try { await fn(); } catch (e) { R.check(`${label}: ran to the end`, [String(e && e.stack || e).split('\n').slice(0, 3).join(' | ')]); } TIMES.push(`${label} ${((Date.now() - t) / 1000).toFixed(1)} s`); }
+async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) return; const relRow = label[0] === 'E' || label === 'A roof 1280x800';   // A roof 1280x800: TL F6-T2 gate ruling (duplicate of f4-t2-model / f4-t1 A / f6-t1 D)
+  if (RELONLY ? !relRow : !REL && relRow) return; const t = Date.now(); try { await fn(); } catch (e) { R.check(`${label}: ran to the end`, [String(e && e.stack || e).split('\n').slice(0, 3).join(' | ')]); } TIMES.push(`${label} ${((Date.now() - t) / 1000).toFixed(1)} s`); }
 // QA's node build of the same state (vm r128): the roof batch's item count
 function nodeRoofItems(state) { const s = Q.plain(state), h = PC.house.build(s); if (!h) return null; const world = new THREE.Group(); world.name = 'world';
   const mats = { batch: new THREE.MeshLambertMaterial({ vertexColors: true }), ground: new THREE.MeshLambertMaterial(), groundOuter: new THREE.MeshLambertMaterial(), poolWater: new THREE.MeshLambertMaterial(), trunk: new THREE.MeshLambertMaterial(), canopy: new THREE.MeshLambertMaterial(), shrub: new THREE.MeshLambertMaterial() };   // F4-T3 vegetation materials (unused before)
@@ -213,5 +214,5 @@ for (const vp of [VP.phone, VP.desk]) await guard(`F undo ${vp.tag}`, async () =
 if (!FULL) R.note('A roof and B interior at 360x640 run with QA_FULL=1 only (TL Q-T8 run-time moves)');
 R.note('sections: ' + TIMES.join(', '));
 R.note(`runtime ${((Date.now() - t0) / 1000).toFixed(1)} s`);
-if (!REL) R.note('E (maximum-house budget) runs in the release step only (QA_RELEASE=1; TL run-time ruling F6-T1c)');
+if (!REL) R.note('E (maximum-house budget) and A roof 1280x800 (TL F6-T2 gate ruling; A roof 360x640 stays QA_FULL) run in the release step only (QA_RELEASE=1; TL run-time ruling F6-T1c)');
 process.exit(R.done() ? 0 : 1);

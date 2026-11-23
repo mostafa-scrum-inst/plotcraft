@@ -186,3 +186,22 @@ Both release processes are under the 260 s NOTE line. FS runs the three-run medi
 - **rows3 measured:** 129.5 s on the f6t2 400383c copy (sample stream 36.6 s, rows 92.8 s).
 - **Timing-sensitive checks:** rows3 has none. The leak "slowest operation" is a note only.
 - **Expected effects:** the stream side drops to about 274 − 93 ≈ 181 s. The default pool loses about 50 s of solo time, roughly 100 s of pool-step time in the 3-job pool. FS re-times.
+
+## Addendum 6: F6-T2 gate, more rows out of the default run (FS re-time 456.3 s; about 55 s solo needed)
+
+| row | from | to | default solo time saved (f6t2 bcd837e copy) |
+|---|---|---|---|
+| f4-t1-view A2 1280x800: four Q10 exterior rebuilds and Q14 in 3D (5 rebuilds). The same geometry is judged in node by f4-t1-model 3a and 2. | default | rows3 (f4-t1-view --release-only) | f4-t1-view 64 → 40 s (with D loop) |
+| f4-t1-view D loop 1280x800. It duplicates D loop 360x640, and the default run keeps the idle checks of the leak smoke. | default | rows3 | (in the line above) |
+| f4-t2-view A roof 1280x800. It duplicates f4-t2-model (geometry), the f4-t1 A level matrix and f6-t1 D. | default | rows3 (f4-t2-view --release-only) | 20 → 13 s |
+| f4-t2-s0-ui 1280x800, the desktop twin of 360x640 (as in rows 1-7). This one is 2D. | default | rows side (`--only=640x360,1280x800`) | 38.7 → 24 s |
+| The f4-t1-view --release-only row (59 s → 64 s with A2 and the desk D loop). | rows side | rows3 | balance |
+
+- **Total:** about 46 s solo from QA. FS offered its view3d-real indoor checks (about 7 s), which would make about 53 s.
+- **Tried and reverted:** splitting the f4-t3 A seasons saved nothing (A stayed at 17.6 s), so it stays in the default run.
+- **Solo times of the three release processes:**
+  - rows3: 208.4 s (sample stream 36.6 s, rows 171.8 s);
+  - rows side: 224.7 s;
+  - stream side: about 181 s.
+  - When the three run in parallel, they will be slower. FS re-times.
+- **Timing-sensitive checks:** none of the moved rows has one. The f4-t3 setLook check stays in the default run.

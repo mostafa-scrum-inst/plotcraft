@@ -81,7 +81,7 @@ async function guard(label, fn) { if (ONLY.length && !ONLY.includes(label[0])) r
 // F6-T1 run-time moves (TL Q-T8, docs/03-tasks/F6-T1/qa-full-moves.md): A 360x640, C 640x360 and D loop 360x640 run
 // in the release step only (QA_RELEASE=1; TL ruling after the 488 s QA_FULL gate: out of QA_FULL=1). --release-only runs
 // just those three (the release step: f6-t1-leak.mjs --max-only). The 1280x800 passes, C 360x640 and the mock stay default.
-const FULL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only'), REL_RE = /^(A 360x640|C 640x360|C 1280x800|D loop 360x640|F G6)$/;   // C 1280x800: TL F6-T2 gate ruling (duplicate of C 360x640)   // F G6: TL ruling F6-T1c run-time debt (maximum house)
+const FULL = !!process.env.QA_RELEASE, RELONLY = process.argv.includes('--release-only'), REL_RE = /^(A 360x640|A2 1280x800|C 640x360|C 1280x800|D loop 1280x800|D loop 360x640|F G6)$/;   // C 1280x800: TL F6-T2 gate ruling (duplicate of C 360x640)   // F G6: TL ruling F6-T1c run-time debt (maximum house)
 const browser = await launch();
 
 // ================= A + B: acceptance and Q14 with real r128 =================
@@ -98,19 +98,6 @@ for (const vp of [VP.desk, ...(FULL ? [VP.phone] : [])]) await guard(`A ${vp.tag
   R.check(`${T}: canvas backing store = CSS size x pixel ratio 1`, await S.page.evaluate(() => { const c = document.querySelector('[data-pc="v3-canvas"]'); return c.width === c.clientWidth && c.height === c.clientHeight && PC.debug.scene().renderer.getPixelRatio() === 1; }));
   await S.shot('a-sample');
   if (vp === VP.desk) {
-    // exteriors: commit Q10 while open -> rebuild, pose kept, walls in the new colour, the pictures differ
-    const pics = {}, f = [];
-    for (const ext of ['white', 'terracotta', 'grey', 'sand']) {
-      const before = await info(S);
-      await S.page.evaluate((e) => PC.store.commit((st) => { st.ans.exterior = e; }), ext); await ready(S);
-      const after = await info(S), ex = await expect(S);
-      if (after.builds !== before.builds + 1) f.push(`${ext}: builds ${before.builds} -> ${after.builds}`);
-      if (!poseEq(before.pose, after.pose)) f.push(`${ext}: pose ${pf(before.pose)} -> ${pf(after.pose)}`);
-      f.push(...H.shellProblems(await world(S), ex.X, D).map((p) => `${ext}: ${p}`));
-      pics[ext] = await S.page.locator('[data-pc="v3-canvas"]').screenshot();
-    }
-    const ks = Object.keys(pics); for (let a = 0; a < ks.length; a++) for (let b = a + 1; b < ks.length; b++) if (pics[ks[a]].equals(pics[ks[b]])) f.push(`${ks[a]} and ${ks[b]} render the same picture`);
-    R.check(`${T}: four Q10 exteriors: each a rebuild with the pose kept, walls in its colour, four different pictures`, f);
     // edit + approve, then m and ft
     const g = [];
     await S.page.evaluate(() => { PC.store.go(3); PC.store.commit((st) => { const p = st.plans['1'], r = p.rooms.slice().sort((a, b) => a.w * a.h - b.w * b.h)[0]; r.w -= 0.5; p.edited = true; p.approved = true; }); PC.store.go(4); PC.store.go(5); });
@@ -139,21 +126,39 @@ for (const vp of [VP.desk, ...(FULL ? [VP.phone] : [])]) await guard(`A ${vp.tag
     m.push(...H.shellProblems(w, X, D, { level: v }).map((p) => `${v}: ${p}`));
   }
   R.check(`${T}: level selector matrix on Basement + 3 floors + lift (level k shown iff k <= selected; Basement hides the ground cap and the levels above; roof hidden; one frame per change)`, cut(m));
-  // Q14 in 3D (desk only: 5 rebuilds)
-  if (vp === VP.desk) {
-    const q = [];
-    for (const pos of ['fl', 'fr', 'bl', 'br', 'centre']) {
-      await to5(S, `s.ans.stairPos = '${pos}'; s.ans.lift = true;`);
-      const ex = await expect(S), w = await world(S), fpT = H.tBox(ex.X.F, ex.X.fp, 0, 0);
-      if (ex.s.ans.stairPos !== pos) q.push(`${pos}: setup`);
-      for (const L of ex.X.levels) { const b = H.coreBoxes(w, L.id, ex.X); q.push(...H.q14Problems(pos, b.stair, b.lift, fpT).map((p) => `${pos} ${L.id}: ${p}`)); }
-      q.push(...H.shellProblems(w, ex.X, D).map((p) => `${pos}: ${p}`));
-      if (pos === 'fl') await S.shot('b-q14-fl');
-    }
-    R.check(`B ${vp.tag} real: Q14 seen from the street in the rendered scene for fl / fr / bl / br / centre (stair + lift block in its corner of T on every level, all geometry = my oracle)`, cut(q));
-  }
   R.check(`${T}: no THREE.* warnings from r128`, S.log.threeWarnings);
   await S.end(T);
+});
+
+// TL F6-T2 gate ruling (rebuild-heavy duplicates of f4-t1-model 3a / 2 on the node r128 geometry): the four Q10 exterior
+// rebuilds and Q14 in 3D at 1280x800 run in the release step (A2, own session from the sample)
+if (FULL) await guard('A2 1280x800', async () => {
+  const S = await session(browser, VP.desk, { three: 'real' }), T = 'A 1280x800 real';
+  if (!(await to5(S, SHELL0))) R.check(`${T} (release): ready`, ['not ready after 8 s']);
+  // exteriors: commit Q10 while open -> rebuild, pose kept, walls in the new colour, the pictures differ
+  const pics = {}, f = [];
+  for (const ext of ['white', 'terracotta', 'grey', 'sand']) {
+    const before = await info(S);
+    await S.page.evaluate((e) => PC.store.commit((st) => { st.ans.exterior = e; }), ext); await ready(S);
+    const after = await info(S), ex = await expect(S);
+    if (after.builds !== before.builds + 1) f.push(`${ext}: builds ${before.builds} -> ${after.builds}`);
+    if (!poseEq(before.pose, after.pose)) f.push(`${ext}: pose ${pf(before.pose)} -> ${pf(after.pose)}`);
+    f.push(...H.shellProblems(await world(S), ex.X, D).map((p) => `${ext}: ${p}`));
+    pics[ext] = await S.page.locator('[data-pc="v3-canvas"]').screenshot();
+  }
+  const ks = Object.keys(pics); for (let a = 0; a < ks.length; a++) for (let b = a + 1; b < ks.length; b++) if (pics[ks[a]].equals(pics[ks[b]])) f.push(`${ks[a]} and ${ks[b]} render the same picture`);
+  R.check(`${T}: four Q10 exteriors: each a rebuild with the pose kept, walls in its colour, four different pictures`, f);
+  const q = [];
+  for (const pos of ['fl', 'fr', 'bl', 'br', 'centre']) {
+    await to5(S, `s.ans.stairPos = '${pos}'; s.ans.lift = true;`);
+    const ex = await expect(S), w = await world(S), fpT = H.tBox(ex.X.F, ex.X.fp, 0, 0);
+    if (ex.s.ans.stairPos !== pos) q.push(`${pos}: setup`);
+    for (const L of ex.X.levels) { const b = H.coreBoxes(w, L.id, ex.X); q.push(...H.q14Problems(pos, b.stair, b.lift, fpT).map((p) => `${pos} ${L.id}: ${p}`)); }
+    q.push(...H.shellProblems(w, ex.X, D).map((p) => `${pos}: ${p}`));
+    if (pos === 'fl') await S.shot('b-q14-fl');
+  }
+  R.check(`B ${VP.desk.tag} real: Q14 seen from the street in the rendered scene for fl / fr / bl / br / centre (stair + lift block in its corner of T on every level, all geometry = my oracle)`, cut(q));
+  await S.end('A2 1280x800');
 });
 
 // mock: DOM acceptance and the visibility matrix at 360x640
@@ -273,7 +278,7 @@ async function gestures(vp) {
 for (const vp of [VP.phone, ...(FULL ? [VP.land, VP.desk] : [])]) await guard(`C ${vp.tag}`, () => gestures(vp));   // desk: release step (TL F6-T2 gate ruling)
 
 // ================= D: render loop (real r128) =================
-for (const vp of [VP.desk, ...(FULL ? [VP.phone] : [])]) await guard(`D loop ${vp.tag}`, async () => {   // 360x640 added in Round 1 (F4T1-1 re-test: the stage-4 strip case)
+for (const vp of [...(FULL ? [VP.desk, VP.phone] : [])]) await guard(`D loop ${vp.tag}`, async () => {   // 360x640 added in Round 1 (F4T1-1 re-test: the stage-4 strip case)
   const S = await session(browser, vp, { three: 'real', init: [RAF] }), T = `D ${vp.tag} real`;
   await to5(S);
   const idle = async (ms = 600) => { await S.page.evaluate(() => { window.__raf = 0; }); const r0 = (await info(S)).renders; await S.page.waitForTimeout(ms); const i = await info(S); return { raf: i.raf, renders: i.renders - r0 }; };   // the idle span is the thing under test
@@ -441,6 +446,6 @@ await guard('G controls', async () => {
 });
 
 await browser.close();
-if (!FULL) R.note('A 360x640, C 640x360, D loop 360x640 and F G6 (maximum house) run in the release step only (QA_RELEASE=1, f6-t1-leak.mjs --max-only; TL ruling)');
+if (!FULL) R.note('A 360x640, A2 1280x800 (Q10 exterior rebuilds + Q14 in 3D; TL F6-T2 gate ruling), C 640x360, C 1280x800, D loop 1280x800 / 360x640 (the default run keeps the idle checks of the leak smoke; TL F6-T2 gate ruling) and F G6 (maximum house) run in the release step only (QA_RELEASE=1, f6-t1-leak.mjs --max-only; TL ruling)');
 R.note(`browser run ${((Date.now() - t0) / 1000).toFixed(1)} s (${TIMES.join(', ')})`);
 process.exit(R.done() ? 0 : 1);
