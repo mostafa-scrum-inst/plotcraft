@@ -41,7 +41,7 @@
     hall: '#D9D6CE', stair: '#C5CBD0', lift: '#AEB7BB'
   };
   PC.data.siteColors = {
-    ground: '#668748', groundOuter: '#727E58', paving: '#C1B4A1', poolWater: '#398BB5', poolRim: '#F1E3C1',
+    ground: '#668748', groundOuter: '#6A8550', paving: '#C1B4A1', poolWater: '#398BB5', poolRim: '#F1E3C1',
     boundaryWall: '#B5A990', gate: '#3B4652', carCanopy: '#838D93', seating: '#7E664C', trunk: '#5B4636',
     northMarker: '#16212B', highlight: '#C2410C', asphalt: '#5D6063',
     glassTop: '#9FB6C6', glassBottom: '#34495A'

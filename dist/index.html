@@ -4909,7 +4909,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     hall: '#D9D6CE', stair: '#C5CBD0', lift: '#AEB7BB'
   };
   PC.data.siteColors = {
-    ground: '#668748', groundOuter: '#727E58', paving: '#C1B4A1', poolWater: '#398BB5', poolRim: '#F1E3C1',
+    ground: '#668748', groundOuter: '#6A8550', paving: '#C1B4A1', poolWater: '#398BB5', poolRim: '#F1E3C1',
     boundaryWall: '#B5A990', gate: '#3B4652', carCanopy: '#838D93', seating: '#7E664C', trunk: '#5B4636',
     northMarker: '#16212B', highlight: '#C2410C', asphalt: '#5D6063',
     glassTop: '#9FB6C6', glassBottom: '#34495A'
@@ -5059,8 +5059,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       { h: 24, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30, skyMid: '#0F1A2E', skyZenith: '#060B16', exposure: 1.3 }
     ],
     seasons: {
-      spring: { elevMax: 52, tint: '#F1F7E4', tintAmount: 0.08, canopy: '#558739', canopyVisible: true, shrub: '#67A344', ground: '#76A953', meadow: '#76865A' },
-      summer: { elevMax: 72, tint: '#FFF4DE', tintAmount: 0, canopy: '#477338', canopyVisible: true, shrub: '#507A3C', ground: '#668748', meadow: '#727E58' },
+      spring: { elevMax: 52, tint: '#F1F7E4', tintAmount: 0.08, canopy: '#558739', canopyVisible: true, shrub: '#67A344', ground: '#76A953', meadow: '#6F8A58' },
+      summer: { elevMax: 72, tint: '#FFF4DE', tintAmount: 0, canopy: '#477338', canopyVisible: true, shrub: '#507A3C', ground: '#668748', meadow: '#6A8550' },
       autumn: { elevMax: 52, tint: '#F6C58E', tintAmount: 0.15, canopy: '#A85D27', canopyVisible: true, shrub: '#8A5A2F', ground: '#877F4D', meadow: '#857D55' },
       winter: { elevMax: 32, tint: '#D3E0F2', tintAmount: 0.20, canopy: '#5F5C53', canopyVisible: false, shrub: '#CDEDFE', ground: '#FFFFFF', meadow: '#E4E8EA' }
     },
@@ -5088,7 +5088,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     grass: { tileM: 3, base: 0.86, noise: [[4, 0.10], [16, 0.05]], blades: 0.06, bladeLen: 3, bladeEvery: 40 },
     paving: { tileM: 2.4, base: 0.92, slabs: 4, joint: -0.28, slab: 0.05, speckle: 0.03 },
     tiles: { tileM: 1.5, base: 0.9, rows: 5, perRow: 6, lineW: 2, line: -0.30, joint: -0.15, tile: 0.06 },
-    meadow: { tileM: 12, base: 0.9, noise: [[3, 0.045], [12, 0.025]] },   // F6-T1a shots: 0.08 read as camouflage patches
+    meadow: { tileM: 48, base: 0.9, noise: [[2, 0.05], [6, 0.035], [24, 0.02]] },   // F6-T1c G2: 24 / 8 / 2 m features over one 48 m tile (T1a: 0.08 at 12 m read as camouflage patches)
     // F6-T1c R2 (Designer): the flat roof deck membrane: sheets sheetW m wide along v with a seam, mottle, speckle
     membrane: { tileM: 4, base: 0.9, sheetW: 1.0, seam: -0.12, mottle: [[2, 0.05], [8, 0.025]], speckle: 0.03 },
     blob: { power: 1.5 }

@@ -35,8 +35,8 @@
       { h: 24, background: '#0B1626', sunColor: '#9FB3D9', sunI: 0.15, hemiSky: '#7083AD', hemiGround: '#2A3040', hemiI: 0.30, skyMid: '#0F1A2E', skyZenith: '#060B16', exposure: 1.3 }
     ],
     seasons: {
-      spring: { elevMax: 52, tint: '#F1F7E4', tintAmount: 0.08, canopy: '#558739', canopyVisible: true, shrub: '#67A344', ground: '#76A953', meadow: '#76865A' },
-      summer: { elevMax: 72, tint: '#FFF4DE', tintAmount: 0, canopy: '#477338', canopyVisible: true, shrub: '#507A3C', ground: '#668748', meadow: '#727E58' },
+      spring: { elevMax: 52, tint: '#F1F7E4', tintAmount: 0.08, canopy: '#558739', canopyVisible: true, shrub: '#67A344', ground: '#76A953', meadow: '#6F8A58' },
+      summer: { elevMax: 72, tint: '#FFF4DE', tintAmount: 0, canopy: '#477338', canopyVisible: true, shrub: '#507A3C', ground: '#668748', meadow: '#6A8550' },
       autumn: { elevMax: 52, tint: '#F6C58E', tintAmount: 0.15, canopy: '#A85D27', canopyVisible: true, shrub: '#8A5A2F', ground: '#877F4D', meadow: '#857D55' },
       winter: { elevMax: 32, tint: '#D3E0F2', tintAmount: 0.20, canopy: '#5F5C53', canopyVisible: false, shrub: '#CDEDFE', ground: '#FFFFFF', meadow: '#E4E8EA' }
     },
