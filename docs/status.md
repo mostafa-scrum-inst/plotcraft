@@ -336,3 +336,4 @@
 - [TL] QA_FULL cut accepted (main 01ebac4): QA_FULL median 478.4 → 457.9 s; release wall 724–743 s (< 800 cap; stream ~254 s, next moves → rows3). questions.spec north-reset flake (1/3) → FS to diagnose (app vs test race) before next gate.
 - [TL] questions.spec north-reset flake: harness cause (Chrome drops synthesized click after injected drag); FS fix 4a032c2 (settle waits via inert tap probe) approved for main.
 - 2026-11-23T14:42Z Orchestrator: flake follow-up d7c155c (probe events stop bubbling) on main; F6-T2 batch closed, v10 published. Waiting on CD-7 phone answers.
+- 2026-11-28T13:15Z Orchestrator: WebGPU /gpu design approved by client (CD-10..CD-13); feature G starts with G0 spike.

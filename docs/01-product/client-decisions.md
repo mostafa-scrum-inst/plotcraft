@@ -55,3 +55,16 @@ Decisions made directly by the client (Mostafa). They override any conflicting t
 ### CD-9 Stage 5 opens with the Roof on (2026-11-22 19:16 UTC)
 - Decision: **open the 3D view with the roof on**, showing the finished house (PC.C.VIEW3D.roofOnOpen: true). Turning Roof off or picking a room shows the inside.
 - Consequence: PM round-15 story wording for F4-S1 / §3.3 goes in; roof stays off after a finder pick or tour (PM Q-P2).
+
+## 2026-11-28 13:14 UTC — WebGPU high-end page (client request)
+
+Design: docs/02-features/G-plan.md (Claude Doc https://claude.ai/artifact/A6TJCjy1xpBGgTKhDGSWd5), reviewed by a Fable 5.2 agent (round 1 CHANGES REQUESTED, 7 items folded in). Client: "Approve".
+
+### CD-10 A WebGPU page at gpu/index.html in the same artifact; r128-only rule waived for that page only
+- Decision: **the /gpu page loads three.js 0.180.0 (WebGPU build, ES modules) from cdnjs**; the hard constraint "three.js r128 global build only, no ES-module imports" (docs/00-brief.md) does not apply to it. dist/index.html keeps r128 and stays byte-identical in behaviour.
+### CD-11 No WebGPU on the device: message + link to the standard page
+- Decision: stage 5 on /gpu shows "This device or browser does not support WebGPU" and a link to the standard page (draft carries over). No WebGL2 fallback for users.
+### CD-12 Link from the standard page
+- Decision: the standard page shows a "High-end 3D (WebGPU)" link, only where the browser has WebGPU.
+### CD-13 Effects in scope
+- Decision: G3 (ambient occlusion + night bloom behind an Effects switch, on by default on ultra) is in scope.
