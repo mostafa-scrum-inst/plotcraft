@@ -18,10 +18,14 @@
      then done(true): scene.js applies visibility and look again.
    - watch: device loss (renderer.onDeviceLost replaces three's handler): the reason 'destroyed' (our own dispose,
      page teardown) is ignored; otherwise h.lost(), a new renderer, h.restored(r); at most MAX_LOSSES a session.
-   - capture (tests): the view drawn into a half-float 4x MSAA render target in the next animation frame, read back,
-     linear -> sRGB bytes in JS (headless or not, a WebGPU canvas cannot be read back from a test).
-   - Known r180 behaviour: WebGPURenderer runs its own requestAnimationFrame loop from init() to advance its node
-     frame (per-frame uniforms); it renders nothing, and the app's on-demand loop still draws no idle frames. */
+     A renderer is bound once: by watch() for the first one, by make() for every later one (watched.current null).
+   - Frame loop (G1 round 2, TL required change 1): r180's init() starts its own requestAnimationFrame loop
+     (renderer._animation) that only advances the node frame and resets info, every vsync, forever. make() stops it,
+     and frame(r) does the same work before each of the app's renders (scene.js render(), the warm-up, the capture),
+     so an idle view requests no frames (A-10) and per-frame uniforms and the one-shadow-per-frameId rule follow the
+     app's own renders. _animation is a private member of the pinned 0.180.0.
+   - capture (tests): the view drawn into a half-float 4x MSAA render target, read back, linear -> sRGB bytes in JS
+     (headless or not, a WebGPU canvas cannot be read back from a test). */
 (function (PC) {
   'use strict';
   var PRE = /^(glow-|textured-|furniture$)/, MAX_LOSSES = 3;
@@ -50,8 +54,7 @@
       if (++losses > MAX_LOSSES) { h.failed(); return; }
       gfx.make(canvas, h.pr(), function (err, r2) {
         if (err || !watched) { h.failed(); return; }
-        watched.current = r2; bind(r2);
-        h.restored(r2);
+        h.restored(r2);                                              // make() bound r2 (watched.current was null)
       });
     };
   }
@@ -76,9 +79,10 @@
           return ad.requestDevice({ requiredFeatures: Array.from(ad.features) });
         }).then(function (device) {
           r = new THREE.WebGPURenderer({ canvas: canvas, antialias: true, device: device });
-          r.onDeviceLost = function () {};                          // until watch() binds it
+          r.onDeviceLost = function () {};                          // until watch() or the adoption below binds it
           return r.init();
         }).then(function () {
+          if (r._animation) r._animation.stop();                    // three's own rAF loop: see the header (frame)
           if (!r.backend || !r.backend.isWebGPUBackend) throw new Error('not the WebGPU backend');
           r.setPixelRatio(pr);
           r.shadowMap.enabled = true;
@@ -86,13 +90,21 @@
           r.outputColorSpace = THREE.SRGBColorSpace;
           r.toneMapping = THREE.NoToneMapping;
           uniforms();
-          if (watched && !watched.current) { watched.current = r; bind(r); }   // a renderer made again after a failure
+          // a renderer made after a loss (restore) or after a failure (adopted by scene.js made()): the only bind
+          // for it, watch() binds the first one
+          if (watched && !watched.current) { watched.current = r; bind(r); }
           later(done, null, r);
         }).catch(function (e) {
           if (r) { try { r.dispose(); } catch (x) { /* nothing to free */ } }
           later(done, e || new Error('WebGPU start failed'));
         });
       });
+    },
+    // What one tick of three's own loop (Animation.start, stopped in make) does, once per app render.
+    frame: function (r) {
+      var n = r._nodes && r._nodes.nodeFrame;
+      if (r.info.autoReset) r.info.reset();
+      if (n) { n.update(); r.info.frame = n.frameId; }
     },
     watch: function (canvas, h, r) { watched = { canvas: canvas, h: h, current: r }; bind(r); },
     col: function (hex) { return new THREE.Color(hex); },
@@ -143,6 +155,7 @@
         gfx.stats.pipelinesCompiled = R._pipelines ? R._pipelines.caches.size : -1;
         if (ctx.live()) {
           ctx.place();
+          gfx.frame(R);
           R.render(ctx.scene, ctx.camera);          // warm-up: the shadow pass and the uploads, under the Building card
           gfx.stats.pipelinesWarm = R._pipelines ? R._pipelines.caches.size : -1;
         }
@@ -151,17 +164,15 @@
       });
     },
     stats: { compileMs: 0, pipelinesCompiled: 0, pipelinesWarm: 0 },
-    // r180 refreshes per-frame uniforms (the light directions among them) once per node frame, which its own
-    // requestAnimationFrame loop advances: the capture draws in the next animation frame, as the canvas does.
+    // r180 refreshes per-frame uniforms (the light directions among them) once per node frame: the capture is a
+    // frame of its own (frame(r)), so it never reuses the canvas frame's uniforms or shadow.
     capture: function (r, scene, camera, size, done) {
-      requestAnimationFrame(function () { gfx.captureNow(r, scene, camera, size, done); });
-    },
-    captureNow: function (r, scene, camera, size, done) {
       var w = Math.max(1, size[0] | 0), h = Math.max(1, size[1] | 0);
       var rt = new THREE.RenderTarget(w, h, { type: THREE.HalfFloatType, samples: 4 }), sun = scene.getObjectByName('sun');   // 4x MSAA like the canvas
       // r180 keeps a shadow map per render context: the canvas frame used up needsUpdate, so the render target's own
       // shadow map is drawn here (test hook only; the page itself only ever renders to its canvas)
       if (sun) sun.shadow.needsUpdate = true;
+      gfx.frame(r);
       r.setRenderTarget(rt);
       r.render(scene, camera);
       r.setRenderTarget(null);

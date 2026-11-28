@@ -47,6 +47,7 @@
     exposure: function (r, k) { r.toneMappingExposure = k; },
     lightK: 1,
     shadowsDirty: function (r) { r.shadowMap.needsUpdate = true; },
+    frame: function () {},              // r128 has no node frame (the /gpu adapter advances one per app render)
     materials: function () {},
     look: function () {},
     // ctx = { renderer, scene, camera, world, mats }

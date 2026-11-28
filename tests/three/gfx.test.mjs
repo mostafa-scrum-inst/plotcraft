@@ -23,7 +23,7 @@ test('the standard page loads the r128 adapter; PC.three.col delegates to PC.gfx
 
 test('open / build / look / precompile reach the adapter (r128: synchronous continuations)', () => {
   const E = load3d(), PC = E.PC, seen = [];
-  for (const k of ['make', 'materials', 'look', 'precompile', 'exposure', 'shadowsDirty', 'texSpace', 'maxAniso', 'maxTex', 'watch']) {
+  for (const k of ['make', 'materials', 'look', 'precompile', 'exposure', 'shadowsDirty', 'texSpace', 'maxAniso', 'maxTex', 'watch', 'frame']) {
     const f = PC.gfx[k];
     PC.gfx[k] = function () { seen.push(k); return f.apply(this, arguments); };
   }
@@ -31,7 +31,7 @@ test('open / build / look / precompile reach the adapter (r128: synchronous cont
   PC.view3d.open(h, E.canvas, (s) => log.push(s));
   E.raf.flush(); E.timer.flush(); E.raf.flush();
   assert.deepEqual(log, ['building', 'ready']);
-  for (const k of ['make', 'watch', 'maxTex', 'texSpace', 'maxAniso', 'materials', 'look', 'exposure', 'shadowsDirty', 'precompile']) assert.ok(seen.includes(k), k);
+  for (const k of ['make', 'watch', 'maxTex', 'texSpace', 'maxAniso', 'materials', 'look', 'exposure', 'shadowsDirty', 'precompile', 'frame']) assert.ok(seen.includes(k), k);
   const i = PC.view3d.info();
   assert.deepEqual([i.gfx, i.compiling, i.building, i.builds], ['r128', false, false, 1]);
 });
@@ -47,4 +47,9 @@ test('the /gpu adapter file loads without THREE, defines PC.gfx and starts nothi
   let err = null;
   g.make({}, 1, (e) => { err = e; });
   assert.ok(err && /three\.js did not load: missing/.test(err.message), 'make() without the bootstrap reports an error: ' + (err && err.message));
+  // frame(r): one tick of three's own (stopped) loop: info reset when autoReset, then the node frame
+  const log = [], nf = { frameId: 0, update() { log.push('update'); this.frameId++; } };
+  const r = { _nodes: { nodeFrame: nf }, info: { autoReset: true, frame: 0, reset() { log.push('reset'); } } };
+  g.frame(r); r.info.autoReset = false; g.frame(r);
+  assert.deepEqual([log, r.info.frame], [['reset', 'update', 'update'], 2]);
 });

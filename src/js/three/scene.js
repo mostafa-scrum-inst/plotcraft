@@ -132,6 +132,7 @@
   }
   function render() {
     place();
+    PC.gfx.frame(S.renderer);           // /gpu: the node frame per app render (three's own loop is stopped); r128: nothing
     S.renderer.render(S.scene, S.camera);
     S.renders++;
   }
@@ -436,6 +437,8 @@
     pose: function () { return S.pose ? PC.cam.copy(S.pose) : null; },
     // G1 test hook: the current view drawn into a render target and read back as sRGB bytes by the adapter (headless
     // WebGPU canvases read back blank). done(null) where the adapter has none (r128 reads its canvas directly).
+    // false when three.js itself did not load (/gpu: the import failed or timed out; G1 round 2, N2)
+    available: function () { return PC.gfx.available(); },
     capture: function (done) {
       if (!PC.gfx.capture || !S.house || S.lost || !S.renderer || S.building || S.pending) { done(null); return; }
       place();

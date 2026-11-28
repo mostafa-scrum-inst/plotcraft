@@ -1623,7 +1623,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
         </div>
 
         <div class="pc-v3__center pc-v3__unavail" role="alert" data-pc="v3-unavailable" hidden>
-          <div class="pc-v3__card"><svg class="pc-i" aria-hidden="true"><use href="#i-warn"/></svg><div><h3>3D view unavailable</h3><p data-pc="v3-unavailable-text">This device or browser does not support WebGPU.</p><p><a id="pc-gpu-fallback" data-alt="standard">Open the standard 3D view</a></p></div></div>
+          <div class="pc-v3__card"><svg class="pc-i" aria-hidden="true"><use href="#i-warn"/></svg><div><h3>3D view unavailable</h3><p data-pc="v3-unavailable-text">This device or browser does not support WebGPU.</p><p data-pc="v3-unavailable-load" hidden>The high-end 3D view could not load. Check your connection and reload, or open the standard 3D view.</p><p><a id="pc-gpu-fallback" data-alt="standard">Open the standard 3D view</a></p></div></div>
         </div>
 
         <div class="pc-caption" role="status" data-pc="v3-caption" hidden>
@@ -4755,8 +4755,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       if (++losses > MAX_LOSSES) { h.failed(); return; }
       gfx.make(canvas, h.pr(), function (err, r2) {
         if (err || !watched) { h.failed(); return; }
-        watched.current = r2; bind(r2);
-        h.restored(r2);
+        h.restored(r2);                                              // make() bound r2 (watched.current was null)
       });
     };
   }
@@ -4778,9 +4777,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
           return ad.requestDevice({ requiredFeatures: Array.from(ad.features) });
         }).then(function (device) {
           r = new THREE.WebGPURenderer({ canvas: canvas, antialias: true, device: device });
-          r.onDeviceLost = function () {};                          // until watch() binds it
+          r.onDeviceLost = function () {};                          // until watch() or the adoption below binds it
           return r.init();
         }).then(function () {
+          if (r._animation) r._animation.stop();                    // three's own rAF loop: see the header (frame)
           if (!r.backend || !r.backend.isWebGPUBackend) throw new Error('not the WebGPU backend');
           r.setPixelRatio(pr);
           r.shadowMap.enabled = true;
@@ -4788,13 +4788,18 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
           r.outputColorSpace = THREE.SRGBColorSpace;
           r.toneMapping = THREE.NoToneMapping;
           uniforms();
-          if (watched && !watched.current) { watched.current = r; bind(r); }   // a renderer made again after a failure
+          if (watched && !watched.current) { watched.current = r; bind(r); }
           later(done, null, r);
         }).catch(function (e) {
           if (r) { try { r.dispose(); } catch (x) { /* nothing to free */ } }
           later(done, e || new Error('WebGPU start failed'));
         });
       });
+    },
+    frame: function (r) {
+      var n = r._nodes && r._nodes.nodeFrame;
+      if (r.info.autoReset) r.info.reset();
+      if (n) { n.update(); r.info.frame = n.frameId; }
     },
     watch: function (canvas, h, r) { watched = { canvas: canvas, h: h, current: r }; bind(r); },
     col: function (hex) { return new THREE.Color(hex); },
@@ -4841,6 +4846,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
         gfx.stats.pipelinesCompiled = R._pipelines ? R._pipelines.caches.size : -1;
         if (ctx.live()) {
           ctx.place();
+          gfx.frame(R);
           R.render(ctx.scene, ctx.camera);          // warm-up: the shadow pass and the uploads, under the Building card
           gfx.stats.pipelinesWarm = R._pipelines ? R._pipelines.caches.size : -1;
         }
@@ -4850,12 +4856,10 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     },
     stats: { compileMs: 0, pipelinesCompiled: 0, pipelinesWarm: 0 },
     capture: function (r, scene, camera, size, done) {
-      requestAnimationFrame(function () { gfx.captureNow(r, scene, camera, size, done); });
-    },
-    captureNow: function (r, scene, camera, size, done) {
       var w = Math.max(1, size[0] | 0), h = Math.max(1, size[1] | 0);
       var rt = new THREE.RenderTarget(w, h, { type: THREE.HalfFloatType, samples: 4 }), sun = scene.getObjectByName('sun');   // 4x MSAA like the canvas
       if (sun) sun.shadow.needsUpdate = true;
+      gfx.frame(r);
       r.setRenderTarget(rt);
       r.render(scene, camera);
       r.setRenderTarget(null);
@@ -6156,6 +6160,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   }
   function render() {
     place();
+    PC.gfx.frame(S.renderer);           // /gpu: the node frame per app render (three's own loop is stopped); r128: nothing
     S.renderer.render(S.scene, S.camera);
     S.renders++;
   }
@@ -6420,6 +6425,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     house: function () { return S.house; },
     limits: function () { return S.limits; },
     pose: function () { return S.pose ? PC.cam.copy(S.pose) : null; },
+    available: function () { return PC.gfx.available(); },
     capture: function (done) {
       if (!PC.gfx.capture || !S.house || S.lost || !S.renderer || S.building || S.pending) { done(null); return; }
       place();
@@ -8761,6 +8767,12 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     ui.show(ui.$('v3-unavailable'), s === 'unavailable');
     ui.show(ui.$('v3-panel'), s !== 'unavailable');
     ui.show(ui.$('v3-canvas'), s !== 'unavailable');
+    var load = ui.$$('[data-pc="v3-unavailable-load"]')[0];
+    if (load) {
+      var net = !PC.view3d.available();
+      ui.show(load, net);
+      ui.show(ui.$('v3-unavailable-text'), !net);
+    }
   }
   function fillLevels(h) {
     var key = h.levels.map(function (l) { return l.id; }).join(',');

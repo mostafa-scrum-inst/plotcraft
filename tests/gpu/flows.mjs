@@ -5,6 +5,8 @@
 // (d) the three.js import fails (404) or never answers (bootstrap timeout, shortened here) -> unavailable, no hang
 // (e) a simulated device loss rebuilds once on a new renderer, and nothing loops
 // (f) close or another house while the build compiles leaves no stale build; Roof / level changes made meanwhile stay
+// (i) idle: a ready /gpu view, and the page after closing stage 5, request no animation frames (A-10; three's own
+//     loop is stopped, G1 round 2)
 import { loadCore } from '../helpers/load.mjs';
 import { sampleApproved, maxHouse } from '../helpers/houses.mjs';
 import { suite } from '../helpers/browser.mjs';
@@ -71,6 +73,8 @@ try {
     T.ok(Date.now() - t1 < 10000, `(d) import ${how}: within ${Date.now() - t1} ms (no hang)`);
     T.eq(await P.page.evaluate(() => PC.boot3d.state), how === '404' ? 'failed' : 'timeout', `(d) import ${how}: bootstrap state`);
     T.ok(!(await shown(P.page, '[data-pc="v3-building"]')) && await shown(P.page, '#pc-gpu-fallback'), `(d) import ${how}: no Building card, the standard-page link`);
+    T.ok(await shown(P.page, '[data-pc="v3-unavailable-load"]') && !(await shown(P.page, '[data-pc="v3-unavailable-text"]')), `(d) import ${how}: the load text, not the WebGPU one`);
+    T.eq(await P.page.evaluate(() => document.querySelector('[data-pc="v3-unavailable-load"]').textContent), 'The high-end 3D view could not load. Check your connection and reload, or open the standard 3D view.', `(d) import ${how}: the N2 copy`);
     await P.page.click('[data-pc="btn-back"]');
     T.eq(await P.page.evaluate(() => PC.store.get().stage), 4, `(d) import ${how}: stage 4 still works`);
     T.none(P.problems(), `(d) import ${how}: no page errors`);
@@ -99,6 +103,23 @@ try {
     const px = await P.page.evaluate(() => new Promise((r) => PC.view3d.capture((c) => r(c ? Array.from(c.data.slice(0, 4)) : null))));
     T.ok(px && px[0] + px[1] + px[2] > 100, `(e) the new renderer draws (top-left pixel ${px})`);
     T.none(P.problems(), '(e) no errors');
+    await ctx.close();
+  }
+
+  // ---- (i) no idle animation frames (a counting requestAnimationFrame wrapper from an init script)
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const init = () => { const raf = window.requestAnimationFrame; window.__raf = 0; window.requestAnimationFrame = function (f) { window.__raf++; return raf.call(window, f); }; };
+    const P = await openPage(browser, srv.url, { page: 'gpu', ctx, init });
+    await toStage5(P.page, SAMPLE);
+    T.eq(await ready3d(P.page), 'ready', '(i) ready');
+    const idle = () => P.page.evaluate(() => new Promise((r) => setTimeout(() => { const a = window.__raf; setTimeout(() => r(window.__raf - a), 2000); }, 500)));
+    T.eq(await idle(), 0, '(i) an idle ready /gpu view requests 0 animation frames in 2 s');
+    T.ok(await P.page.evaluate(() => { const r = PC.debug.scene().renderer; return !!r._animation && r._animation._requestId === null; }), '(i) three\'s own loop is stopped');
+    await P.page.click('[data-pc="btn-back"]');
+    T.eq(await P.page.evaluate(() => PC.store.get().stage), 4, '(i) back at stage 4');
+    T.eq(await idle(), 0, '(i) after closing stage 5: 0 animation frames in 2 s');
+    T.none(P.problems(), '(i) no errors');
     await ctx.close();
   }
 

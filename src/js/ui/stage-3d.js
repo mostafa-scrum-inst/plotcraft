@@ -36,6 +36,13 @@
     ui.show(ui.$('v3-unavailable'), s === 'unavailable');
     ui.show(ui.$('v3-panel'), s !== 'unavailable');
     ui.show(ui.$('v3-canvas'), s !== 'unavailable');
+    // /gpu only (G1 round 2, N2): the three.js import failed or timed out -> the load text instead of the WebGPU one
+    var load = ui.$$('[data-pc="v3-unavailable-load"]')[0];
+    if (load) {
+      var net = !PC.view3d.available();
+      ui.show(load, net);
+      ui.show(ui.$('v3-unavailable-text'), !net);
+    }
   }
   // "All" stays in the markup; one option per plan level of this house is added from tpl-v3-level.
   function fillLevels(h) {

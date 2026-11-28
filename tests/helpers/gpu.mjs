@@ -41,7 +41,8 @@ export function xvfb() {
     let out = '';
     const t = setTimeout(() => fail(new Error('Xvfb did not start')), 10000);
     p.stdout.on('data', (d) => { out += d; const m = /^(\d+)\n/.exec(out); if (m) { clearTimeout(t); ok({ display: ':' + m[1], stop: () => p.kill() }); } });
-    p.on('error', fail);
+    // no Xvfb: fail (an explicit QA_GPU run never skips) and say what is missing (G1 round 2, N1)
+    p.on('error', (e) => { clearTimeout(t); fail(e && e.code === 'ENOENT' ? new Error('QA_GPU needs Xvfb (apt install xvfb); the /gpu suite cannot run headless (device lost)') : e); });
   });
 }
 

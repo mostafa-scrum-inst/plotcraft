@@ -4745,6 +4745,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     exposure: function (r, k) { r.toneMappingExposure = k; },
     lightK: 1,
     shadowsDirty: function (r) { r.shadowMap.needsUpdate = true; },
+    frame: function () {},              // r128 has no node frame (the /gpu adapter advances one per app render)
     materials: function () {},
     look: function () {},
     precompile: function (ctx, done) {
@@ -6048,6 +6049,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   }
   function render() {
     place();
+    PC.gfx.frame(S.renderer);           // /gpu: the node frame per app render (three's own loop is stopped); r128: nothing
     S.renderer.render(S.scene, S.camera);
     S.renders++;
   }
@@ -6312,6 +6314,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     house: function () { return S.house; },
     limits: function () { return S.limits; },
     pose: function () { return S.pose ? PC.cam.copy(S.pose) : null; },
+    available: function () { return PC.gfx.available(); },
     capture: function (done) {
       if (!PC.gfx.capture || !S.house || S.lost || !S.renderer || S.building || S.pending) { done(null); return; }
       place();
@@ -8653,6 +8656,12 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     ui.show(ui.$('v3-unavailable'), s === 'unavailable');
     ui.show(ui.$('v3-panel'), s !== 'unavailable');
     ui.show(ui.$('v3-canvas'), s !== 'unavailable');
+    var load = ui.$$('[data-pc="v3-unavailable-load"]')[0];
+    if (load) {
+      var net = !PC.view3d.available();
+      ui.show(load, net);
+      ui.show(ui.$('v3-unavailable-text'), !net);
+    }
   }
   function fillLevels(h) {
     var key = h.levels.map(function (l) { return l.id; }).join(',');

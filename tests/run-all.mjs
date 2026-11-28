@@ -138,12 +138,15 @@ if (process.env.QA_RELEASE || words.includes('leak-max')) {
 }
 // G1 QA_GPU step: after the pool, alone, one file at a time (each starts its own Xvfb + headed Chrome on SwiftShader).
 if (process.env.QA_GPU && want('--gpu')) {
+  const GPU_FILE_MS = 300000;
   const files = picked(list('gpu', '.mjs')), t = Date.now();
   console.log(`\n=== QA_GPU step: ${files.length} file(s), one at a time ===`);
   for (const f of files) {
-    const label = 'gpu ' + f.slice(here.length + 1), t1 = Date.now(), r = spawnSync(process.execPath, [f], { cwd: root, encoding: 'utf8' });
+    // capped (G1 round 2, N1): a hung Chrome fails its file after GPU_FILE_MS instead of hanging the run
+    const label = 'gpu ' + f.slice(here.length + 1), t1 = Date.now(), r = spawnSync(process.execPath, [f], { cwd: root, encoding: 'utf8', timeout: GPU_FILE_MS, killSignal: 'SIGKILL' });
+    const timedOut = !!(r.error && r.error.code === 'ETIMEDOUT');
     console.log(`\n=== ${label} ===`); process.stdout.write((r.stdout || '') + (r.stderr || ''));
-    console.log(`(${label}: ${r.status === 0 ? 'ok' : 'FAILED, exit ' + r.status}, ${secs(Date.now() - t1)})`);
+    console.log(`(${label}: ${r.status === 0 ? 'ok' : timedOut ? 'FAILED, timed out after ' + secs(GPU_FILE_MS) : 'FAILED, exit ' + r.status}, ${secs(Date.now() - t1)})`);
     if (r.status !== 0) failed.push(label);
   }
   soloLines.push(`  [QA_GPU] /gpu suite wall time: ${secs(Date.now() - t)} (${files.length} files)`);

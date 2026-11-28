@@ -91,8 +91,8 @@ Changed: `build.mjs`, `src/manifest.json`, `src/index.html`, `src/js/three/scene
 5. **Fog mixed in sRGB inside the outputNode** (spike item 4 said `mix` in linear): r128 mixes fog into the encoded
    output, so the node converts to sRGB, mixes with the raw horizon colour, converts back. Fully fogged ground then
    reads the horizon hex as on the standard page.
-6. **Capture hook**: 4x MSAA half-float render target (like the canvas), drawn in the next animation frame (r180
-   refreshes per-frame uniforms such as the light directions once per node frame), with the sun's
+6. **Capture hook**: 4x MSAA half-float render target (like the canvas), drawn as a frame of its own
+   (`PC.gfx.frame`, round 2; it was the next animation frame before), with the sun's
    `shadow.needsUpdate` set (r180 keeps one shadow map per render context), and the rows un-padded (256-byte copy
    alignment).
 7. **compileAsync and shadows**: it does not build the shadow-pass pipelines (sample house: 19 pipelines after
@@ -103,10 +103,47 @@ Changed: `build.mjs`, `src/manifest.json`, `src/index.html`, `src/js/three/scene
 
 ## Known limits
 
-- WebGPURenderer runs its own `requestAnimationFrame` loop from `init()` (to advance its node frame). It draws
-  nothing and our on-demand loop still requests no idle frames, but the page is not rAF-silent when idle on /gpu.
+- (Round 2: resolved.) r180's own `requestAnimationFrame` loop from `init()` is stopped; `PC.gfx.frame(r)` does
+  its work per app render. It uses two private members of the pinned 0.180.0 (`renderer._animation`,
+  `renderer._nodes.nodeFrame`); a three.js upgrade must re-check them (the QA_GPU (i) check fails if the loop runs).
 - The /gpu page is published only as files (`dist/gpu/index.html`); publishing and the real-device / iframe check
   (G0 item 2) are the orchestrator's.
 - Shadow bias is unchanged (`-0.0005` / `0.02`); the image check shows no acne difference that matters at tier full
   (walls within 4.7 per channel). Re-tune with the 4096 map in G2.
-- The QA_GPU suite needs `Xvfb` (present here).
+- The QA_GPU suite needs `Xvfb` (present here); without it the run fails with that message (round 2).
+
+## Round 2 (TL impl review: CHANGES REQUESTED)
+
+- **Required change 1 (three's own frame loop).** `gfx-webgpu.js` `make()` stops `renderer._animation` after
+  `init()`. The new adapter member `PC.gfx.frame(r)` does one tick of that loop: on /gpu it runs `info.reset()` when
+  `autoReset`, then `nodeFrame.update()` and `info.frame`; on r128 it does nothing. It is called before scene.js
+  `render()`, before the warm-up render and in `capture`, and capture's next-frame wait is gone. New QA_GPU flows
+  check (i): a counting `requestAnimationFrame` wrapper sees **0 calls in 2 s** on an idle ready /gpu view and
+  **0 after Back to stage 4**, and three's loop is stopped. Planted mistake: without the `stop()` the check fails,
+  with 122 and 120 calls. The image deltas did not change (worst: side 4.7, wall 2.8, ground 0.3, sky 0.1,
+  needle 0).
+- **N1.** `xvfb()` rejects with "QA_GPU needs Xvfb (apt install xvfb); the /gpu suite cannot run headless (device
+  lost)" on `ENOENT` (checked with Xvfb off the PATH: exit 1, so the run fails and does not skip). Each QA_GPU file
+  in run-all is capped at 300 s (`spawnSync` timeout, SIGKILL), and a timeout is reported as "FAILED, timed out".
+- **N2 (PM call via orchestrator).** The /gpu card has a second, gpu-only text,
+  `data-pc="v3-unavailable-load"`: "The high-end 3D view could not load. Check your connection and reload, or open
+  the standard 3D view." It has the same link. stage-3d.js shows it in place of the WebGPU text when
+  `PC.view3d.available()` is false. That function is new: it passes through `PC.gfx.available()`, so the ui layer
+  does not read `PC.boot3d`, and the standard page keeps no bootstrap text. On /gpu it is false only when the
+  import failed or timed out. With no adapter, or a failed init, the card still says "This device or browser does
+  not support WebGPU." Flows (d) checks the new copy for 404 and hang, and (c) still checks the WebGPU text.
+- **N7.** A renderer is bound once. `watch()` binds the first one. `make()` binds every later one, both after a
+  restore and when adopted after a failure. The loss handler no longer calls `bind(r2)` again.
+- **Standard page**:
+  - In `dist/index.html`, the only changes are `frame: function () {}` in gfx-r128.js, the `PC.gfx.frame` call in
+    `render()`, `PC.view3d.available`, and the stage-3d block. That block does nothing there, because the page has
+    no load-text element.
+  - No test expectations were edited.
+  - `tests/three/gfx.test.mjs` now spies on `frame` too, and has a unit check of the /gpu `frame()` order.
+- **Runs**:
+  - `node build.mjs && node tests/run-all.mjs --unit --three`: green, 29.8 s.
+  - `QA_GPU=1 node tests/run-all.mjs --gpu`: flows 67/67 and parity 47/47 (114 checks), 54.1 s.
+  - Focused e2e + QA (`--e2e --qa --only view3d,device-sweep,contract,shell,f1-t1,f4-t1,f4-t3,f5-t1,f5-t2,f5-t3,f6-t1`):
+    green, 110.6 s.
+  - The full default run was not repeated. The scene.js changes are a no-op call on r128 and one new read-only
+    function.
