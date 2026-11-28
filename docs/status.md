@@ -339,3 +339,4 @@
 - 2026-11-28T13:15Z Orchestrator: WebGPU /gpu design approved by client (CD-10..CD-13); feature G starts with G0 spike.
 - [FS] G1 plan written (docs/03-tasks/G1/plan.md).
 - [FS] G1 implemented (dfba6a7): PC.gfx adapters (r128 / WebGPU), build targets dist/index.html + dist/gpu/index.html, per-target lint, CD-11/CD-12 links, QA_GPU suite. Default run green 342.9 s (no expectation edits); QA_GPU 104 checks green, 51.8 s. Deviations in docs/03-tasks/G1/outcome.md (targetFiles, PC.boot3d, headed Chrome on Xvfb for QA_GPU). Ready for TL impl review.
+- [TL] G1 impl review: CHANGES REQUESTED (1 required: stop r180's internal rAF loop on /gpu, tick the node frame from the app's renders; idle /gpu measured 63 rAF calls / 2 s, 0 with the fix, QA_GPU still green). Standard page diff = CD-12 link + adapter indirection only; unit+three and QA_GPU green. docs/03-tasks/G1/impl-review.md.
