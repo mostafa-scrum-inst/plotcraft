@@ -1,7 +1,7 @@
 /* PC.three helpers (A-10, A-11). THREE is touched only inside functions, so this file loads without it.
    - mixHex(a, b, k): the one colour mix of the app (A-10) = PC.sky.mix (core): per-channel lerp of the 0-255 sRGB
      values, Math.round per channel, upper-case '#RRGGBB'.
-   - col(hex): sRGB hex -> linear THREE.Color. Every material, vertex and light colour goes through it; the scene
+   - col(hex): sRGB hex -> linear THREE.Color (G1: through PC.gfx.col, the adapter of the page). Every material, vertex and light colour goes through it; the scene
      background does not (A-10).
    - BoxBatch: hand-written merge of boxes and up-facing quads into ONE Mesh with per-vertex colours (A-11).
      add(cx, cy, cz, sx, sy, sz, hex[, topHex]) in frame T (centre and full sizes); topHex colours the top face only
@@ -27,7 +27,7 @@
   var three = PC.three = PC.three || {};
 
   three.mixHex = PC.sky.mix;   // one rule, in core (F4-T3, TL plan review item 2)
-  three.col = function (hex) { return new THREE.Color(hex).convertSRGBToLinear(); };
+  three.col = function (hex) { return PC.gfx.col(hex); };   // G1: the adapter owns the conversion (r128 vs r180)
 
   // Faces as [normal axis, sign, u axis, v axis] with u x v = normal, so (-u-v, +u-v, +u+v, -u+v) runs counter-clockwise
   // seen from outside. Axes: 0 = X, 1 = Y, 2 = Z. The +Y face is index 2 (the top).
@@ -214,9 +214,9 @@
     var k = tm ? 1 / tm : 1, wrap = tm ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;   // F6-T1b: the blob clamps, no repeat
     t.wrapS = wrap; t.wrapT = wrap;
     t.repeat.set(k, k);
-    t.encoding = kind === 'blob' ? THREE.LinearEncoding : THREE.sRGBEncoding;
+    PC.gfx.texSpace(t, kind !== 'blob');
     t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true;
-    t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+    t.anisotropy = Math.min(4, PC.gfx.maxAniso(renderer));
     t.needsUpdate = true;
     return t;
   };

@@ -4,9 +4,32 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { shellFor } from '../build-targets.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const THREE_TAG = '<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>';
+// G1 (G-plan 4, CD-10): the /gpu page loads three.js 0.180.0 with this one classic script. It is the only text exempt
+// from import-dynamic (and from ui-no-three: it sets the THREE global), matched exactly like THREE_TAG; any other
+// script on either page keeps every rule. A change to the bootstrap in src/index.html must change this copy too.
+export const GPU_URL = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.180.0/three.webgpu.min.js';
+export const GPU_BOOT = `
+(function (PC) {
+  'use strict';
+  var boot = PC.boot3d = { state: 'loading', waiting: [] };
+  function settle(state) {
+    if (boot.state !== 'loading') return;
+    boot.state = state;
+    clearTimeout(timer);
+    boot.waiting.splice(0).forEach(function (f) { f(state); });
+  }
+  var timer = setTimeout(function () { settle('timeout'); }, 20000);
+  import('${GPU_URL}').then(function (m) {
+    if (boot.state === 'loading') globalThis.THREE = m;
+    settle('ready');
+  }).catch(function () { settle('failed'); });
+})(globalThis.PC = globalThis.PC || {});
+`;
+const BOOT_EXEMPT = ['import-dynamic', 'ui-no-three'];
 const NAT = '(?:alert|confirm|prompt)';
 
 // kind: which text the rule applies to. allow(file): files exempt from the rule.
@@ -80,6 +103,7 @@ export function scan(text, o) {
   const out = [];
   for (const r of RULES) {
     if (r.kind !== 'any' && r.kind !== o.kind) continue;
+    if (o.skip && o.skip.includes(r.id)) continue;
     if (r.layer && r.layer !== o.layer) continue;
     if (r.allow && r.allow(o.file || '')) continue;
     const m = r.find ? r.find(text) : r.re.exec(text);
@@ -88,7 +112,7 @@ export function scan(text, o) {
   return out;
 }
 
-const layerOfPath = (f) => f.startsWith('js/core/') ? 'core' : f.startsWith('js/data/') ? 'data' : f.startsWith('js/three/') ? 'three' : 'ui';
+const layerOfPath = (f) => f.startsWith('js/core/') ? 'core' : f.startsWith('js/data/') ? 'data' : f.startsWith('js/three/') || f.startsWith('gpu/three/') ? 'three' : 'ui';
 
 // Splits an HTML document into inline scripts, styles and the remaining markup.
 export function splitHtml(html) {
@@ -98,11 +122,13 @@ export function splitHtml(html) {
   return { scripts, styles, rest };
 }
 
-export function scanHtml(html, file, layers = {}) {
+// target 'gpu' (G1): the exact GPU_BOOT script skips BOOT_EXEMPT; every other script and rule as on the standard page.
+export function scanHtml(html, file, layers = {}, target = 'standard') {
   const { scripts, styles, rest } = splitHtml(html), out = [];
   for (const body of scripts) {
-    const m = /^\s*\/\* (js\/[\w\-./]+) \*\//.exec(body), f = m ? m[1] : '';
-    out.push(...scan(body, { kind: 'js', file: f, layer: layers[f] || (f ? layerOfPath(f) : 'ui') }).map((v) => `${file} > ${v}`));
+    const m = /^\s*\/\* ((?:js|gpu)\/[\w\-./]+) \*\//.exec(body), f = m ? m[1] : '';
+    const skip = target === 'gpu' && body === GPU_BOOT ? BOOT_EXEMPT : null;
+    out.push(...scan(body, { kind: 'js', file: f, layer: layers[f] || (f ? layerOfPath(f) : 'ui'), skip }).map((v) => `${file} > ${v}`));
   }
   for (const body of styles) out.push(...scan(body, { kind: 'css', file }));
   out.push(...scan(rest, { kind: 'html', file }));
@@ -120,6 +146,20 @@ export function scanExternal(html, file) {
   return out;
 }
 
+// G1 /gpu page: no external tag at all, and exactly one URL, the bootstrap's import, inside the exact GPU_BOOT script
+// (which comes before the first app script); no r128 tag.
+export function scanExternalGpu(html, file) {
+  const out = [], urls = html.match(/https?:\/\/[^\s"'<>)]+/g) || [];
+  if (urls.length !== 1 || urls[0] !== GPU_URL) out.push(`${file}: expected exactly 1 external URL (${GPU_URL}), found ${urls.length}: ${urls.slice(0, 5).join(', ')}`);
+  if (/(?:src|href)\s*=\s*["']?https?:/i.test(html)) out.push(`${file}: an external src/href reference`);
+  if (html.includes(THREE_TAG) || /three\.js\/r128/.test(html)) out.push(`${file}: the r128 tag belongs to the standard page only`);
+  const at = html.indexOf('<script>' + GPU_BOOT + '</script>');
+  if (at < 0 || html.indexOf('<script>' + GPU_BOOT + '</script>', at + 1) >= 0) out.push(`${file}: the three.js bootstrap must appear exactly once, exactly as GPU_BOOT`);
+  const firstApp = html.search(/<script>\/\* (?:js|gpu)\//);
+  if (at >= 0 && firstApp >= 0 && firstApp < at) out.push(`${file}: an app script comes before the three.js bootstrap`);
+  return out;
+}
+
 // The vendored test copy of three.js (tests/vendor, A-16) must never reach the build: the licence banner is the real
 // guard; the size cap is a tripwire (the vendored file alone is 603 445 bytes) — raise it only with that in mind.
 // F6-T1c (TL ruling, CTO told): 600 000 -> 700 000; an inlined three.js still puts the build near 1.2 MB. The real
@@ -134,6 +174,7 @@ export function scanBudget(html, file) {
 export function scanVendor(html, file) {
   const out = [];
   if (/Copyright 2010-2021 Three\.js Authors/.test(html)) out.push(`${file}: contains the three.js r128 licence banner: the vendored test copy (tests/vendor) must never be inlined; the app loads r128 from cdnjs only`);
+  if (/Copyright 2010-2025 Three\.js Authors/.test(html)) out.push(`${file}: contains the three.js 0.180 licence banner: tests/vendor/three-0.180.0 must never be inlined; /gpu loads it from cdnjs only`);
   const bytes = Buffer.byteLength(html, 'utf8');
   if (bytes >= DIST_MAX_BYTES) out.push(`${file}: ${bytes} bytes >= ${DIST_MAX_BYTES} (tripwire against an inlined three.js; see tests/vendor/README)`);
   return out;
@@ -144,12 +185,18 @@ const walk = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isD
 export function lintProject(root = ROOT) {
   const src = join(root, 'src'), out = [], warn = [];
   const man = JSON.parse(readFileSync(join(src, 'manifest.json'), 'utf8'));
-  const layers = Object.fromEntries(man.js.map((j) => [j.file, j.layer]));
-  for (const j of man.js) if (layerOfPath(j.file) !== j.layer) out.push(`manifest: ${j.file} is listed as "${j.layer}" but lives in the ${layerOfPath(j.file)} layer`);
+  const all = man.js.concat(man.targetFiles || []);   // G1: + the gpu-only files (build-targets.mjs)
+  const layers = Object.fromEntries(all.map((j) => [j.file, j.layer]));
+  for (const j of all) if (layerOfPath(j.file) !== j.layer) out.push(`manifest: ${j.file} is listed as "${j.layer}" but lives in the ${layerOfPath(j.file)} layer`);
   for (const abs of walk(src)) {
     const f = relative(src, abs).split('\\').join('/'), text = readFileSync(abs, 'utf8');
     if (f.endsWith('.js')) out.push(...scan(text, { kind: 'js', file: f, layer: layers[f] || layerOfPath(f) }));
     else if (f.endsWith('.css')) out.push(...scan(text, { kind: 'css', file: f }));
+    else if (f === 'index.html') {   // G1: the shared shell, once per target
+      const std = shellFor(text, 'standard'), gpu = shellFor(text, 'gpu');
+      out.push(...scanHtml(std, f, layers)); out.push(...scanExternal(std, f));
+      out.push(...scanHtml(gpu, f + ' (gpu)', layers, 'gpu')); out.push(...scanExternalGpu(gpu, f + ' (gpu)'));
+    }
     else if (f.endsWith('.html')) { out.push(...scanHtml(text, f, layers)); out.push(...scanExternal(text, f)); }
     if (/\.(js|css)$/.test(f) && /https?:\/\//.test(text)) out.push(`${f}: external URL in a source file`);
     if (/\.(js|css)$/.test(f) && text.split('\n').length > 300) warn.push(`${f}: ${text.split('\n').length} lines (target 300)`);
@@ -160,6 +207,13 @@ export function lintProject(root = ROOT) {
     const html = readFileSync(dist, 'utf8'); out.push(...scanHtml(html, 'dist/index.html', layers)); out.push(...scanExternal(html, 'dist/index.html'));
     out.push(...scanVendor(html, 'dist/index.html'));
     out.push(...scanBudget(html, 'dist/index.html'));
+  }
+  const gdist = join(root, 'dist', 'gpu', 'index.html');   // G1: the /gpu page, same rules, its own external check
+  if (!existsSync(gdist)) out.push('dist/gpu/index.html is missing: run node build.mjs');
+  else {
+    const html = readFileSync(gdist, 'utf8'); out.push(...scanHtml(html, 'dist/gpu/index.html', layers, 'gpu')); out.push(...scanExternalGpu(html, 'dist/gpu/index.html'));
+    out.push(...scanVendor(html, 'dist/gpu/index.html'));
+    out.push(...scanBudget(html, 'dist/gpu/index.html'));
   }
   return { violations: out, warnings: warn };
 }

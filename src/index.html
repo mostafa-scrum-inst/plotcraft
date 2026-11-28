@@ -3,7 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!--@IF standard-->
 <title>PlotCraft</title>
+<!--@END-->
+<!--@IF gpu-->
+<title>PlotCraft WebGPU</title>
+<!--@END-->
 <link rel="icon" href="data:,">
 <!--@CSS-->
 </head>
@@ -478,7 +483,12 @@
         </div>
 
         <div class="pc-v3__center pc-v3__unavail" role="alert" data-pc="v3-unavailable" hidden>
+<!--@IF standard-->
           <div class="pc-v3__card"><svg class="pc-i" aria-hidden="true"><use href="#i-warn"/></svg><div><h3>3D view unavailable</h3><p data-pc="v3-unavailable-text">The 3D view could not start on this device. Your plot, answers and floor plans are still available in the earlier stages.</p></div></div>
+<!--@END-->
+<!--@IF gpu-->
+          <div class="pc-v3__card"><svg class="pc-i" aria-hidden="true"><use href="#i-warn"/></svg><div><h3>3D view unavailable</h3><p data-pc="v3-unavailable-text">This device or browser does not support WebGPU.</p><p><a id="pc-gpu-fallback" data-alt="standard">Open the standard 3D view</a></p></div></div>
+<!--@END-->
         </div>
 
         <div class="pc-caption" role="status" data-pc="v3-caption" hidden>
@@ -551,6 +561,12 @@
   <footer class="pc-bar">
     <button class="pc-btn" type="button" data-pc="btn-back" disabled><svg class="pc-i" aria-hidden="true"><use href="#i-chev-left"/></svg>Back</button>
     <button class="pc-btn pc-btn--primary pc-bar__next" type="button" data-pc="btn-next" disabled><span data-pc="btn-next-label">Next: Questions</span><svg class="pc-i" aria-hidden="true"><use href="#i-chev-right"/></svg></button>
+<!--@IF standard-->
+    <a class="pc-btn pc-btn--quiet pc-bar__alt" id="pc-alt-link" data-alt="gpu" hidden>High-end 3D (WebGPU)</a>
+<!--@END-->
+<!--@IF gpu-->
+    <a class="pc-btn pc-btn--quiet pc-bar__alt" id="pc-alt-link" data-alt="standard" hidden>Standard version</a>
+<!--@END-->
   </footer>
 </div>
 
@@ -634,8 +650,30 @@
 <!-- ============================== TEMPLATES: STAGE 5 ============================== -->
 <template data-pc="tpl-v3-level"><label class="pc-opt"><input type="radio" name="v3-level" value=""><span class="pc-seg__txt" data-pc="level-label"></span></label></template>
 
+<!--@IF standard-->
 <!-- three.js r128 (the only external reference), then the app scripts -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!--@END-->
+<!--@IF gpu-->
+<!-- /gpu (CD-10): three.js 0.180.0 WebGPU build as a module, loaded by this bootstrap (the only external reference) -->
+<script>
+(function (PC) {
+  'use strict';
+  var boot = PC.boot3d = { state: 'loading', waiting: [] };
+  function settle(state) {
+    if (boot.state !== 'loading') return;
+    boot.state = state;
+    clearTimeout(timer);
+    boot.waiting.splice(0).forEach(function (f) { f(state); });
+  }
+  var timer = setTimeout(function () { settle('timeout'); }, 20000);
+  import('https://cdnjs.cloudflare.com/ajax/libs/three.js/0.180.0/three.webgpu.min.js').then(function (m) {
+    if (boot.state === 'loading') globalThis.THREE = m;
+    settle('ready');
+  }).catch(function () { settle('failed'); });
+})(globalThis.PC = globalThis.PC || {});
+</script>
+<!--@END-->
 <!--@JS-->
 </body>
 </html>

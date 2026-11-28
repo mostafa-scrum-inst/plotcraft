@@ -16,7 +16,8 @@
    0.9 x outerK x R / 2); the lite groundOuter skirt's outer vertices fade to the horizon (colour / meadow colour,
    clamped). Still nothing created or disposed.
    F6-T2: the indoor terms (L.indoor): emissive intensities of glazing / furniture / interior / lamp, the glow colour
-   and the glow meshes' visibility; uniforms and visibility only, so no program changes. */
+   and the glow meshes' visibility; uniforms and visibility only, so no program changes.
+   G1: exposure, light units (PC.gfx.lightK) and the output-node uniforms go through the page's adapter (PC.gfx). */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
@@ -59,8 +60,8 @@
 
   three.applyLook = function (ctx, L) {
     var col = three.col, house = ctx.house, fp = house.footprint, V = PC.C.VIEW3D;
-    ctx.hemi.color.copy(col(L.hemiSky)); ctx.hemi.groundColor.copy(col(L.hemiGround)); ctx.hemi.intensity = L.hemiIntensity;
-    ctx.sun.color.copy(col(L.sunColor)); ctx.sun.intensity = L.sunIntensity;
+    ctx.hemi.color.copy(col(L.hemiSky)); ctx.hemi.groundColor.copy(col(L.hemiGround)); ctx.hemi.intensity = L.hemiIntensity * PC.gfx.lightK;
+    ctx.sun.color.copy(col(L.sunColor)); ctx.sun.intensity = L.sunIntensity * PC.gfx.lightK;
     var tx = fp.u + fp.w / 2 - house.center[0], tz = -(fp.v + fp.d / 2 - house.center[1]), s = L.sunDir, dist = V.sunDist * house.radius;
     var eye = [tx + s[0] * dist, s[1] * dist, tz + s[2] * dist];
     ctx.sun.target.position.set(tx, 0, tz);
@@ -78,7 +79,7 @@
     if (can) can.visible = !!L.canopyVisible;
     var bl = ctx.world.getObjectByName('blobs');   // F6-T1b (Q-T4): winter shows only the shrubs' blobs (a count, no GPU object)
     if (bl) bl.count = L.canopyVisible ? bl.userData.all : bl.userData.shrubs;
-    if (ctx.renderer) ctx.renderer.toneMappingExposure = L.exposure;
+    if (ctx.renderer) PC.gfx.exposure(ctx.renderer, L.exposure);
     var sky = ctx.world.getObjectByName('sky');
     if (sky) three.skyPaint(sky.userData.dome, L);
     var fog = ctx.scene.fog, R = house.radius;
@@ -102,5 +103,6 @@
       sk.outer.forEach(function (i) { a[i * 3] = q[0]; a[i * 3 + 1] = q[1]; a[i * 3 + 2] = q[2]; });
       sk.colors.needsUpdate = true;
     }
+    PC.gfx.look(ctx, L);   // G1: the /gpu page copies fog and exposure into its output-node uniforms
   };
 })(globalThis.PC = globalThis.PC || {});

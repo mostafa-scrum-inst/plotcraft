@@ -19,6 +19,10 @@
 //                                                  times and wall time reprinted at the end
 //   --write-durations                              after a green full run, rewrite tests/durations.json (commit it
 //                                                  with the run)
+//   QA_GPU=1 node tests/run-all.mjs [--gpu]        G1: also the /gpu page's suite (tests/gpu/*.mjs: real WebGPU on
+//                                                  SwiftShader in a headed Chrome on its own Xvfb display), after
+//                                                  everything else, one file at a time; --gpu alone runs only it.
+//                                                  Without QA_GPU=1 nothing of it runs (the default run is untouched)
 //
 // Steps: --unit, --three, --e2e (tests/e2e/*.spec.mjs), --qa (QA's own suites, tests/qa/run-*.mjs, without
 // screenshots). No step flag = all steps. Build and lint always run. Browser files are separate processes with
@@ -32,7 +36,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url)), root = join(here, '..'), started = Date.now();
-const args = process.argv.slice(2), only = ['--unit', '--three', '--e2e', '--qa'].filter((f) => args.includes(f));
+const args = process.argv.slice(2), only = ['--unit', '--three', '--e2e', '--qa', '--gpu'].filter((f) => args.includes(f));
 const want = (f) => only.length === 0 || only.includes(f);
 const opt = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : null; };
 const words = (opt('--only') || '').split(',').map((w) => w.trim()).filter(Boolean);
@@ -132,6 +136,18 @@ if (process.env.QA_RELEASE || words.includes('leak-max')) {
   }
   soloLines.push(`  [leak-max] release step wall time: ${((Date.now() - t) / 1000).toFixed(1)} s (${parts.length} processes, ${RJ} at a time)`);
 }
+// G1 QA_GPU step: after the pool, alone, one file at a time (each starts its own Xvfb + headed Chrome on SwiftShader).
+if (process.env.QA_GPU && want('--gpu')) {
+  const files = picked(list('gpu', '.mjs')), t = Date.now();
+  console.log(`\n=== QA_GPU step: ${files.length} file(s), one at a time ===`);
+  for (const f of files) {
+    const label = 'gpu ' + f.slice(here.length + 1), t1 = Date.now(), r = spawnSync(process.execPath, [f], { cwd: root, encoding: 'utf8' });
+    console.log(`\n=== ${label} ===`); process.stdout.write((r.stdout || '') + (r.stderr || ''));
+    console.log(`(${label}: ${r.status === 0 ? 'ok' : 'FAILED, exit ' + r.status}, ${secs(Date.now() - t1)})`);
+    if (r.status !== 0) failed.push(label);
+  }
+  soloLines.push(`  [QA_GPU] /gpu suite wall time: ${secs(Date.now() - t)} (${files.length} files)`);
+} else if (args.includes('--gpu')) console.log('\n=== QA_GPU step skipped: set QA_GPU=1 ===');
 if (soloLines.length) console.log('\n' + soloLines.join('\n'));
 if (failed.length) console.log('\nfailed: ' + failed.join(', '));
 if (args.includes('--write-durations')) {

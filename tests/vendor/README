@@ -20,3 +20,23 @@ three-r128.min.js
            sha512sum <repo>/tests/vendor/three-r128.min.js                 # must equal the file hash above
   Note:    byte identity with the cdnjs copy cannot be checked from here; it is the same r128 release and
            tests/e2e/view3d-real.spec.mjs asserts THREE.REVISION === '128'.
+
+three-0.180.0/three.webgpu.min.js, three-0.180.0/three.core.min.js   (G1, QA_GPU only)
+  What:    three.js 0.180.0 WebGPU build (package three@0.180.0, files package/build/three.webgpu.min.js and
+           package/build/three.core.min.js, MIT, licence headers kept). three.webgpu.min.js imports ./three.core.min.js.
+  Why:     the /gpu page (dist/gpu/index.html) imports
+           https://cdnjs.cloudflare.com/ajax/libs/three.js/0.180.0/three.webgpu.min.js from its bootstrap script (CD-10).
+           tests/helpers/gpu.mjs fulfils that URL (and the ./three.core.min.js next to it) with these files through
+           page.route; the app, src/ and dist/ never reference this folder (lint: one external URL on /gpu, and the
+           0.180 licence banner must never be inlined).
+  Tarball: https://registry.npmjs.org/three/-/three-0.180.0.tgz (7 750 248 bytes)
+           integrity sha512-o+qycAMZrh+TsE01GqWUxUIKR1AL0S8pq7zDkYOQw8GqfX8b8VoCKYUoHbhiX5j+7hr8XsuHDVU6+gkQJQKg9w==
+  Files:   three.webgpu.min.js 579 780 bytes, sha512sum
+           74ae3da6dbd9684b85093950d0a32edf4e8fe8a70b3a75f933012394826317697c4d9b10e80389c4998016c973146ef64959bc7e7d4c8f1e82827067033865b9
+           three.core.min.js   381 124 bytes, sha512sum
+           26d13ed8b800f92e4463bc1658646303e1c793376f937d744e083bee58254e6801df4fc06b3694e22684561c80f270caadc8ed403caddb7309b7e71b1d731f57
+  Refetch (in an empty scratch directory):
+           curl -sO https://registry.npmjs.org/three/-/three-0.180.0.tgz
+           openssl dgst -sha512 -binary three-0.180.0.tgz | base64 -w0    # must equal the integrity above
+           tar -xzf three-0.180.0.tgz package/build/three.webgpu.min.js package/build/three.core.min.js
+           cp package/build/three.webgpu.min.js package/build/three.core.min.js <repo>/tests/vendor/three-0.180.0/

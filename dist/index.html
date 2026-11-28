@@ -197,6 +197,8 @@ canvas { display: block; }
   background: var(--surface); border-top: 1px solid var(--ink);
 }
 .pc-bar__next { min-width: 150px; margin-left: auto; }
+/* G1 (CD-12): the other page's link, stage 5 only, where Next is hidden */
+.pc-bar__alt { margin-left: auto; text-decoration: none; }
 
 /* 720+: every step shows its short label */
 @media (min-width: 720px) {
@@ -1059,6 +1061,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 .pc-v3__card { max-width: 420px; padding: var(--s4); display: flex; gap: var(--s3); align-items: flex-start; background: var(--surface); border: 1px solid var(--ink); border-left: 4px solid var(--warn); border-radius: var(--r2); }
 .pc-v3__card h3 { font-size: var(--fs-md); }
 .pc-v3__card p { font-size: var(--fs-sm); color: var(--ink-2); }
+/* G1 (CD-11): the /gpu unavailable card links to the standard page */
+.pc-v3__card a { display: inline-flex; align-items: center; min-height: var(--tap); color: var(--accent); font-weight: 600; }
 
 /* Room caption chip: top centre of the visible canvas; carries Pause / Stop during a tour */
 .pc-caption {
@@ -1692,6 +1696,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   <footer class="pc-bar">
     <button class="pc-btn" type="button" data-pc="btn-back" disabled><svg class="pc-i" aria-hidden="true"><use href="#i-chev-left"/></svg>Back</button>
     <button class="pc-btn pc-btn--primary pc-bar__next" type="button" data-pc="btn-next" disabled><span data-pc="btn-next-label">Next: Questions</span><svg class="pc-i" aria-hidden="true"><use href="#i-chev-right"/></svg></button>
+    <a class="pc-btn pc-btn--quiet pc-bar__alt" id="pc-alt-link" data-alt="gpu" hidden>High-end 3D (WebGPU)</a>
   </footer>
 </div>
 
@@ -4706,13 +4711,70 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 })(globalThis.PC = globalThis.PC || {});
 
 </script>
+<script>/* js/three/gfx-r128.js */
+(function (PC) {
+  'use strict';
+  var PRE = /^(glow-|textured-|furniture$)/;
+  var gfx = PC.gfx = {
+    name: 'r128',
+    tier: null,
+    available: function () { return typeof THREE !== 'undefined'; },
+    create: function (canvas, pr) {
+      var r = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+      r.setPixelRatio(pr);
+      r.shadowMap.enabled = true;
+      r.shadowMap.type = THREE.PCFSoftShadowMap;
+      r.shadowMap.autoUpdate = false;
+      r.outputEncoding = THREE.sRGBEncoding;
+      r.toneMapping = THREE.ACESFilmicToneMapping;
+      return r;
+    },
+    make: function (canvas, pr, done) {
+      var r = null;
+      try { r = gfx.create(canvas, pr); } catch (e) { done(e, null); return; }
+      done(null, r);
+    },
+    watch: function (canvas, h) {
+      canvas.addEventListener('webglcontextlost', function (e) { e.preventDefault(); h.lost(); });
+      canvas.addEventListener('webglcontextrestored', function () { h.restored(null); });
+    },
+    col: function (hex) { return new THREE.Color(hex).convertSRGBToLinear(); },
+    texSpace: function (t, srgb) { t.encoding = srgb ? THREE.sRGBEncoding : THREE.LinearEncoding; },
+    maxTex: function (r) { return r.capabilities.maxTextureSize; },
+    maxAniso: function (r) { return r.capabilities.getMaxAnisotropy(); },
+    exposure: function (r, k) { r.toneMappingExposure = k; },
+    lightK: 1,
+    shadowsDirty: function (r) { r.shadowMap.needsUpdate = true; },
+    materials: function () {},
+    look: function () {},
+    precompile: function (ctx, done) {
+      var R = ctx.renderer;
+      if (!R || !R.compile) { done(false); return; }
+      var gs = [];
+      ctx.world.traverse(function (o) { if (PRE.test(o.name)) { gs.push([o, o.visible]); o.visible = true; } });
+      if (!gs.length) { done(false); return; }
+      var sm = R.shadowMap, nu = sm.needsUpdate;
+      R.compile(ctx.scene, ctx.camera);
+      if (R.initTexture && ctx.mats.interior && ctx.mats.interior.map) R.initTexture(ctx.mats.interior.map);   // CTO: the atlas up at build
+      if (R.setScissorTest) {
+        sm.needsUpdate = false;
+        R.setScissor(0, 0, 1, 1); R.setScissorTest(true); R.render(ctx.scene, ctx.camera); R.setScissorTest(false);
+        sm.needsUpdate = nu;
+      }
+      gs.forEach(function (e) { e[0].visible = e[1]; });
+      done(false);
+    }
+  };
+})(globalThis.PC = globalThis.PC || {});
+
+</script>
 <script>/* js/three/util.js */
 (function (PC) {
   'use strict';
   var three = PC.three = PC.three || {};
 
   three.mixHex = PC.sky.mix;   // one rule, in core (F4-T3, TL plan review item 2)
-  three.col = function (hex) { return new THREE.Color(hex).convertSRGBToLinear(); };
+  three.col = function (hex) { return PC.gfx.col(hex); };   // G1: the adapter owns the conversion (r128 vs r180)
 
   var FACES = [[0, 1, 1, 2], [0, -1, 2, 1], [1, 1, 2, 0], [1, -1, 0, 2], [2, 1, 0, 1], [2, -1, 1, 0]];
   var CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
@@ -4881,9 +4943,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     var k = tm ? 1 / tm : 1, wrap = tm ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;   // F6-T1b: the blob clamps, no repeat
     t.wrapS = wrap; t.wrapT = wrap;
     t.repeat.set(k, k);
-    t.encoding = kind === 'blob' ? THREE.LinearEncoding : THREE.sRGBEncoding;
+    PC.gfx.texSpace(t, kind !== 'blob');
     t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true;
-    t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+    t.anisotropy = Math.min(4, PC.gfx.maxAniso(renderer));
     t.needsUpdate = true;
     return t;
   };
@@ -5714,8 +5776,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
 
   three.applyLook = function (ctx, L) {
     var col = three.col, house = ctx.house, fp = house.footprint, V = PC.C.VIEW3D;
-    ctx.hemi.color.copy(col(L.hemiSky)); ctx.hemi.groundColor.copy(col(L.hemiGround)); ctx.hemi.intensity = L.hemiIntensity;
-    ctx.sun.color.copy(col(L.sunColor)); ctx.sun.intensity = L.sunIntensity;
+    ctx.hemi.color.copy(col(L.hemiSky)); ctx.hemi.groundColor.copy(col(L.hemiGround)); ctx.hemi.intensity = L.hemiIntensity * PC.gfx.lightK;
+    ctx.sun.color.copy(col(L.sunColor)); ctx.sun.intensity = L.sunIntensity * PC.gfx.lightK;
     var tx = fp.u + fp.w / 2 - house.center[0], tz = -(fp.v + fp.d / 2 - house.center[1]), s = L.sunDir, dist = V.sunDist * house.radius;
     var eye = [tx + s[0] * dist, s[1] * dist, tz + s[2] * dist];
     ctx.sun.target.position.set(tx, 0, tz);
@@ -5733,7 +5795,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     if (can) can.visible = !!L.canopyVisible;
     var bl = ctx.world.getObjectByName('blobs');   // F6-T1b (Q-T4): winter shows only the shrubs' blobs (a count, no GPU object)
     if (bl) bl.count = L.canopyVisible ? bl.userData.all : bl.userData.shrubs;
-    if (ctx.renderer) ctx.renderer.toneMappingExposure = L.exposure;
+    if (ctx.renderer) PC.gfx.exposure(ctx.renderer, L.exposure);
     var sky = ctx.world.getObjectByName('sky');
     if (sky) three.skyPaint(sky.userData.dome, L);
     var fog = ctx.scene.fog, R = house.radius;
@@ -5755,6 +5817,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       sk.outer.forEach(function (i) { a[i * 3] = q[0]; a[i * 3 + 1] = q[1]; a[i * 3 + 2] = q[2]; });
       sk.colors.needsUpdate = true;
     }
+    PC.gfx.look(ctx, L);   // G1: the /gpu page copies fog and exposure into its output-node uniforms
   };
 })(globalThis.PC = globalThis.PC || {});
 
@@ -5898,7 +5961,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     house: null, builtKey: null, pose: null, limits: null, size: [0, 0], occl: { right: 0, bottom: 0 }, view: null,
     active: false, lost: false, dirty: false, frame: 0, building: 0, token: 0, onState: null,
     meshes: [], level: 'all', roof: !!(PC.C && PC.C.VIEW3D && PC.C.VIEW3D.roofOnOpen), renders: 0, builds: 0, restores: 0, looks: 0,
-    tier: null, textures: [], shadowUpdates: 0,
+    tier: null, textures: [], shadowUpdates: 0, seq: 0, pending: 0, pendingDone: null, making: false, want: null,
     look: { hour: 12, season: 'summer' },
     anim: null, animT: null, highlight: null, selected: null, onSelect: null, hlMade: 0
   };
@@ -5907,31 +5970,22 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   function dpr() { var d = typeof devicePixelRatio === 'number' && devicePixelRatio > 0 ? devicePixelRatio : 1; return Math.min(d, S.tier ? S.tier.maxDpr : V().maxDpr); }
 
   three.pickTier = function (env) {
-    var v = V(), name = v.tier[env.coarse ? 'coarse' : 'fine'], t = v.tiers[name] || v.tiers.full;
+    var v = V(), name = env.force || v.tier[env.coarse ? 'coarse' : 'fine'], t = v.tiers[name] || v.tiers.full;
     var fine = t.fineShadow && !env.coarse && env.maxTex >= 4096;
     return { name: v.tiers[name] ? name : 'full', tex: t.tex, fog: !!t.fog, treeDetail: t.treeDetail,
       shadowMap: fine ? v.shadowMapFine : v.shadowMap, maxDpr: Math.min(v.maxDpr, t.maxDpr, env.coarse ? v.maxDprCoarse : Infinity) };
   };
   function visible() { return typeof document === 'undefined' || document.visibilityState !== 'hidden'; }
 
-  three.makeRenderer = function (canvas) {
-    var r = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
-    r.setPixelRatio(dpr());
-    r.shadowMap.enabled = true;
-    r.shadowMap.type = THREE.PCFSoftShadowMap;
-    r.shadowMap.autoUpdate = false;
-    r.outputEncoding = THREE.sRGBEncoding;
-    r.toneMapping = THREE.ACESFilmicToneMapping;
-    return r;
-  };
+  three.makeRenderer = function (canvas) { return PC.gfx.create(canvas, dpr()); };
 
   function cancelFrame() { if (S.frame) { cancelAnimationFrame(S.frame); S.frame = 0; } }
   function request() {
-    if (!S.active || S.lost || S.building || S.frame || !S.house || !visible()) return;
+    if (!S.active || S.lost || S.building || S.pending || S.frame || !S.house || !visible()) return;
     S.frame = requestAnimationFrame(frame);
   }
   function invalidate() { S.dirty = true; request(); }
-  function shadowsDirty() { if (S.renderer) { S.renderer.shadowMap.needsUpdate = true; S.shadowUpdates++; } }
+  function shadowsDirty() { if (S.renderer) { PC.gfx.shadowsDirty(S.renderer, S.sun); S.shadowUpdates++; } }
   function frame(ts) {
     S.frame = 0;
     if (!S.active || S.lost || !visible()) return;
@@ -5984,14 +6038,17 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     invalidate();
     return true;
   }
-  function render() {
+  function place() {
     var p = S.pose, e = PC.cam.position(p), cam = S.camera, n = PC.cam.near(p);
     cam.position.set(e[0], e[1], e[2]);
     cam.lookAt(p.target[0], p.target[1], p.target[2]);
     if (cam.near !== n) { cam.near = n; cam.updateProjectionMatrix(); }
     var sky = S.world.getObjectByName('sky');
     if (sky) sky.position.set(e[0], e[1], e[2]);               // TL required change 2: the dome follows the eye
-    S.renderer.render(S.scene, cam);
+  }
+  function render() {
+    place();
+    S.renderer.render(S.scene, S.camera);
     S.renders++;
   }
   function aspect() { return S.size[0] && S.size[1] ? PC.cam.visibleAspect(S.size[0], S.size[1], S.occl) : 1; }
@@ -6024,6 +6081,23 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     if (!inFrame) invalidate();
   }
 
+  var LOSS = {
+    lost: function () { S.lost = true; cancelFrame(); },
+    restored: function (r) {
+      var old = null;
+      if (r && r !== S.renderer) {
+        old = S.renderer;
+        S.renderer = r; S.pr = 0; S.size = [0, 0];
+        r.setPixelRatio(dpr());
+      }
+      S.lost = false; S.restores++;
+      if (S.house) { var d = S.pending ? S.pendingDone : null; S.builtKey = null; build(S.house, d); }
+      if (old) { try { old.dispose(); } catch (e) { /* its device is gone already */ } }
+      invalidate();
+    },
+    failed: function () { S.renderer = null; S.builtKey = null; S.building = 0; if (S.onState) S.onState('unavailable'); },
+    pr: function () { return dpr(); }
+  };
   function setup(canvas) {
     S.canvas = canvas;
     S.scene = new THREE.Scene();
@@ -6038,12 +6112,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     S.sun.target.name = 'sunTarget';
     S.world = new THREE.Group(); S.world.name = 'world';
     S.scene.add(S.hemi, S.sun, S.sun.target, S.world);
-    canvas.addEventListener('webglcontextlost', function (e) { e.preventDefault(); S.lost = true; cancelFrame(); });
-    canvas.addEventListener('webglcontextrestored', function () {
-      S.lost = false; S.restores++;
-      if (S.house) { S.builtKey = null; build(S.house); }
-      invalidate();
-    });
+    PC.gfx.watch(canvas, LOSS, S.renderer);
     if (typeof ResizeObserver === 'function' && canvas.parentElement) { var ro = new ResizeObserver(function () { resize(); }); ro.observe(canvas.parentElement); ro.observe(canvas); }
     else if (typeof addEventListener === 'function') addEventListener('resize', function () { resize(); });
     if (typeof document !== 'undefined' && document.addEventListener) {
@@ -6081,7 +6150,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   function lights(house) { apply(house); S.looks++; }
   function tex(kind) { var t = three.texture(kind, S.tier.tex, S.renderer); S.textures.push(t); return t; }
 
-  function build(house) {
+  function build(house, done) {
     dispose();
     var SC = PC.data.siteColors;
     var lite = !S.tier.fog;
@@ -6112,6 +6181,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     S.mats.lamp = glow({ vertexColors: true }, IN.lamp.hex);
     S.mats.glazing = glow({ vertexColors: true }, IN.glazing.hex);
     if (!lite) S.mats.glow = new THREE.MeshBasicMaterial({ color: three.col('#000000'), map: S.mats.blob.map, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    PC.gfx.materials(S.mats, S.scene);   // G1: /gpu output nodes (tone mapping + fog as r128 does them); r128: nothing
     S.meshes = three.buildShell(house, S.world, S.mats, { tier: S.tier }).concat(three.buildInterior(house, S.world, S.mats, { cells: three.atlasCells(S.tier.tex) }),
       three.buildRoof(house, S.world, S.mats), three.buildSite(house, S.world, S.mats, { tier: S.tier }));
     S.meshes = S.meshes.concat(three.buildGlow(house, S.world, S.mats, { tier: S.tier }));
@@ -6123,23 +6193,19 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     lights(house);
     if (!house.levels.some(function (l) { return l.id === S.level; })) S.level = 'all';
     applyVisibility();
-    precompile();
+    precompile(house, done);
   }
-  var PRE = /^(glow-|textured-|furniture$)/;
-  function precompile() {
-    if (!S.renderer || !S.renderer.compile) return;
-    var gs = [];
-    S.world.traverse(function (o) { if (PRE.test(o.name)) { gs.push([o, o.visible]); o.visible = true; } });
-    if (!gs.length) return;
-    var R = S.renderer, sm = R.shadowMap, nu = sm.needsUpdate;
-    R.compile(S.scene, S.camera);
-    if (R.initTexture && S.mats.interior && S.mats.interior.map) R.initTexture(S.mats.interior.map);   // CTO: the atlas up at build
-    if (R.setScissorTest) {
-      sm.needsUpdate = false;
-      R.setScissor(0, 0, 1, 1); R.setScissorTest(true); R.render(S.scene, S.camera); R.setScissorTest(false);
-      sm.needsUpdate = nu;
-    }
-    gs.forEach(function (e) { e[0].visible = e[1]; });
+  function precompile(house, done) {
+    var seq = ++S.seq;
+    S.pending = seq; S.pendingDone = done || null;
+    PC.gfx.precompile({ renderer: S.renderer, scene: S.scene, camera: S.camera, world: S.world, mats: S.mats, place: place,
+      live: function () { return seq === S.seq && !S.lost; } }, function (reapply) {
+      if (seq !== S.seq) return;            // a newer build disposed this one
+      S.pending = 0; S.pendingDone = null;
+      if (reapply) { applyVisibility(); apply(house); }
+      if (done) done();
+      if (reapply) invalidate();
+    });
   }
 
   function applyVisibility() {
@@ -6159,35 +6225,64 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     shadowsDirty();
   }
 
-  PC.view3d = {
-    open: function (house, canvas, onState) {
-      S.onState = onState || function () {};
-      if (typeof THREE === 'undefined' || !house) { S.onState('unavailable'); return { ok: false }; }
-      if (!S.renderer) {
-        try { S.renderer = three.makeRenderer(canvas); } catch (e) { S.renderer = null; S.onState('unavailable'); return { ok: false }; }
-        S.tier = three.pickTier({ coarse: coarse(), maxTex: S.renderer.capabilities.maxTextureSize });
-        S.renderer.setPixelRatio(dpr());
-        setup(canvas);
-      }
-      S.active = true;
-      if (house.key === S.builtKey) { S.onState('ready'); invalidate(); return { ok: true }; }   // the frame sizes
-      resize();
-      S.onState('building');
-      var token = ++S.token;
-      S.building = token;
-      requestAnimationFrame(function () {
-        setTimeout(function () {
-          if (S.building !== token || !S.active) return;
-          build(house);
+  function made(err, r, canvas) {
+    if (err || !r) { S.renderer = null; return false; }
+    S.renderer = r; S.lost = false;                     // /gpu: a renderer made again after a failed device restore
+    S.tier = three.pickTier({ coarse: coarse(), maxTex: PC.gfx.maxTex(r), force: PC.gfx.tier });
+    S.renderer.setPixelRatio(dpr());
+    if (!S.canvas) setup(canvas);
+    return true;
+  }
+  function go(house) {
+    if (house.key === S.builtKey && !S.pending) { S.onState('ready'); invalidate(); return { ok: true }; }   // the frame sizes
+    resize();
+    S.onState('building');
+    var token = ++S.token;
+    S.building = token;
+    requestAnimationFrame(function () {
+      setTimeout(function () {
+        if (S.building !== token || !S.active) return;
+        build(house, function () {
+          if (S.building !== token || !S.active) return;   // closed, or another house, while it compiled (/gpu)
           S.building = 0;
           S.onState('ready');
           resize();
           invalidate();
-        }, 0);
-      });
-      return { ok: true };
+        });
+      }, 0);
+    });
+    return { ok: true };
+  }
+
+  PC.view3d = {
+    open: function (house, canvas, onState) {
+      S.onState = onState || function () {};
+      if (!PC.gfx.available() || !house) { S.onState('unavailable'); return { ok: false }; }
+      if (!S.renderer) {
+        S.want = house;
+        if (S.making) { S.onState('building'); return { ok: true }; }
+        var sync = true, now = null;
+        S.making = true;
+        PC.gfx.make(canvas, dpr(), function (err, r) {
+          S.making = false;
+          var ok = made(err, r, canvas);
+          if (sync) { now = ok; return; }
+          var h = S.want;
+          S.want = null;
+          if (!h) return;                                     // closed while waiting
+          if (!ok) { S.onState('unavailable'); return; }
+          S.active = true;
+          go(h);
+        });
+        sync = false;
+        S.want = null;
+        if (now === false) { S.onState('unavailable'); return { ok: false }; }
+        if (now === null) { S.want = house; S.onState('building'); return { ok: true }; }
+      }
+      S.active = true;
+      return go(house);
     },
-    close: function () { S.active = false; S.building = 0; cancelFrame(); stopAnim('close'); clearSelection(); },
+    close: function () { S.active = false; S.building = 0; S.want = null; cancelFrame(); stopAnim('close'); clearSelection(); },
     invalidate: invalidate,
     setLevel: function (sel) { S.level = sel; applyVisibility(); invalidate(); },
     setRoof: function (on) { S.roof = !!on; applyVisibility(); invalidate(); },
@@ -6217,12 +6312,18 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     house: function () { return S.house; },
     limits: function () { return S.limits; },
     pose: function () { return S.pose ? PC.cam.copy(S.pose) : null; },
+    capture: function (done) {
+      if (!PC.gfx.capture || !S.house || S.lost || !S.renderer || S.building || S.pending) { done(null); return; }
+      place();
+      PC.gfx.capture(S.renderer, S.scene, S.camera, S.size, done);
+    },
     info: function () {
       return { renderer: S.renderer, scene: S.scene, camera: S.camera, world: S.world, house: S.house, active: S.active, lost: S.lost,
         building: !!S.building, frame: !!S.frame, dirty: S.dirty, renders: S.renders, builds: S.builds, restores: S.restores,
         meshCount: S.meshes.length + (S.highlight ? 1 : 0), meshes: S.meshes.concat(S.highlight ? [S.highlight] : []),
         flight: S.anim && S.anim.kind === 'flight' ? { from: PC.cam.copy(S.anim.from), to: PC.cam.copy(S.anim.to), t: S.anim.t, ms: S.anim.ms } : null,
         tier: S.tier ? Object.assign({}, S.tier) : null, textures: S.textures.slice(), shadowUpdates: S.shadowUpdates,
+        compiling: !!S.pending, gfx: PC.gfx.name,
         animating: !!S.anim, selected: S.selected, highlight: S.highlight, highlightsMade: S.hlMade, level: S.level, roof: S.roof, look: { hour: S.look.hour, season: S.look.season }, looks: S.looks, size: S.size.slice(), occl: { right: S.occl.right, bottom: S.occl.bottom }, viewOffset: S.view ? S.view.slice() : null, aspect: aspect(), renderNow: function () { if (S.house && !S.lost) render(); } };
     }
   };
@@ -6441,6 +6542,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   var ui = PC.ui = PC.ui || {};
   var controllers = {}, shown = 0, ready = false;
   var furthest = 1;                  // furthest stage opened in this session (a step is "done" only once visited)
+  var ALT = { gpu: 'gpu/index.html', standard: '../index.html' };   // G1 (CD-11, CD-12): from each page to the other
   var STATIC_ID = 'stage-static', STATIC_TEXT = 'This stage is not built yet: static preview';
   var STRIP_STAGES = [1, 3];         // sample strip (and the only "Skip to 3D") shows here while the sample is untouched (PM round 8: not on 4)
 
@@ -6465,6 +6567,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     next.hidden = last;
     next.disabled = last || !st[s.stage].valid || !st[s.stage + 1].reachable;
     if (!last) ui.$('btn-next-label').textContent = PC.stages.TEXT.next[s.stage];
+    var alt = document.getElementById('pc-alt-link');
+    if (alt) alt.hidden = !last || (alt.getAttribute('data-alt') === 'gpu' && !(typeof navigator !== 'undefined' && navigator.gpu));
   }
 
   function switchStage(s) {
@@ -6531,6 +6635,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       });
       ui.on(document, 'keydown', function () { lastInput = 'key'; }, true);
       ui.on(document, 'pointerdown', function () { lastInput = 'pointer'; }, true);
+      Array.prototype.forEach.call(document.querySelectorAll('a[data-alt]'), function (el) { el.setAttribute('href', ALT[el.getAttribute('data-alt')]); });
       PC.store.subscribe(render);
       ready = true;
       render();

@@ -4,6 +4,7 @@
   var ui = PC.ui = PC.ui || {};
   var controllers = {}, shown = 0, ready = false;
   var furthest = 1;                  // furthest stage opened in this session (a step is "done" only once visited)
+  var ALT = { gpu: 'gpu/index.html', standard: '../index.html' };   // G1 (CD-11, CD-12): from each page to the other
   var STATIC_ID = 'stage-static', STATIC_TEXT = 'This stage is not built yet: static preview';
   var STRIP_STAGES = [1, 3];         // sample strip (and the only "Skip to 3D") shows here while the sample is untouched (PM round 8: not on 4)
 
@@ -28,6 +29,11 @@
     next.hidden = last;
     next.disabled = last || !st[s.stage].valid || !st[s.stage + 1].reachable;
     if (!last) ui.$('btn-next-label').textContent = PC.stages.TEXT.next[s.stage];
+    // G1 (CD-12): the link to the other page, on stage 5 only (where Next is hidden). The standard page offers the
+    // WebGPU page only where the browser has WebGPU (a feature check, no adapter request); /gpu always offers the
+    // standard page.
+    var alt = document.getElementById('pc-alt-link');
+    if (alt) alt.hidden = !last || (alt.getAttribute('data-alt') === 'gpu' && !(typeof navigator !== 'undefined' && navigator.gpu));
   }
 
   function switchStage(s) {
@@ -97,6 +103,9 @@
       });
       ui.on(document, 'keydown', function () { lastInput = 'key'; }, true);
       ui.on(document, 'pointerdown', function () { lastInput = 'pointer'; }, true);
+      // G1: the links between the two pages get their (relative) targets here, so the markup keeps the A-3 rule of
+      // no src / href other than the three.js tag, #fragments and data: (QA F1-T1)
+      Array.prototype.forEach.call(document.querySelectorAll('a[data-alt]'), function (el) { el.setAttribute('href', ALT[el.getAttribute('data-alt')]); });
       PC.store.subscribe(render);
       ready = true;
       render();

@@ -6,6 +6,8 @@
 .pc-v3__card { max-width: 420px; padding: var(--s4); display: flex; gap: var(--s3); align-items: flex-start; background: var(--surface); border: 1px solid var(--ink); border-left: 4px solid var(--warn); border-radius: var(--r2); }
 .pc-v3__card h3 { font-size: var(--fs-md); }
 .pc-v3__card p { font-size: var(--fs-sm); color: var(--ink-2); }
+/* G1 (CD-11): the /gpu unavailable card links to the standard page */
+.pc-v3__card a { display: inline-flex; align-items: center; min-height: var(--tap); color: var(--accent); font-weight: 600; }
 
 /* Room caption chip: top centre of the visible canvas; carries Pause / Stop during a tour */
 .pc-caption {

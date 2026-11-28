@@ -38,7 +38,7 @@
     house: null, builtKey: null, pose: null, limits: null, size: [0, 0], occl: { right: 0, bottom: 0 }, view: null,
     active: false, lost: false, dirty: false, frame: 0, building: 0, token: 0, onState: null,
     meshes: [], level: 'all', roof: !!(PC.C && PC.C.VIEW3D && PC.C.VIEW3D.roofOnOpen), renders: 0, builds: 0, restores: 0, looks: 0,
-    tier: null, textures: [], shadowUpdates: 0,
+    tier: null, textures: [], shadowUpdates: 0, seq: 0, pending: 0, pendingDone: null, making: false, want: null,
     look: { hour: 12, season: 'summer' },
     anim: null, animT: null, highlight: null, selected: null, onSelect: null, hlMade: 0
   };
@@ -47,32 +47,25 @@
   function dpr() { var d = typeof devicePixelRatio === 'number' && devicePixelRatio > 0 ? devicePixelRatio : 1; return Math.min(d, S.tier ? S.tier.maxDpr : V().maxDpr); }
 
   // env = { coarse, maxTex } -> the tier record used for this page session (CTO C-4.5 .. C-4.7).
+  // G1: env.force (PC.gfx.tier) names the tier outright; the /gpu page runs 'full' only.
   three.pickTier = function (env) {
-    var v = V(), name = v.tier[env.coarse ? 'coarse' : 'fine'], t = v.tiers[name] || v.tiers.full;
+    var v = V(), name = env.force || v.tier[env.coarse ? 'coarse' : 'fine'], t = v.tiers[name] || v.tiers.full;
     var fine = t.fineShadow && !env.coarse && env.maxTex >= 4096;
     return { name: v.tiers[name] ? name : 'full', tex: t.tex, fog: !!t.fog, treeDetail: t.treeDetail,
       shadowMap: fine ? v.shadowMapFine : v.shadowMap, maxDpr: Math.min(v.maxDpr, t.maxDpr, env.coarse ? v.maxDprCoarse : Infinity) };
   };
   function visible() { return typeof document === 'undefined' || document.visibilityState !== 'hidden'; }
 
-  three.makeRenderer = function (canvas) {
-    var r = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
-    r.setPixelRatio(dpr());
-    r.shadowMap.enabled = true;
-    r.shadowMap.type = THREE.PCFSoftShadowMap;
-    r.shadowMap.autoUpdate = false;
-    r.outputEncoding = THREE.sRGBEncoding;
-    r.toneMapping = THREE.ACESFilmicToneMapping;
-    return r;
-  };
+  // The A-10 renderer, synchronously: the standard page only (the /gpu adapter's make() is asynchronous).
+  three.makeRenderer = function (canvas) { return PC.gfx.create(canvas, dpr()); };
 
   function cancelFrame() { if (S.frame) { cancelAnimationFrame(S.frame); S.frame = 0; } }
   function request() {
-    if (!S.active || S.lost || S.building || S.frame || !S.house || !visible()) return;
+    if (!S.active || S.lost || S.building || S.pending || S.frame || !S.house || !visible()) return;
     S.frame = requestAnimationFrame(frame);
   }
   function invalidate() { S.dirty = true; request(); }
-  function shadowsDirty() { if (S.renderer) { S.renderer.shadowMap.needsUpdate = true; S.shadowUpdates++; } }
+  function shadowsDirty() { if (S.renderer) { PC.gfx.shadowsDirty(S.renderer, S.sun); S.shadowUpdates++; } }
   // The frame measures the canvas itself (QA F4T1-1): the shell may still be settling its layout when
   // PC.view3d.open() runs (e.g. stage 4's sample strip), so the size is taken when the frame draws.
   function frame(ts) {
@@ -128,14 +121,18 @@
     invalidate();
     return true;
   }
-  function render() {
+  // The camera at the pose and the sky dome at the eye (also before a precompile and a debug capture).
+  function place() {
     var p = S.pose, e = PC.cam.position(p), cam = S.camera, n = PC.cam.near(p);
     cam.position.set(e[0], e[1], e[2]);
     cam.lookAt(p.target[0], p.target[1], p.target[2]);
     if (cam.near !== n) { cam.near = n; cam.updateProjectionMatrix(); }
     var sky = S.world.getObjectByName('sky');
     if (sky) sky.position.set(e[0], e[1], e[2]);               // TL required change 2: the dome follows the eye
-    S.renderer.render(S.scene, cam);
+  }
+  function render() {
+    place();
+    S.renderer.render(S.scene, S.camera);
     S.renders++;
   }
   // The radius fits use the aspect of the canvas part the panel leaves uncovered (F5-T3a, TL ruling 2).
@@ -173,6 +170,29 @@
     if (!inFrame) invalidate();
   }
 
+  // Context / device loss (A-10; G-plan 3.3). r128: the same renderer comes back. /gpu: the adapter makes a new
+  // renderer (r), which replaces the lost one (per-renderer state reset: pixel ratio, size); the rebuild runs through
+  // the build continuation, so a build that was compiling when the device went completes its opening through it.
+  var LOSS = {
+    lost: function () { S.lost = true; cancelFrame(); },
+    restored: function (r) {
+      var old = null;
+      if (r && r !== S.renderer) {
+        old = S.renderer;
+        S.renderer = r; S.pr = 0; S.size = [0, 0];
+        r.setPixelRatio(dpr());
+      }
+      S.lost = false; S.restores++;
+      if (S.house) { var d = S.pending ? S.pendingDone : null; S.builtKey = null; build(S.house, d); }
+      // the old renderer goes after the rebuild: disposing the old materials notifies it, so it must still be whole
+      if (old) { try { old.dispose(); } catch (e) { /* its device is gone already */ } }
+      invalidate();
+    },
+    failed: function () { S.renderer = null; S.builtKey = null; S.building = 0; if (S.onState) S.onState('unavailable'); },
+    pr: function () { return dpr(); }
+  };
+  // Once per canvas (G-plan 3.3): scene, camera, lights, the loss watch, resize / visibility listeners, controls.
+  // Swapping the renderer after a device loss (LOSS.restored) attaches nothing again.
   function setup(canvas) {
     S.canvas = canvas;
     S.scene = new THREE.Scene();
@@ -187,12 +207,7 @@
     S.sun.target.name = 'sunTarget';
     S.world = new THREE.Group(); S.world.name = 'world';
     S.scene.add(S.hemi, S.sun, S.sun.target, S.world);
-    canvas.addEventListener('webglcontextlost', function (e) { e.preventDefault(); S.lost = true; cancelFrame(); });
-    canvas.addEventListener('webglcontextrestored', function () {
-      S.lost = false; S.restores++;
-      if (S.house) { S.builtKey = null; build(S.house); }
-      invalidate();
-    });
+    PC.gfx.watch(canvas, LOSS, S.renderer);
     // the wrap and the canvas itself (F5-T3a: at 640x360 the canvas narrows beside the panel; a double fire is harmless)
     if (typeof ResizeObserver === 'function' && canvas.parentElement) { var ro = new ResizeObserver(function () { resize(); }); ro.observe(canvas.parentElement); ro.observe(canvas); }
     else if (typeof addEventListener === 'function') addEventListener('resize', function () { resize(); });
@@ -235,7 +250,9 @@
   function lights(house) { apply(house); S.looks++; }
   function tex(kind) { var t = three.texture(kind, S.tier.tex, S.renderer); S.textures.push(t); return t; }
 
-  function build(house) {
+  // done (optional) runs once the build is complete, after the precompile: at once on r128, later on /gpu. A newer
+  // build (or close + another house) bumps S.seq first, so a stale continuation does nothing (G-plan 3.3).
+  function build(house, done) {
     dispose();
     var SC = PC.data.siteColors;
     var lite = !S.tier.fog;
@@ -271,6 +288,7 @@
     S.mats.glazing = glow({ vertexColors: true }, IN.glazing.hex);
     // N4 glow pools (full tier only; CTO 1.2d, 1.6): additive, no depth write, the blob map (RGB white, alpha falloff)
     if (!lite) S.mats.glow = new THREE.MeshBasicMaterial({ color: three.col('#000000'), map: S.mats.blob.map, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    PC.gfx.materials(S.mats, S.scene);   // G1: /gpu output nodes (tone mapping + fog as r128 does them); r128: nothing
     S.meshes = three.buildShell(house, S.world, S.mats, { tier: S.tier }).concat(three.buildInterior(house, S.world, S.mats, { cells: three.atlasCells(S.tier.tex) }),
       three.buildRoof(house, S.world, S.mats), three.buildSite(house, S.world, S.mats, { tier: S.tier }));
     S.meshes = S.meshes.concat(three.buildGlow(house, S.world, S.mats, { tier: S.tier }));
@@ -282,28 +300,23 @@
     lights(house);
     if (!house.levels.some(function (l) { return l.id === S.level; })) S.level = 'all';
     applyVisibility();
-    precompile();
+    precompile(house, done);
   }
-  // F6-T2 (CTO 1.2, TL): the glow meshes are hidden by day, and r128 builds a program only for what it draws; compile
-  // them once at build (shown for the call, then put back) so dusk switches nothing and stalls nothing. The same for
-  // the furniture and textured-<level>, hidden in exterior mode (TL gate ruling): compiled, and their buffers and the
-  // atlas uploaded by one draw clipped to a 1 px scissor without a shadow pass, so the first Roof-off frame (a phone
-  // opens with the Roof on) uploads nothing and the renderer's geometry count does not change.
-  var PRE = /^(glow-|textured-|furniture$)/;
-  function precompile() {
-    if (!S.renderer || !S.renderer.compile) return;
-    var gs = [];
-    S.world.traverse(function (o) { if (PRE.test(o.name)) { gs.push([o, o.visible]); o.visible = true; } });
-    if (!gs.length) return;
-    var R = S.renderer, sm = R.shadowMap, nu = sm.needsUpdate;
-    R.compile(S.scene, S.camera);
-    if (R.initTexture && S.mats.interior && S.mats.interior.map) R.initTexture(S.mats.interior.map);   // CTO: the atlas up at build
-    if (R.setScissorTest) {
-      sm.needsUpdate = false;
-      R.setScissor(0, 0, 1, 1); R.setScissorTest(true); R.render(S.scene, S.camera); R.setScissorTest(false);
-      sm.needsUpdate = nu;
-    }
-    gs.forEach(function (e) { e[0].visible = e[1]; });
+  // F6-T2 precompile (the night-only and interior-only programs at build), done by the adapter (PC.gfx.precompile).
+  // r128 shows the meshes for one synchronous call and puts the flags back. /gpu compiles asynchronously, so when it
+  // returns (reapply = true) the visibility and the look are applied again instead of restoring saved flags: a level,
+  // Roof or Light change made while it compiled is kept (G-plan 3.3).
+  function precompile(house, done) {
+    var seq = ++S.seq;
+    S.pending = seq; S.pendingDone = done || null;
+    PC.gfx.precompile({ renderer: S.renderer, scene: S.scene, camera: S.camera, world: S.world, mats: S.mats, place: place,
+      live: function () { return seq === S.seq && !S.lost; } }, function (reapply) {
+      if (seq !== S.seq) return;            // a newer build disposed this one
+      S.pending = 0; S.pendingDone = null;
+      if (reapply) { applyVisibility(); apply(house); }
+      if (done) done();
+      if (reapply) invalidate();
+    });
   }
 
   function applyVisibility() {
@@ -327,36 +340,68 @@
     shadowsDirty();
   }
 
-  PC.view3d = {
-    // onState('building' | 'ready' | 'unavailable'). Returns { ok }.
-    open: function (house, canvas, onState) {
-      S.onState = onState || function () {};
-      if (typeof THREE === 'undefined' || !house) { S.onState('unavailable'); return { ok: false }; }
-      if (!S.renderer) {
-        try { S.renderer = three.makeRenderer(canvas); } catch (e) { S.renderer = null; S.onState('unavailable'); return { ok: false }; }
-        S.tier = three.pickTier({ coarse: coarse(), maxTex: S.renderer.capabilities.maxTextureSize });
-        S.renderer.setPixelRatio(dpr());
-        setup(canvas);
-      }
-      S.active = true;
-      if (house.key === S.builtKey) { S.onState('ready'); invalidate(); return { ok: true }; }   // the frame sizes
-      resize();
-      S.onState('building');
-      var token = ++S.token;
-      S.building = token;
-      requestAnimationFrame(function () {
-        setTimeout(function () {
-          if (S.building !== token || !S.active) return;
-          build(house);
+  // The renderer from PC.gfx.make: the tier for this page session, the pixel ratio, the once-per-canvas setup.
+  function made(err, r, canvas) {
+    if (err || !r) { S.renderer = null; return false; }
+    S.renderer = r; S.lost = false;                     // /gpu: a renderer made again after a failed device restore
+    S.tier = three.pickTier({ coarse: coarse(), maxTex: PC.gfx.maxTex(r), force: PC.gfx.tier });
+    S.renderer.setPixelRatio(dpr());
+    if (!S.canvas) setup(canvas);
+    return true;
+  }
+  function go(house) {
+    if (house.key === S.builtKey && !S.pending) { S.onState('ready'); invalidate(); return { ok: true }; }   // the frame sizes
+    resize();
+    S.onState('building');
+    var token = ++S.token;
+    S.building = token;
+    requestAnimationFrame(function () {
+      setTimeout(function () {
+        if (S.building !== token || !S.active) return;
+        build(house, function () {
+          if (S.building !== token || !S.active) return;   // closed, or another house, while it compiled (/gpu)
           S.building = 0;
           S.onState('ready');
           resize();
           invalidate();
-        }, 0);
-      });
-      return { ok: true };
+        });
+      }, 0);
+    });
+    return { ok: true };
+  }
+
+  PC.view3d = {
+    // onState('building' | 'ready' | 'unavailable'). Returns { ok }.
+    open: function (house, canvas, onState) {
+      S.onState = onState || function () {};
+      if (!PC.gfx.available() || !house) { S.onState('unavailable'); return { ok: false }; }
+      if (!S.renderer) {
+        // G1 continuation: r128 calls back at once (now = true / false); /gpu after the module, the device gate and
+        // renderer.init(), meanwhile the stage shows Building... and the opening waits for the latest house (S.want).
+        S.want = house;
+        if (S.making) { S.onState('building'); return { ok: true }; }
+        var sync = true, now = null;
+        S.making = true;
+        PC.gfx.make(canvas, dpr(), function (err, r) {
+          S.making = false;
+          var ok = made(err, r, canvas);
+          if (sync) { now = ok; return; }
+          var h = S.want;
+          S.want = null;
+          if (!h) return;                                     // closed while waiting
+          if (!ok) { S.onState('unavailable'); return; }
+          S.active = true;
+          go(h);
+        });
+        sync = false;
+        S.want = null;
+        if (now === false) { S.onState('unavailable'); return { ok: false }; }
+        if (now === null) { S.want = house; S.onState('building'); return { ok: true }; }
+      }
+      S.active = true;
+      return go(house);
     },
-    close: function () { S.active = false; S.building = 0; cancelFrame(); stopAnim('close'); clearSelection(); },
+    close: function () { S.active = false; S.building = 0; S.want = null; cancelFrame(); stopAnim('close'); clearSelection(); },
     invalidate: invalidate,
     setLevel: function (sel) { S.level = sel; applyVisibility(); invalidate(); },
     setRoof: function (on) { S.roof = !!on; applyVisibility(); invalidate(); },
@@ -389,6 +434,13 @@
     house: function () { return S.house; },
     limits: function () { return S.limits; },
     pose: function () { return S.pose ? PC.cam.copy(S.pose) : null; },
+    // G1 test hook: the current view drawn into a render target and read back as sRGB bytes by the adapter (headless
+    // WebGPU canvases read back blank). done(null) where the adapter has none (r128 reads its canvas directly).
+    capture: function (done) {
+      if (!PC.gfx.capture || !S.house || S.lost || !S.renderer || S.building || S.pending) { done(null); return; }
+      place();
+      PC.gfx.capture(S.renderer, S.scene, S.camera, S.size, done);
+    },
     // Read-only snapshot for tests and PC.debug.scene().
     info: function () {
       return { renderer: S.renderer, scene: S.scene, camera: S.camera, world: S.world, house: S.house, active: S.active, lost: S.lost,
@@ -396,6 +448,7 @@
         meshCount: S.meshes.length + (S.highlight ? 1 : 0), meshes: S.meshes.concat(S.highlight ? [S.highlight] : []),
         flight: S.anim && S.anim.kind === 'flight' ? { from: PC.cam.copy(S.anim.from), to: PC.cam.copy(S.anim.to), t: S.anim.t, ms: S.anim.ms } : null,
         tier: S.tier ? Object.assign({}, S.tier) : null, textures: S.textures.slice(), shadowUpdates: S.shadowUpdates,
+        compiling: !!S.pending, gfx: PC.gfx.name,
         animating: !!S.anim, selected: S.selected, highlight: S.highlight, highlightsMade: S.hlMade, level: S.level, roof: S.roof, look: { hour: S.look.hour, season: S.look.season }, looks: S.looks, size: S.size.slice(), occl: { right: S.occl.right, bottom: S.occl.bottom }, viewOffset: S.view ? S.view.slice() : null, aspect: aspect(), renderNow: function () { if (S.house && !S.lost) render(); } };
     }
   };
