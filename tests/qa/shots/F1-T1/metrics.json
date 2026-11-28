@@ -201,7 +201,7 @@
     "heightShare": 0.2938775510204082,
     "areaShare": 0.2938775510204082
    },
-   "tabStops": 17
+   "tabStops": 19
   },
   "s5-collapsed": {
    "minContrast": 6.42,
@@ -236,202 +236,6 @@
   "x-banners": {
    "minContrast": 6.55,
    "textNodes": 29,
-   "disabledLow": []
-  }
- },
- "768x1024": {
-  "s1-start": {
-   "minContrast": 5.55,
-   "textNodes": 27,
-   "disabledLow": []
-  },
-  "s1-resume": {
-   "minContrast": 5.55,
-   "textNodes": 33,
-   "disabledLow": []
-  },
-  "s1-drawn": {
-   "minContrast": 5.55,
-   "textNodes": 26,
-   "disabledLow": []
-  },
-  "s1-strip-msg": {
-   "minContrast": 5.55,
-   "textNodes": 28,
-   "disabledLow": []
-  },
-  "s2-site": {
-   "minContrast": 5.55,
-   "textNodes": 62,
-   "disabledLow": []
-  },
-  "s2-site-errors": {
-   "minContrast": 5.55,
-   "textNodes": 66,
-   "disabledLow": []
-  },
-  "s2-site-preview-collapsed": {
-   "minContrast": 5.55,
-   "textNodes": 56,
-   "disabledLow": []
-  },
-  "s2-building": {
-   "minContrast": 5.55,
-   "textNodes": 47,
-   "disabledLow": []
-  },
-  "s2-rooms": {
-   "minContrast": 5,
-   "textNodes": 144,
-   "disabledLow": []
-  },
-  "s2-rooms-nostairs": {
-   "minContrast": 5.55,
-   "textNodes": 51,
-   "disabledLow": []
-  },
-  "s2-outdoor": {
-   "minContrast": 5.55,
-   "textNodes": 43,
-   "disabledLow": []
-  },
-  "s2-summary-open": {
-   "minContrast": 5.55,
-   "textNodes": 94,
-   "disabledLow": []
-  },
-  "s2-summary-open-rooms": {
-   "minContrast": 5,
-   "textNodes": 86,
-   "disabledLow": []
-  },
-  "s2-summary-closed-conflicts": {
-   "minContrast": 5.55,
-   "textNodes": 43,
-   "disabledLow": []
-  },
-  "s2-summary-one-conflict": {
-   "minContrast": 5.55,
-   "textNodes": 80,
-   "disabledLow": []
-  },
-  "s2-rooms-list-scrolled": {
-   "minContrast": 5,
-   "textNodes": 94,
-   "disabledLow": []
-  },
-  "s2-rooms-pairs-scrolled": {
-   "minContrast": 5,
-   "textNodes": 73,
-   "disabledLow": []
-  },
-  "s1-worst-readout": {
-   "minContrast": 5.55,
-   "textNodes": 26,
-   "disabledLow": []
-  },
-  "s3-worst-readout": {
-   "minContrast": 5.55,
-   "textNodes": 35,
-   "disabledLow": []
-  },
-  "s3": {
-   "minContrast": 5.55,
-   "textNodes": 31,
-   "disabledLow": []
-  },
-  "s3-max": {
-   "minContrast": 5.55,
-   "textNodes": 37,
-   "disabledLow": []
-  },
-  "s3-warn-open": {
-   "minContrast": 5.55,
-   "textNodes": 36,
-   "disabledLow": []
-  },
-  "s3-error": {
-   "minContrast": 5.55,
-   "textNodes": 32,
-   "disabledLow": []
-  },
-  "s4": {
-   "minContrast": 6.55,
-   "textNodes": 31,
-   "disabledLow": []
-  },
-  "s5-view": {
-   "minContrast": 6.42,
-   "textNodes": 24,
-   "disabledLow": [],
-   "panel": {
-    "panelW": 768,
-    "panelH": 144,
-    "canvasW": 768,
-    "canvasH": 874,
-    "heightShare": 0.16475972540045766,
-    "areaShare": 0.16475972540045766
-   }
-  },
-  "s5-light": {
-   "minContrast": 6.42,
-   "textNodes": 20,
-   "disabledLow": [],
-   "panel": {
-    "panelW": 768,
-    "panelH": 162,
-    "canvasW": 768,
-    "canvasH": 874,
-    "heightShare": 0.1853546910755149,
-    "areaShare": 0.1853546910755149
-   }
-  },
-  "s5-tour": {
-   "minContrast": 6.42,
-   "textNodes": 23,
-   "disabledLow": [],
-   "panel": {
-    "panelW": 768,
-    "panelH": 144,
-    "canvasW": 768,
-    "canvasH": 874,
-    "heightShare": 0.16475972540045766,
-    "areaShare": 0.16475972540045766
-   }
-  },
-  "s5-collapsed": {
-   "minContrast": 6.42,
-   "textNodes": 18,
-   "disabledLow": []
-  },
-  "s5-building": {
-   "minContrast": 6.42,
-   "textNodes": 23,
-   "disabledLow": []
-  },
-  "s5-unavailable": {
-   "minContrast": 7.89,
-   "textNodes": 16,
-   "disabledLow": []
-  },
-  "x-dialog-confirm": {
-   "minContrast": 5.55,
-   "textNodes": 31,
-   "disabledLow": []
-  },
-  "x-dialog-level-remove": {
-   "minContrast": 5.55,
-   "textNodes": 53,
-   "disabledLow": []
-  },
-  "x-toast": {
-   "minContrast": 5.55,
-   "textNodes": 28,
-   "disabledLow": []
-  },
-  "x-banners": {
-   "minContrast": 6.55,
-   "textNodes": 33,
    "disabledLow": []
   }
  },
@@ -575,44 +379,11 @@
     "heightShare": 0.8338994565217391,
     "areaShare": 0.20847486413043478
    },
-   "tabStops": 19
-  },
-  "s5-light": {
-   "minContrast": 5.55,
-   "textNodes": 31,
-   "disabledLow": [],
-   "panel": {
-    "panelW": 320,
-    "panelH": 575.390625,
-    "canvasW": 1280,
-    "canvasH": 690,
-    "heightShare": 0.8338994565217391,
-    "areaShare": 0.20847486413043478
-   },
-   "tabStops": 19
-  },
-  "s5-tour": {
-   "minContrast": 5.55,
-   "textNodes": 32,
-   "disabledLow": [],
-   "panel": {
-    "panelW": 320,
-    "panelH": 575.390625,
-    "canvasW": 1280,
-    "canvasH": 690,
-    "heightShare": 0.8338994565217391,
-    "areaShare": 0.20847486413043478
-   },
-   "tabStops": 23
+   "tabStops": 21
   },
   "s5-collapsed": {
    "minContrast": 6.81,
    "textNodes": 16,
-   "disabledLow": []
-  },
-  "s5-building": {
-   "minContrast": 5.55,
-   "textNodes": 32,
    "disabledLow": []
   },
   "s5-unavailable": {
@@ -635,10 +406,11 @@
    "textNodes": 31,
    "disabledLow": []
   },
-  "x-banners": {
-   "minContrast": 6.55,
-   "textNodes": 33,
-   "disabledLow": []
+  "s5-light": {
+   "tabStops": 21
+  },
+  "s5-tour": {
+   "tabStops": 25
   }
  },
  "640x360": {
@@ -769,46 +541,15 @@
    "panel": {
     "panelW": 272,
     "panelH": 262,
-    "canvasW": 640,
+    "canvasW": 368,
     "canvasH": 262,
     "heightShare": 1,
-    "areaShare": 0.425
-   }
-  },
-  "s5-light": {
-   "minContrast": 6.42,
-   "textNodes": 15,
-   "disabledLow": [],
-   "panel": {
-    "panelW": 272,
-    "panelH": 262,
-    "canvasW": 640,
-    "canvasH": 262,
-    "heightShare": 1,
-    "areaShare": 0.425
-   }
-  },
-  "s5-tour": {
-   "minContrast": 6.42,
-   "textNodes": 18,
-   "disabledLow": [],
-   "panel": {
-    "panelW": 272,
-    "panelH": 262,
-    "canvasW": 640,
-    "canvasH": 262,
-    "heightShare": 1,
-    "areaShare": 0.425
+    "areaShare": 0.7391304347826086
    }
   },
   "s5-collapsed": {
    "minContrast": 6.67,
    "textNodes": 10,
-   "disabledLow": []
-  },
-  "s5-building": {
-   "minContrast": 6.42,
-   "textNodes": 18,
    "disabledLow": []
   },
   "s5-unavailable": {
@@ -829,11 +570,6 @@
   "x-toast": {
    "minContrast": 5.55,
    "textNodes": 26,
-   "disabledLow": []
-  },
-  "x-banners": {
-   "minContrast": 6.55,
-   "textNodes": 28,
    "disabledLow": []
   }
  }

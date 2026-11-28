@@ -1,0 +1,41 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WebGPU Probe 2</title>
+<style>:root{--bg:#fff;--fg:#1a1a1a;--ok:#1a7f37;--bad:#c62828;--mut:#666}
+@media (prefers-color-scheme:dark){:root{--bg:#161616;--fg:#eee;--ok:#5bd17a;--bad:#ff7a7a;--mut:#aaa}}
+body{background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif;margin:0;padding:16px;max-width:720px}
+li{margin:4px 0}.ok{color:var(--ok)}.bad{color:var(--bad)}.mut{color:var(--mut)}a{color:inherit}canvas{width:100%;max-width:480px;height:240px;display:block;border:1px solid #8884}</style></head><body>
+<h1>WebGPU probe: page 2 of 2</h1>
+<ul id="out"></ul>
+<canvas id="c"></canvas>
+<p class="mut">Expected picture: a lit orange box on the left, a flat blue square on the right, light grey background.</p>
+<p><a href="../index.html">Back to page 1</a></p>
+<script>
+(function(){
+var out=document.getElementById('out');function row(ok,t){var li=document.createElement('li');li.className=ok?'ok':'bad';li.textContent=(ok?'PASS ':'FAIL ')+t;out.appendChild(li);}
+row(true,'page 2 opened by link');
+var v=null;try{v=localStorage.getItem('probe.shared');}catch(e){}
+row(!!v,'storage shared with page 1'+(v?' (written '+Math.round((Date.now()-v)/1000)+' s ago)':''));
+var base='https://cdnjs.cloudflare.com/ajax/libs/three.js/0.180.0/';
+var timer=setTimeout(function(){row(false,'three.js import timed out after 15 s');},15000);
+import(base+'three.webgpu.min.js').then(function(x){return [x,x.TSL];}).then(async function(m){
+  clearTimeout(timer);var THREE=m[0],TSL=m[1];row(true,'three.js 0.180 module import from cdnjs');
+  if(!navigator.gpu){row(false,'no navigator.gpu');return;}
+  var ad=await navigator.gpu.requestAdapter();row(!!ad,'WebGPU adapter'+(ad&&ad.info?' ('+[ad.info.vendor,ad.info.architecture].join(' ')+(ad.info.isFallbackAdapter?', software':'')+')':''));
+  if(!ad)return;
+  var cv=document.getElementById('c'),r=new THREE.WebGPURenderer({canvas:cv,antialias:true});
+  await r.init();row(!!r.backend.isWebGPUBackend,'renderer uses the WebGPU backend');
+  r.setPixelRatio(Math.min(2,devicePixelRatio));r.setSize(cv.clientWidth,cv.clientHeight,false);
+  r.toneMapping=THREE.NoToneMapping;r.shadowMap.enabled=true;
+  var s=new THREE.Scene();s.background=new THREE.Color().setHex(0xdddddd,THREE.LinearSRGBColorSpace);
+  var cam=new THREE.PerspectiveCamera(40,cv.clientWidth/cv.clientHeight,0.1,50);cam.position.set(0,1.5,5);cam.lookAt(0,0,0);
+  var lit=new THREE.MeshLambertMaterial({color:new THREE.Color('#E08A3C')});
+  lit.outputNode=TSL.vec4(TSL.toneMapping(THREE.ACESFilmicToneMapping,TSL.float(1),TSL.output.rgb),TSL.output.a);
+  var a=new THREE.Mesh(new THREE.BoxGeometry(1.2,1.2,1.2),lit);a.position.x=-1;a.rotation.y=0.6;a.castShadow=true;s.add(a);
+  var b=new THREE.Mesh(new THREE.PlaneGeometry(1.2,1.2),new THREE.MeshBasicMaterial({color:new THREE.Color('#2F6FD6')}));b.position.x=1.2;s.add(b);
+  var g=new THREE.Mesh(new THREE.PlaneGeometry(8,8),new THREE.MeshLambertMaterial({color:new THREE.Color('#cccccc')}));g.rotation.x=-Math.PI/2;g.position.y=-0.6;g.receiveShadow=true;s.add(g);
+  s.add(new THREE.HemisphereLight(0xffffff,0x888888,Math.PI*0.6));var sun=new THREE.DirectionalLight(0xffffff,Math.PI);sun.position.set(3,5,2);sun.castShadow=true;sun.shadow.autoUpdate=false;sun.shadow.needsUpdate=true;s.add(sun);
+  var t0=performance.now();await r.compileAsync(s,cam);row(true,'shaders compiled ahead ('+Math.round(performance.now()-t0)+' ms)');
+  r.render(s,cam);row(true,'frame drawn: check the picture below');
+}).catch(function(e){clearTimeout(timer);row(false,'three.js import or render: '+(e&&e.message||e));});
+})();
+</script></body></html>

@@ -1,0 +1,15 @@
+<title>WebGPU Probe</title>
+<style>:root{--bg:#fff;--fg:#1a1a1a;--ok:#1a7f37;--bad:#c62828;--mut:#666}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161616;--fg:#eee;--ok:#5bd17a;--bad:#ff7a7a;--mut:#aaa}}
+:root[data-theme="dark"]{--bg:#161616;--fg:#eee;--ok:#5bd17a;--bad:#ff7a7a;--mut:#aaa}
+body{background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif;margin:0;padding:16px;max-width:720px}
+li{margin:4px 0}.ok{color:var(--ok)}.bad{color:var(--bad)}.mut{color:var(--mut)}a{color:inherit}</style>
+<h1>WebGPU probe: page 1 of 2</h1>
+<p class="mut">Checks whether this app host allows what the PlotCraft /gpu page needs. Open it in desktop Chrome or Edge.</p>
+<ul id="out"></ul>
+<p><a id="go" href="gpu/index.html">Open page 2 (gpu/index.html)</a> · <a href="gpu/">try gpu/</a> · <a href="gpu.html">try gpu.html</a></p>
+<script>
+(function(){var out=document.getElementById('out');function row(ok,t){var li=document.createElement('li');li.className=ok?'ok':'bad';li.textContent=(ok?'PASS ':'FAIL ')+t;out.appendChild(li);}
+try{localStorage.setItem('probe.shared',String(Date.now()));row(true,'storage write on page 1');}catch(e){row(false,'storage write: '+e.message);}
+row(!!navigator.gpu,'browser has WebGPU (navigator.gpu)');})();
+</script>
