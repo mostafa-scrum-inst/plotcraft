@@ -24,12 +24,67 @@
      and frame(r) does the same work before each of the app's renders (scene.js render(), the warm-up, the capture),
      so an idle view requests no frames (A-10) and per-frame uniforms and the one-shadow-per-frameId rule follow the
      app's own renders. _animation is a private member of the pinned 0.180.0.
-   - capture (tests): the view drawn into a half-float 4x MSAA render target, read back, linear -> sRGB bytes in JS
-     (headless or not, a WebGPU canvas cannot be read back from a test). */
+   - capture (tests): the view drawn into a 4x MSAA render target of the renderer's colour buffer type (half float,
+     or 8-bit with tiers.ultra.colorBuffer 'byte'), read back, linear -> sRGB bytes in JS (headless or not, a WebGPU
+     canvas cannot be read back from a test).
+   - G2 tier gate (G-plan 6), once per page session at the first make(): gfx.force (tests) or ultra when the pointer
+     is fine and the adapter is not a fallback adapter (adapter.info.isFallbackAdapter), else full. scene.js reads it
+     as PC.gfx.tier (pickTier's force).
+   - G2 frame probe (tier.probe / tier.moving, ultra only), fed by frame(r, f) from scene.js's frame(): a frame
+     "moves" when an animation requested it or it comes within moving.gapMs of the previous one; only moving frames
+     are timed (rAF timestamp deltas: an idle view draws nothing and is never timed). The first probe.frames moving
+     frames: median over probe.slowMs -> the downgrade to probe.down, once per page session, at rest and never during
+     an animation or a build (view.retier: a quiet rebuild). While moving: the median of the last moving.frames over
+     moving.slowMs -> pixel ratio moving.dpr until rest (moving.restMs without a frame, a timer: no rAF), then one
+     frame at the tier cap. */
 (function (PC) {
   'use strict';
   var PRE = /^(glow-|textured-|furniture$)/, MAX_LOSSES = 3;
-  var U = null, losses = 0, watched = null;
+  var U = null, losses = 0, watched = null, picked = false;
+  // the G2 probe state for the page session
+  var P = { last: null, recent: [], samples: [], done: false, low: false, down: null, rest: 0 };
+
+  function median(a) { var b = a.slice().sort(function (x, y) { return x - y; }); return b.length ? (b[(b.length - 1) >> 1] + b[b.length >> 1]) / 2 : 0; }
+  function pick(ad) {
+    if (gfx.force) return gfx.force;
+    var info = ad.info || {}, fallback = info.isFallbackAdapter === true || ad.isFallbackAdapter === true;
+    var fine = typeof matchMedia === 'function' && !!matchMedia('(pointer: fine)').matches;
+    return fine && !fallback ? 'ultra' : 'full';
+  }
+  // the downgrade first (its rebuild resets the pixel ratio and draws once compiled); else one frame at the tier cap
+  function rest(view) {
+    P.rest = 0; P.recent = [];
+    if (P.down && !view.busy()) {
+      var d = P.down;
+      P.down = null; P.low = false; gfx.tier = d; gfx.stats.downgrades++;
+      view.retier(d);
+      return;
+    }
+    if (P.low) { P.low = false; gfx.stats.rests++; view.dpr(null, true); }
+  }
+  function probe(f) {
+    var t = f.tier, m = t.moving, pr = t.probe, last = P.last;
+    P.last = f.ts;
+    if (last === null) return;
+    var dt = f.ts - last, moving = f.chained || dt < m.gapMs;
+    if (moving) {
+      P.recent.push(dt);
+      if (P.recent.length > m.frames) P.recent.shift();
+      if (!P.low && P.recent.length >= m.frames && median(P.recent) > m.slowMs) { P.low = true; gfx.stats.lowDpr++; f.view.dpr(m.dpr, false); }
+      if (pr && !P.done) {
+        P.samples.push(dt);
+        if (P.samples.length >= pr.frames) {
+          P.done = true; gfx.stats.probeMs = median(P.samples);
+          if (gfx.stats.probeMs > pr.slowMs) P.down = pr.down;
+        }
+      }
+    }
+    if (moving || P.down) {
+      if (P.rest) clearTimeout(P.rest);
+      var view = f.view;
+      P.rest = setTimeout(function () { rest(view); }, m.restMs);
+    }
+  }
 
   function uniforms() {
     if (U) return U;
@@ -61,7 +116,8 @@
 
   var gfx = PC.gfx = {
     name: 'webgpu',
-    tier: 'full',                       // G1: the /gpu page runs the full tier only (ultra comes in G2)
+    tier: 'full',                       // until the first make() picks it (G2: ultra or full; see the header)
+    force: null,                        // tests: 'full' | 'ultra' set before stage 5 opens
     adapter: null,
     available: function () { return !!PC.boot3d && PC.boot3d.state !== 'failed' && PC.boot3d.state !== 'timeout'; },
     make: function (canvas, pr, done) {
@@ -76,9 +132,13 @@
           // Chrome fails every later buffer map ("A valid external Instance reference no longer exists"), which
           // breaks render-target readback. Same features as three would ask for (all the adapter has).
           gfx.adapter = ad;
+          if (!picked) { picked = true; gfx.tier = pick(ad); }
           return ad.requestDevice({ requiredFeatures: Array.from(ad.features) });
         }).then(function (device) {
-          r = new THREE.WebGPURenderer({ canvas: canvas, antialias: true, device: device });
+          // G2: the colour buffer per tier (half float by default; 'byte' measured in G2, see outcome.md)
+          var tr = PC.C.VIEW3D.tiers[gfx.tier] || {};
+          r = new THREE.WebGPURenderer({ canvas: canvas, antialias: true, device: device,
+            colorBufferType: tr.colorBuffer === 'byte' ? THREE.UnsignedByteType : THREE.HalfFloatType });
           r.onDeviceLost = function () {};                          // until watch() or the adoption below binds it
           return r.init();
         }).then(function () {
@@ -100,11 +160,13 @@
         });
       });
     },
-    // What one tick of three's own loop (Animation.start, stopped in make) does, once per app render.
-    frame: function (r) {
+    // What one tick of three's own loop (Animation.start, stopped in make) does, once per app render; f (scene.js
+    // frame(), null for other renders): the G2 probe on a tier that has one.
+    frame: function (r, f) {
       var n = r._nodes && r._nodes.nodeFrame;
       if (r.info.autoReset) r.info.reset();
       if (n) { n.update(); r.info.frame = n.frameId; }
+      if (f && f.tier && f.tier.moving) probe(f);
     },
     watch: function (canvas, h, r) { watched = { canvas: canvas, h: h, current: r }; bind(r); },
     col: function (hex) { return new THREE.Color(hex); },
@@ -154,21 +216,34 @@
         gfx.stats.compileMs = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
         gfx.stats.pipelinesCompiled = R._pipelines ? R._pipelines.caches.size : -1;
         if (ctx.live()) {
+          // warm-up (the shadow pass and the uploads), under the Building card. G2 (TL N5): the first render has the
+          // precompile meshes shown, so the furniture's and the textured parts' shadow-pass pipelines are built too;
+          // the second has the real visibility. Both run in this one task, so only the second is ever presented.
+          var t1 = typeof performance !== 'undefined' ? performance.now() : 0, sun = ctx.scene.getObjectByName('sun'), shown = [];
+          ctx.world.traverse(function (o) { if (PRE.test(o.name) && !o.visible) { shown.push(o); o.visible = true; } });
           ctx.place();
+          if (sun) sun.shadow.needsUpdate = true;
           gfx.frame(R);
-          R.render(ctx.scene, ctx.camera);          // warm-up: the shadow pass and the uploads, under the Building card
+          R.render(ctx.scene, ctx.camera);
+          shown.forEach(function (o) { o.visible = false; });
           gfx.stats.pipelinesWarm = R._pipelines ? R._pipelines.caches.size : -1;
+          if (sun) sun.shadow.needsUpdate = true;
+          gfx.frame(R);
+          R.render(ctx.scene, ctx.camera);
+          gfx.stats.pipelinesWarm2 = R._pipelines ? R._pipelines.caches.size : -1;
+          gfx.stats.warmMs = (typeof performance !== 'undefined' ? performance.now() : 0) - t1;
         }
       }).catch(function () { /* a failed compile is not fatal: the first frame compiles what is missing */ }).then(function () {
         setTimeout(function () { done(true); }, 0);
       });
     },
-    stats: { compileMs: 0, pipelinesCompiled: 0, pipelinesWarm: 0 },
+    stats: { compileMs: 0, pipelinesCompiled: 0, pipelinesWarm: 0, pipelinesWarm2: 0, warmMs: 0, probeMs: 0, downgrades: 0, lowDpr: 0, rests: 0 },
     // r180 refreshes per-frame uniforms (the light directions among them) once per node frame: the capture is a
     // frame of its own (frame(r)), so it never reuses the canvas frame's uniforms or shadow.
     capture: function (r, scene, camera, size, done) {
       var w = Math.max(1, size[0] | 0), h = Math.max(1, size[1] | 0);
-      var rt = new THREE.RenderTarget(w, h, { type: THREE.HalfFloatType, samples: 4 }), sun = scene.getObjectByName('sun');   // 4x MSAA like the canvas
+      var type = r.getColorBufferType ? r.getColorBufferType() : THREE.HalfFloatType;   // the canvas's own colour buffer type (G2)
+      var rt = new THREE.RenderTarget(w, h, { type: type, samples: 4 }), sun = scene.getObjectByName('sun');   // 4x MSAA like the canvas
       // r180 keeps a shadow map per render context: the canvas frame used up needsUpdate, so the render target's own
       // shadow map is drawn here (test hook only; the page itself only ever renders to its canvas)
       if (sun) sun.shadow.needsUpdate = true;
@@ -179,7 +254,7 @@
       r.readRenderTargetPixelsAsync(rt, 0, 0, w, h).then(function (px) {
         // rows come padded to WebGPU's 256-byte copy alignment (all but the last row)
         var B = px.BYTES_PER_ELEMENT, stride = Math.ceil(w * 4 * B / 256) * 256 / B;
-        var out = new Uint8ClampedArray(w * h * 4), half = THREE.DataUtils.fromHalfFloat;
+        var out = new Uint8ClampedArray(w * h * 4), half = type === THREE.HalfFloatType ? THREE.DataUtils.fromHalfFloat : function (v) { return v / 255; };
         var enc = function (v) { v = v <= 0 ? 0 : v >= 1 ? 1 : v; return 255 * (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055); };
         for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
           var i = y * stride + x * 4, o = (y * w + x) * 4;

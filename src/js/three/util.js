@@ -209,14 +209,15 @@
   };
   three.BoxBatch = BoxBatch;
 
-  three.texture = function (kind, size, renderer) {
+  // aniso: the tier's anisotropy cap (G2; 4 when not given, as before)
+  three.texture = function (kind, size, renderer, aniso) {
     var px = PC.texgen.get(kind, size), t = new THREE.DataTexture(px.data, px.w, px.h, THREE.RGBAFormat), tm = PC.data.textures[kind].tileM;
     var k = tm ? 1 / tm : 1, wrap = tm ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;   // F6-T1b: the blob clamps, no repeat
     t.wrapS = wrap; t.wrapT = wrap;
     t.repeat.set(k, k);
     PC.gfx.texSpace(t, kind !== 'blob');
     t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true;
-    t.anisotropy = Math.min(4, PC.gfx.maxAniso(renderer));
+    t.anisotropy = Math.min(aniso || 4, PC.gfx.maxAniso(renderer));
     t.needsUpdate = true;
     return t;
   };

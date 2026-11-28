@@ -54,7 +54,8 @@ export async function launchGpu({ webgpu = true, display = null } = {}) {
     args: webgpu ? WEBGPU_ARGS : ['--no-sandbox'] });
 }
 
-// opts: page 'gpu' | 'standard'; three180 'vendor' (default) | '404' | 'hang'; vp { w, h }; init(fn) before scripts;
+// opts: page 'gpu' | 'standard'; three180 'vendor' (default) | '404' | 'hang'; vp { w, h }; init: fn, or a list of fns
+// (or { content } scripts), before the page's scripts;
 // ctx: reuse a browser context (shared localStorage between the two pages, as on the artifact origin).
 export async function openPage(browser, base, opts = {}) {
   const vp = opts.vp || { w: 1280, h: 800 };
@@ -80,7 +81,7 @@ export async function openPage(browser, base, opts = {}) {
     if (m.type() === 'error') { if (opts.three180 === '404' && /Failed to load resource|404/.test(t)) return; log.errors.push('console.error: ' + t); }
     else if (m.type() === 'warning' && /THREE\./.test(t)) log.warnings.push(t);
   });
-  if (opts.init) await page.addInitScript(opts.init);
+  for (const f of [].concat(opts.init || [])) await page.addInitScript(f);   // one init script or several
   await page.goto(base + (opts.page === 'standard' ? '/index.html' : '/gpu/index.html'));
   const problems = () => [...log.errors, ...log.warnings.map((w) => 'THREE warning: ' + w),
     ...log.requests.filter((u) => u !== THREE_URL && !u.startsWith(GPU_BASE)).map((u) => 'unexpected request: ' + u)];

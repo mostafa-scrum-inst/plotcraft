@@ -1859,10 +1859,12 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     TOUR: { overviewLeg: 4.5, roomLeg: 3.5, speeds: { slow: 0.6, normal: 1, fast: 1.8 }, eyeOut: 2, eyeOutK: 0.6, eyeUp: 2.5,
       bEyeIn: 1.5, bEyeUp: 2.5, centralEps: 0.5, treeGap: 0.5, floorSoft: 1, phiSoft: 3, minGap: 0.5, leadInMs: 1200, leadInSkip: 0.5 },
     VIEW3D: { maxDpr: 2, shadowMap: 1024, shadowBias: -0.0005, shadowNormalBias: 0.02, sunDist: 2.5, shadowK: 2.5, shadowR: 1.2,
-      maxDprCoarse: 2, shadowMapFine: 2048, roofOnOpen: true, tier: { coarse: 'full', fine: 'full' },
+      maxDprCoarse: 2, roofOnOpen: true, tier: { coarse: 'full', fine: 'full' },
       tiers: {
-        full: { tex: 512, fog: true, fineShadow: true, maxDpr: 2, treeDetail: 1 },
-        lite: { tex: 256, fog: false, fineShadow: false, maxDpr: 1.5, treeDetail: 0 }
+        full: { tex: 512, fog: true, shadowMap: 2048, aniso: 4, maxDpr: 2, treeDetail: 1 },
+        lite: { tex: 256, fog: false, shadowMap: 1024, aniso: 4, maxDpr: 1.5, treeDetail: 0 },
+        ultra: { tex: 1024, fog: true, shadowMap: 4096, aniso: 16, maxDpr: 2, treeDetail: 2, shadowBias: -0.0005, shadowNormalBias: 0.01,
+          colorBuffer: 'half', probe: { frames: 30, slowMs: 24, down: 'full' }, moving: { frames: 10, slowMs: 20, dpr: 1.5, gapMs: 250, restMs: 300 } }
       },
       fogSpanK: 8, skyK: 0.9, blobY: 0.02 },
     FOOTPRINT_ROUND: 0.5, FOOTPRINT_MAX_RATIO: 2, FOOTPRINT_STRETCH_RATIO: 3, FOOTPRINT_STRETCH_EXTRA: 0.5, BACK_ANGLE: 40
@@ -4939,14 +4941,14 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   };
   three.BoxBatch = BoxBatch;
 
-  three.texture = function (kind, size, renderer) {
+  three.texture = function (kind, size, renderer, aniso) {
     var px = PC.texgen.get(kind, size), t = new THREE.DataTexture(px.data, px.w, px.h, THREE.RGBAFormat), tm = PC.data.textures[kind].tileM;
     var k = tm ? 1 / tm : 1, wrap = tm ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;   // F6-T1b: the blob clamps, no repeat
     t.wrapS = wrap; t.wrapT = wrap;
     t.repeat.set(k, k);
     PC.gfx.texSpace(t, kind !== 'blob');
     t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true;
-    t.anisotropy = Math.min(4, PC.gfx.maxAniso(renderer));
+    t.anisotropy = Math.min(aniso || 4, PC.gfx.maxAniso(renderer));
     t.needsUpdate = true;
     return t;
   };
@@ -5963,24 +5965,29 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     active: false, lost: false, dirty: false, frame: 0, building: 0, token: 0, onState: null,
     meshes: [], level: 'all', roof: !!(PC.C && PC.C.VIEW3D && PC.C.VIEW3D.roofOnOpen), renders: 0, builds: 0, restores: 0, looks: 0,
     tier: null, textures: [], shadowUpdates: 0, seq: 0, pending: 0, pendingDone: null, making: false, want: null,
+    chain: false, prCap: null, retiers: 0,
     look: { hour: 12, season: 'summer' },
     anim: null, animT: null, highlight: null, selected: null, onSelect: null, hlMade: 0
   };
   function V() { return PC.C.VIEW3D; }
   function coarse() { return typeof matchMedia === 'function' && !!matchMedia('(pointer: coarse)').matches; }
-  function dpr() { var d = typeof devicePixelRatio === 'number' && devicePixelRatio > 0 ? devicePixelRatio : 1; return Math.min(d, S.tier ? S.tier.maxDpr : V().maxDpr); }
+  function dpr() { var d = typeof devicePixelRatio === 'number' && devicePixelRatio > 0 ? devicePixelRatio : 1; return Math.min(d, S.tier ? S.tier.maxDpr : V().maxDpr, S.prCap || Infinity); }
 
   three.pickTier = function (env) {
     var v = V(), name = env.force || v.tier[env.coarse ? 'coarse' : 'fine'], t = v.tiers[name] || v.tiers.full;
-    var fine = t.fineShadow && !env.coarse && env.maxTex >= 4096;
+    var fine = !env.coarse && env.maxTex >= 4096;
     return { name: v.tiers[name] ? name : 'full', tex: t.tex, fog: !!t.fog, treeDetail: t.treeDetail,
-      shadowMap: fine ? v.shadowMapFine : v.shadowMap, maxDpr: Math.min(v.maxDpr, t.maxDpr, env.coarse ? v.maxDprCoarse : Infinity) };
+      shadowMap: fine ? t.shadowMap : Math.min(t.shadowMap, v.shadowMap), aniso: t.aniso,
+      shadowBias: t.shadowBias !== undefined ? t.shadowBias : v.shadowBias,
+      shadowNormalBias: t.shadowNormalBias !== undefined ? t.shadowNormalBias : v.shadowNormalBias,
+      probe: t.probe || null, moving: t.moving || null, colorBuffer: t.colorBuffer || null,
+      maxDpr: Math.min(v.maxDpr, t.maxDpr, env.coarse ? v.maxDprCoarse : Infinity) };
   };
   function visible() { return typeof document === 'undefined' || document.visibilityState !== 'hidden'; }
 
   three.makeRenderer = function (canvas) { return PC.gfx.create(canvas, dpr()); };
 
-  function cancelFrame() { if (S.frame) { cancelAnimationFrame(S.frame); S.frame = 0; } }
+  function cancelFrame() { S.chain = false; if (S.frame) { cancelAnimationFrame(S.frame); S.frame = 0; } }
   function request() {
     if (!S.active || S.lost || S.building || S.pending || S.frame || !S.house || !visible()) return;
     S.frame = requestAnimationFrame(frame);
@@ -5989,6 +5996,8 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
   function shadowsDirty() { if (S.renderer) { PC.gfx.shadowsDirty(S.renderer, S.sun); S.shadowUpdates++; } }
   function frame(ts) {
     S.frame = 0;
+    var chained = S.chain;                 // G2: requested by the previous frame (an animation), for the /gpu frame probe
+    S.chain = false;
     if (!S.active || S.lost || !visible()) return;
     if (S.anim && !S.anim.paused) {
       var now = typeof ts === 'number' ? ts : 0, dt = S.animT === null ? 0 : Math.min(PC.C.CAM.dtMax, Math.max(0, now - S.animT));
@@ -5999,8 +6008,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
       S.dirty = true;
     }
     if (!S.dirty) return;
-    resize(true); S.dirty = false; render();
-    if (S.anim && !S.anim.paused) { S.dirty = true; request(); }
+    resize(true); S.dirty = false;
+    render(typeof ts === 'number' ? { ts: ts, chained: chained, tier: S.tier, view: VIEW } : null);
+    if (S.anim && !S.anim.paused) { S.dirty = true; request(); S.chain = !!S.frame; }
   }
   function animate(a) { if (S.anim) stopAnim('replaced'); S.anim = a; S.animT = null; invalidate(); }
   function stopAnim(reason) {
@@ -6047,9 +6057,9 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     var sky = S.world.getObjectByName('sky');
     if (sky) sky.position.set(e[0], e[1], e[2]);               // TL required change 2: the dome follows the eye
   }
-  function render() {
+  function render(f) {
     place();
-    PC.gfx.frame(S.renderer);           // /gpu: the node frame per app render (three's own loop is stopped); r128: nothing
+    PC.gfx.frame(S.renderer, f || null);   // /gpu: the node frame per app render (three's own loop is stopped), the G2 probe; r128: nothing
     S.renderer.render(S.scene, S.camera);
     S.renders++;
   }
@@ -6100,6 +6110,35 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     failed: function () { S.renderer = null; S.builtKey = null; S.building = 0; if (S.onState) S.onState('unavailable'); },
     pr: function () { return dpr(); }
   };
+  var VIEW = {
+    dpr: function (k, draw) {
+      S.prCap = k || null;
+      if (!S.renderer) return;
+      var p = dpr();
+      if (p === S.pr) return;
+      S.pr = p; S.renderer.setPixelRatio(p);
+      if (draw) invalidate();
+    },
+    busy: function () { return !S.active || !!S.anim || !!S.building || !!S.pending || S.lost || !S.renderer; },
+    retier: function (name) {
+      if (!S.renderer || !S.tier || S.tier.name === name) return false;
+      S.tier = three.pickTier({ coarse: coarse(), maxTex: PC.gfx.maxTex(S.renderer), force: name });
+      S.retiers++;
+      S.sun.shadow.mapSize.set(S.tier.shadowMap, S.tier.shadowMap);
+      S.sun.shadow.bias = S.tier.shadowBias; S.sun.shadow.normalBias = S.tier.shadowNormalBias;
+      S.prCap = null; S.pr = 0;                                   // the next frame sets the tier's pixel ratio
+      cancelFrame();                                              // no frame of the old build while the new one compiles
+      if (S.house) {
+        var sel = S.selected, cb = S.onSelect;
+        S.onSelect = null;                                          // the selection comes back below: no null to the ui
+        S.builtKey = null; build(S.house, null);
+        S.onSelect = cb;
+        if (sel !== null) select(sel);
+      }
+      invalidate();
+      return true;
+    }
+  };
   function setup(canvas) {
     S.canvas = canvas;
     S.scene = new THREE.Scene();
@@ -6110,7 +6149,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     S.sun.castShadow = true;
     S.sun.shadow.mapSize.set(S.tier.shadowMap, S.tier.shadowMap);
     if (S.tier.fog) S.scene.fog = new THREE.Fog(new THREE.Color('#FFFFFF'), 1, 2);   // colour and range: applyLook
-    S.sun.shadow.bias = V().shadowBias; S.sun.shadow.normalBias = V().shadowNormalBias;
+    S.sun.shadow.bias = S.tier.shadowBias; S.sun.shadow.normalBias = S.tier.shadowNormalBias;
     S.sun.target.name = 'sunTarget';
     S.world = new THREE.Group(); S.world.name = 'world';
     S.scene.add(S.hemi, S.sun, S.sun.target, S.world);
@@ -6150,7 +6189,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
     if (sig !== S.shadowSig) { S.shadowSig = sig; shadowsDirty(); }
   }
   function lights(house) { apply(house); S.looks++; }
-  function tex(kind) { var t = three.texture(kind, S.tier.tex, S.renderer); S.textures.push(t); return t; }
+  function tex(kind) { var t = three.texture(kind, S.tier.tex, S.renderer, S.tier.aniso); S.textures.push(t); return t; }
 
   function build(house, done) {
     dispose();
@@ -6325,7 +6364,7 @@ button.pc-chip { min-height: var(--tap); min-width: var(--tap); padding: 0 var(-
         building: !!S.building, frame: !!S.frame, dirty: S.dirty, renders: S.renders, builds: S.builds, restores: S.restores,
         meshCount: S.meshes.length + (S.highlight ? 1 : 0), meshes: S.meshes.concat(S.highlight ? [S.highlight] : []),
         flight: S.anim && S.anim.kind === 'flight' ? { from: PC.cam.copy(S.anim.from), to: PC.cam.copy(S.anim.to), t: S.anim.t, ms: S.anim.ms } : null,
-        tier: S.tier ? Object.assign({}, S.tier) : null, textures: S.textures.slice(), shadowUpdates: S.shadowUpdates,
+        tier: S.tier ? Object.assign({}, S.tier) : null, textures: S.textures.slice(), shadowUpdates: S.shadowUpdates, retiers: S.retiers, prCap: S.prCap,
         compiling: !!S.pending, gfx: PC.gfx.name,
         animating: !!S.anim, selected: S.selected, highlight: S.highlight, highlightsMade: S.hlMade, level: S.level, roof: S.roof, look: { hour: S.look.hour, season: S.look.season }, looks: S.looks, size: S.size.slice(), occl: { right: S.occl.right, bottom: S.occl.bottom }, viewOffset: S.view ? S.view.slice() : null, aspect: aspect(), renderNow: function () { if (S.house && !S.lost) render(); } };
     }

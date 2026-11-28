@@ -91,16 +91,25 @@
     TOUR: { overviewLeg: 4.5, roomLeg: 3.5, speeds: { slow: 0.6, normal: 1, fast: 1.8 }, eyeOut: 2, eyeOutK: 0.6, eyeUp: 2.5,
       bEyeIn: 1.5, bEyeUp: 2.5, centralEps: 0.5, treeGap: 0.5, floorSoft: 1, phiSoft: 3, minGap: 0.5, leadInMs: 1200, leadInSkip: 0.5 },
     VIEW3D: { maxDpr: 2, shadowMap: 1024, shadowBias: -0.0005, shadowNormalBias: 0.02, sunDist: 2.5, shadowK: 2.5, shadowR: 1.2,
-      // F6-T1a (CTO C-4.5 .. C-4.7; plan section 2 and review): phones (coarse pointer) and the lite tier keep a 1024
-      // shadow map, fine pointers with maxTextureSize >= 4096 get shadowMapFine; maxDprCoarse caps coarse pointers.
+      // F6-T1a (CTO C-4.5 .. C-4.7; plan section 2 and review): phones (coarse pointer) keep the 1024 shadow map
+      // (shadowMap above), fine pointers with maxTextureSize >= 4096 get their tier's shadowMap (G2: a per-tier field;
+      // full 2048 as shadowMapFine was, lite 1024); maxDprCoarse caps coarse pointers. aniso: the texture anisotropy cap.
       // tier: per pointer kind, chosen once when the view first opens (a phone result switches phones to lite by data).
       // roofOnOpen: stage 5 opens with the Roof on (client card pending; false restores the F4 default).
       // Fog (full tier): near = limits.rMax + R, far = min(near + fogSpanK x R, 0.9 x outerK x R / 2) (TL required
       // change 1). Sky dome radius skyK x camera.far, centred on the eye every frame (required change 2).
-      maxDprCoarse: 2, shadowMapFine: 2048, roofOnOpen: true, tier: { coarse: 'full', fine: 'full' },
+      // G2 ultra (/gpu only, G-plan 6; picked by the /gpu adapter: fine pointer and not a fallback adapter): shadow
+      // 4096 with its own bias (half the texel, half the normal bias), textures 1024, anisotropy 16, tree detail 2,
+      // colorBuffer the renderer's colour buffer ('half' | 'byte', measured in G2). probe: the median of the first
+      // `frames` moving frames over slowMs -> `down` once per page session (rebuild at rest, no message). moving: while
+      // frames move (gaps under gapMs, or an animation), a median of the last `frames` over slowMs lowers the pixel
+      // ratio to dpr until restMs without a frame (rest), then one frame at the tier cap.
+      maxDprCoarse: 2, roofOnOpen: true, tier: { coarse: 'full', fine: 'full' },
       tiers: {
-        full: { tex: 512, fog: true, fineShadow: true, maxDpr: 2, treeDetail: 1 },
-        lite: { tex: 256, fog: false, fineShadow: false, maxDpr: 1.5, treeDetail: 0 }
+        full: { tex: 512, fog: true, shadowMap: 2048, aniso: 4, maxDpr: 2, treeDetail: 1 },
+        lite: { tex: 256, fog: false, shadowMap: 1024, aniso: 4, maxDpr: 1.5, treeDetail: 0 },
+        ultra: { tex: 1024, fog: true, shadowMap: 4096, aniso: 16, maxDpr: 2, treeDetail: 2, shadowBias: -0.0005, shadowNormalBias: 0.01,
+          colorBuffer: 'half', probe: { frames: 30, slowMs: 24, down: 'full' }, moving: { frames: 10, slowMs: 20, dpr: 1.5, gapMs: 250, restMs: 300 } }
       },
       fogSpanK: 8, skyK: 0.9, blobY: 0.02 },
     FOOTPRINT_ROUND: 0.5, FOOTPRINT_MAX_RATIO: 2, FOOTPRINT_STRETCH_RATIO: 3, FOOTPRINT_STRETCH_EXTRA: 0.5, BACK_ANGLE: 40

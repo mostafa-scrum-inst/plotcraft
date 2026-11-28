@@ -39,27 +39,35 @@
     active: false, lost: false, dirty: false, frame: 0, building: 0, token: 0, onState: null,
     meshes: [], level: 'all', roof: !!(PC.C && PC.C.VIEW3D && PC.C.VIEW3D.roofOnOpen), renders: 0, builds: 0, restores: 0, looks: 0,
     tier: null, textures: [], shadowUpdates: 0, seq: 0, pending: 0, pendingDone: null, making: false, want: null,
+    chain: false, prCap: null, retiers: 0,
     look: { hour: 12, season: 'summer' },
     anim: null, animT: null, highlight: null, selected: null, onSelect: null, hlMade: 0
   };
   function V() { return PC.C.VIEW3D; }
   function coarse() { return typeof matchMedia === 'function' && !!matchMedia('(pointer: coarse)').matches; }
-  function dpr() { var d = typeof devicePixelRatio === 'number' && devicePixelRatio > 0 ? devicePixelRatio : 1; return Math.min(d, S.tier ? S.tier.maxDpr : V().maxDpr); }
+  // S.prCap: G2, the lower pixel ratio while frames move on ultra (/gpu); null otherwise
+  function dpr() { var d = typeof devicePixelRatio === 'number' && devicePixelRatio > 0 ? devicePixelRatio : 1; return Math.min(d, S.tier ? S.tier.maxDpr : V().maxDpr, S.prCap || Infinity); }
 
   // env = { coarse, maxTex } -> the tier record used for this page session (CTO C-4.5 .. C-4.7).
-  // G1: env.force (PC.gfx.tier) names the tier outright; the /gpu page runs 'full' only.
+  // G1: env.force (PC.gfx.tier) names the tier outright: the /gpu adapter's choice (G2: ultra or full).
+  // G2: shadowMap and aniso are per-tier fields (coarse pointers and maxTextureSize < 4096 keep VIEW3D.shadowMap);
+  // the shadow bias defaults to VIEW3D's; probe / moving / colorBuffer only on ultra (read by the /gpu adapter).
   three.pickTier = function (env) {
     var v = V(), name = env.force || v.tier[env.coarse ? 'coarse' : 'fine'], t = v.tiers[name] || v.tiers.full;
-    var fine = t.fineShadow && !env.coarse && env.maxTex >= 4096;
+    var fine = !env.coarse && env.maxTex >= 4096;
     return { name: v.tiers[name] ? name : 'full', tex: t.tex, fog: !!t.fog, treeDetail: t.treeDetail,
-      shadowMap: fine ? v.shadowMapFine : v.shadowMap, maxDpr: Math.min(v.maxDpr, t.maxDpr, env.coarse ? v.maxDprCoarse : Infinity) };
+      shadowMap: fine ? t.shadowMap : Math.min(t.shadowMap, v.shadowMap), aniso: t.aniso,
+      shadowBias: t.shadowBias !== undefined ? t.shadowBias : v.shadowBias,
+      shadowNormalBias: t.shadowNormalBias !== undefined ? t.shadowNormalBias : v.shadowNormalBias,
+      probe: t.probe || null, moving: t.moving || null, colorBuffer: t.colorBuffer || null,
+      maxDpr: Math.min(v.maxDpr, t.maxDpr, env.coarse ? v.maxDprCoarse : Infinity) };
   };
   function visible() { return typeof document === 'undefined' || document.visibilityState !== 'hidden'; }
 
   // The A-10 renderer, synchronously: the standard page only (the /gpu adapter's make() is asynchronous).
   three.makeRenderer = function (canvas) { return PC.gfx.create(canvas, dpr()); };
 
-  function cancelFrame() { if (S.frame) { cancelAnimationFrame(S.frame); S.frame = 0; } }
+  function cancelFrame() { S.chain = false; if (S.frame) { cancelAnimationFrame(S.frame); S.frame = 0; } }
   function request() {
     if (!S.active || S.lost || S.building || S.pending || S.frame || !S.house || !visible()) return;
     S.frame = requestAnimationFrame(frame);
@@ -70,6 +78,8 @@
   // PC.view3d.open() runs (e.g. stage 4's sample strip), so the size is taken when the frame draws.
   function frame(ts) {
     S.frame = 0;
+    var chained = S.chain;                 // G2: requested by the previous frame (an animation), for the /gpu frame probe
+    S.chain = false;
     if (!S.active || S.lost || !visible()) return;
     if (S.anim && !S.anim.paused) {
       var now = typeof ts === 'number' ? ts : 0, dt = S.animT === null ? 0 : Math.min(PC.C.CAM.dtMax, Math.max(0, now - S.animT));
@@ -80,8 +90,9 @@
       S.dirty = true;
     }
     if (!S.dirty) return;
-    resize(true); S.dirty = false; render();
-    if (S.anim && !S.anim.paused) { S.dirty = true; request(); }
+    resize(true); S.dirty = false;
+    render(typeof ts === 'number' ? { ts: ts, chained: chained, tier: S.tier, view: VIEW } : null);
+    if (S.anim && !S.anim.paused) { S.dirty = true; request(); S.chain = !!S.frame; }
   }
   function animate(a) { if (S.anim) stopAnim('replaced'); S.anim = a; S.animT = null; invalidate(); }
   // Ends the running animation (if any) and calls its end(reason) exactly once (F5-T2 plan review Q6).
@@ -130,9 +141,10 @@
     var sky = S.world.getObjectByName('sky');
     if (sky) sky.position.set(e[0], e[1], e[2]);               // TL required change 2: the dome follows the eye
   }
-  function render() {
+  // f (from frame()): { ts, chained, tier, view } for the /gpu frame probe (G2); null for other renders
+  function render(f) {
     place();
-    PC.gfx.frame(S.renderer);           // /gpu: the node frame per app render (three's own loop is stopped); r128: nothing
+    PC.gfx.frame(S.renderer, f || null);   // /gpu: the node frame per app render (three's own loop is stopped), the G2 probe; r128: nothing
     S.renderer.render(S.scene, S.camera);
     S.renders++;
   }
@@ -192,6 +204,40 @@
     failed: function () { S.renderer = null; S.builtKey = null; S.building = 0; if (S.onState) S.onState('unavailable'); },
     pr: function () { return dpr(); }
   };
+  // G2: what the /gpu adapter's frame probe may change (G-plan 6). Never called on the standard page (its tiers have
+  // no probe). dpr(k, draw): the pixel-ratio cap while frames move (null: the tier's), and one frame at it if draw.
+  // busy(): a rebuild now would end an animation or overlap a build. retier(name): the quiet downgrade, once per page
+  // session: the tier record, the shadow map size and bias, a rebuild of the same house (pose, level, Roof, look
+  // and selection kept, no Building card: the last frame stays on the canvas while it compiles).
+  var VIEW = {
+    dpr: function (k, draw) {
+      S.prCap = k || null;
+      if (!S.renderer) return;
+      var p = dpr();
+      if (p === S.pr) return;
+      S.pr = p; S.renderer.setPixelRatio(p);
+      if (draw) invalidate();
+    },
+    busy: function () { return !S.active || !!S.anim || !!S.building || !!S.pending || S.lost || !S.renderer; },
+    retier: function (name) {
+      if (!S.renderer || !S.tier || S.tier.name === name) return false;
+      S.tier = three.pickTier({ coarse: coarse(), maxTex: PC.gfx.maxTex(S.renderer), force: name });
+      S.retiers++;
+      S.sun.shadow.mapSize.set(S.tier.shadowMap, S.tier.shadowMap);
+      S.sun.shadow.bias = S.tier.shadowBias; S.sun.shadow.normalBias = S.tier.shadowNormalBias;
+      S.prCap = null; S.pr = 0;                                   // the next frame sets the tier's pixel ratio
+      cancelFrame();                                              // no frame of the old build while the new one compiles
+      if (S.house) {
+        var sel = S.selected, cb = S.onSelect;
+        S.onSelect = null;                                          // the selection comes back below: no null to the ui
+        S.builtKey = null; build(S.house, null);
+        S.onSelect = cb;
+        if (sel !== null) select(sel);
+      }
+      invalidate();
+      return true;
+    }
+  };
   // Once per canvas (G-plan 3.3): scene, camera, lights, the loss watch, resize / visibility listeners, controls.
   // Swapping the renderer after a device loss (LOSS.restored) attaches nothing again.
   function setup(canvas) {
@@ -204,7 +250,7 @@
     S.sun.castShadow = true;
     S.sun.shadow.mapSize.set(S.tier.shadowMap, S.tier.shadowMap);
     if (S.tier.fog) S.scene.fog = new THREE.Fog(new THREE.Color('#FFFFFF'), 1, 2);   // colour and range: applyLook
-    S.sun.shadow.bias = V().shadowBias; S.sun.shadow.normalBias = V().shadowNormalBias;
+    S.sun.shadow.bias = S.tier.shadowBias; S.sun.shadow.normalBias = S.tier.shadowNormalBias;
     S.sun.target.name = 'sunTarget';
     S.world = new THREE.Group(); S.world.name = 'world';
     S.scene.add(S.hemi, S.sun, S.sun.target, S.world);
@@ -249,7 +295,7 @@
     if (sig !== S.shadowSig) { S.shadowSig = sig; shadowsDirty(); }
   }
   function lights(house) { apply(house); S.looks++; }
-  function tex(kind) { var t = three.texture(kind, S.tier.tex, S.renderer); S.textures.push(t); return t; }
+  function tex(kind) { var t = three.texture(kind, S.tier.tex, S.renderer, S.tier.aniso); S.textures.push(t); return t; }
 
   // done (optional) runs once the build is complete, after the precompile: at once on r128, later on /gpu. A newer
   // build (or close + another house) bumps S.seq first, so a stale continuation does nothing (G-plan 3.3).
@@ -450,7 +496,7 @@
         building: !!S.building, frame: !!S.frame, dirty: S.dirty, renders: S.renders, builds: S.builds, restores: S.restores,
         meshCount: S.meshes.length + (S.highlight ? 1 : 0), meshes: S.meshes.concat(S.highlight ? [S.highlight] : []),
         flight: S.anim && S.anim.kind === 'flight' ? { from: PC.cam.copy(S.anim.from), to: PC.cam.copy(S.anim.to), t: S.anim.t, ms: S.anim.ms } : null,
-        tier: S.tier ? Object.assign({}, S.tier) : null, textures: S.textures.slice(), shadowUpdates: S.shadowUpdates,
+        tier: S.tier ? Object.assign({}, S.tier) : null, textures: S.textures.slice(), shadowUpdates: S.shadowUpdates, retiers: S.retiers, prCap: S.prCap,
         compiling: !!S.pending, gfx: PC.gfx.name,
         animating: !!S.anim, selected: S.selected, highlight: S.highlight, highlightsMade: S.hlMade, level: S.level, roof: S.roof, look: { hour: S.look.hour, season: S.look.season }, looks: S.looks, size: S.size.slice(), occl: { right: S.occl.right, bottom: S.occl.bottom }, viewOffset: S.view ? S.view.slice() : null, aspect: aspect(), renderNow: function () { if (S.house && !S.lost) render(); } };
     }

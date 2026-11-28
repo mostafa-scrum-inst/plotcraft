@@ -15,6 +15,7 @@ import { loadCore } from '../helpers/load.mjs';
 import { sampleApproved, maxHouse } from '../helpers/houses.mjs';
 import { suite } from '../helpers/browser.mjs';
 import { serve, xvfb, launchGpu, openPage, toStage5, ready3d } from '../helpers/gpu.mjs';
+import { meshes, regions, closeUp } from '../helpers/gpu-image.mjs';
 
 const T = suite('gpu parity'), t0 = Date.now();
 const PC = loadCore();
@@ -34,65 +35,6 @@ const MUTATE = {
   col: () => { PC.gfx.col = function (hex) { return new THREE.Color(hex).convertSRGBToLinear(); }; },
   tone: () => { PC.gfx.materials = function () {}; }
 }[process.env.GPU_MUTATE || ''];
-
-// The scene as plain data: every mesh in world order.
-const meshes = (page) => page.evaluate(() => {
-  const out = [];
-  PC.debug.scene().world.traverse((m) => {
-    if (!m.geometry) return;
-    const g = m.geometry, inst = m.isInstancedMesh ? m.count : null;
-    out.push([m.name, m.isInstancedMesh ? 'instanced' : 'mesh', g.attributes.position.count, g.index ? g.index.count : 0, inst, m.visible]);
-  });
-  return out;
-});
-
-// Region boxes in canvas pixels (top-left origin), projected with the page's own camera (both pages share pose and
-// size), then the mean colour of each box from a full-frame sRGB pixel array.
-const regions = (page, kind, close) => page.evaluate(async ({ kind, close }) => {
-  const i = PC.debug.scene(), W = i.size[0], H = i.size[1], cam = i.camera, h = i.house;
-  let px;
-  if (kind === 'gpu') {
-    const c = await new Promise((r) => PC.view3d.capture(r));
-    if (!c) return null;
-    px = c.data;
-  } else {
-    i.renderNow();
-    const gl = i.renderer.getContext(), raw = new Uint8Array(W * H * 4);
-    gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, raw);
-    px = new Uint8Array(W * H * 4);
-    for (let y = 0; y < H; y++) px.set(raw.subarray((H - 1 - y) * W * 4, (H - y) * W * 4), y * W * 4);
-  }
-  const at = (x, y, z) => { const v = new THREE.Vector3(x, y, z).project(cam); return [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H]; };
-  const mean = (cx, cy, r) => {
-    const s = [0, 0, 0]; let n = 0;
-    for (let y = Math.round(cy - r); y <= Math.round(cy + r); y++) for (let x = Math.round(cx - r); x <= Math.round(cx + r); x++) {
-      if (x < 0 || y < 0 || x >= W || y >= H) continue;
-      const k = (y * W + x) * 4; s[0] += px[k]; s[1] += px[k + 1]; s[2] += px[k + 2]; n++;
-    }
-    return s.map((v) => +(v / Math.max(1, n)).toFixed(1));
-  };
-  const fp = h.footprint, cu = h.center[0], cv = h.center[1], e = cam.position;
-  // the exterior wall face that looks most at the camera, its middle at 2 m (ground storey, Roof on)
-  const faces = [[fp.u + fp.w / 2, fp.v, 0, 1], [fp.u + fp.w / 2, fp.v + fp.d, 0, -1], [fp.u, fp.v + fp.d / 2, -1, 0], [fp.u + fp.w, fp.v + fp.d / 2, 1, 0]]
-    .map(([u, v, nx, nz]) => { const X = u - cu, Z = -(v - cv), n = [nx, -nz], d = [e.x - X, e.z - Z], l = Math.hypot(d[0], d[1]); return { X: X + n[0] * 0.05, Z: Z + n[1] * 0.05, s: (n[0] * d[0] + n[1] * d[1]) / l }; })
-    .sort((a, b) => b.s - a.s);
-  // the north half of the needle (unlit mats.ui): the centroid of its triangle tipN, east, west (build-site.js); the
-  // close-up pose (closeUp below) puts it in the middle of the frame
-  const nd = PC.three.needle(h), needle = nd ? at((nd.tipN[0] + nd.east[0] + nd.west[0]) / 3, 0.04, (nd.tipN[1] + nd.east[1] + nd.west[1]) / 3) : null;
-  if (close) return { needle: needle ? mean(needle[0], needle[1], 2) : null, needleAt: needle };
-  return {
-    sky: mean(W / 2, Math.max(4, H * 0.015), 3),
-    ground: mean(W * 0.9, H * 0.45, 5),
-    wall: mean(...at(faces[0].X, 2, faces[0].Z), 2), side: mean(...at(faces[1].X, 2, faces[1].Z), 2), W, H
-  };
-}, { kind, close });
-// The camera at the closest radius, looking down at the needle's north half (same pose on both pages), or back to the reset view.
-const closeUp = (page, on) => page.evaluate((on) => {
-  if (!on) { PC.view3d.resetView(); return; }
-  const nd = PC.three.needle(PC.view3d.house()), p = PC.view3d.pose();
-  const c = [(nd.tipN[0] + nd.east[0] + nd.west[0]) / 3, 0, (nd.tipN[1] + nd.east[1] + nd.west[1]) / 3];
-  PC.view3d.flyTo({ target: c, radius: 0.1, theta: p.theta, phi: 0 }, 1);   // clamped to the closest, steepest pose: from above
-}, on);
 
 const X = await xvfb(), srv = await serve(), browser = await launchGpu({ display: X.display });
 try {
