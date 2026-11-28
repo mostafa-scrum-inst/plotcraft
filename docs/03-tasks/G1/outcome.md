@@ -60,7 +60,19 @@ Changed: `build.mjs`, `src/manifest.json`, `src/index.html`, `src/js/three/scene
 
 ## Results
 
-RESULTS_PLACEHOLDER
+- Default run `node build.mjs && node tests/run-all.mjs` on dfba6a7: **all steps passed in 342.9 s** (three step
+  19.6 s, 17 files); no existing expectation edited. An earlier run failed only QA F1-T1 "src/href attributes are
+  the three tag, #fragments or data:, only" (the CD-12 link's `href`): fixed by setting the links' `href` from
+  `shell.js` (`data-alt`), not by touching the check.
+- `QA_GPU=1 node tests/run-all.mjs --gpu`: **2 files, 104 checks, all passed, wall 51.8 s** (parity ~22 s, flows ~21 s
+  plus browser/Xvfb start).
+- Parity (a): sample, sample with pitched roof, maximum house: identical mesh lists (name, kind, vertex / index counts,
+  instance counts, visibility) on both pages at tier full.
+- Image (g), worst per-channel difference of the region means over the four presets: sky 0.1, outer ground 0.3,
+  front wall 2.8, side wall 4.7, north needle 0 (exact #16212B). Tolerances 3 (unlit) / 6 (lit). Planted mistakes
+  (`GPU_MUTATE=lightK|exposure|col|tone`) move lit regions by 76 / 33 / 105 / 28 and all fail the check.
+- compileAsync does not cover the shadow pass: sample 19 pipelines after it, 32 after the warm-up render (maximum
+  house +16 more after warm-up); compileAsync 50-130 ms on SwiftShader.
 
 ## Deviations from the design (and why)
 

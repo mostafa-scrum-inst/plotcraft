@@ -337,3 +337,5 @@
 - [TL] questions.spec north-reset flake: harness cause (Chrome drops synthesized click after injected drag); FS fix 4a032c2 (settle waits via inert tap probe) approved for main.
 - 2026-11-23T14:42Z Orchestrator: flake follow-up d7c155c (probe events stop bubbling) on main; F6-T2 batch closed, v10 published. Waiting on CD-7 phone answers.
 - 2026-11-28T13:15Z Orchestrator: WebGPU /gpu design approved by client (CD-10..CD-13); feature G starts with G0 spike.
+- [FS] G1 plan written (docs/03-tasks/G1/plan.md).
+- [FS] G1 implemented (dfba6a7): PC.gfx adapters (r128 / WebGPU), build targets dist/index.html + dist/gpu/index.html, per-target lint, CD-11/CD-12 links, QA_GPU suite. Default run green 342.9 s (no expectation edits); QA_GPU 104 checks green, 51.8 s. Deviations in docs/03-tasks/G1/outcome.md (targetFiles, PC.boot3d, headed Chrome on Xvfb for QA_GPU). Ready for TL impl review.
