@@ -116,3 +116,44 @@ Runs on this container:
   `watched.current` is null, then again in `bind(r2)`); idempotent, but one of the two can go.
 
 VERDICT: CHANGES REQUESTED
+
+## Round 2 (2026-11-28, TL): re-review of 092f11d..084a036
+
+Runs here on 084a036:
+- `node build.mjs`: the committed `dist/index.html` and `dist/gpu/index.html` are rebuilt byte for byte.
+- `node tests/run-all.mjs --unit --three`: green, 28.6 s.
+- `QA_GPU=1 node tests/run-all.mjs --gpu`: flows 67/67 (with the new (i)), parity 47/47, 51.8 s.
+- I also ran the full default `node tests/run-all.mjs`, because stage-3d.js and scene.js `render()` changed on the
+  standard page as well. It was green in 357.8 s, under the 420 s gate. It rewrote
+  `tests/qa/shots/F1-T1/metrics.json`, which I restored.
+
+Required change 1: **done**.
+- `make()` stops `renderer._animation` right after `init()`, before any error path. A later `dispose()` stops it
+  again, which is harmless.
+- `PC.gfx.frame(r)` does what `Animation.start`'s tick does, in the same order: `info.reset()` when `autoReset`,
+  then `nodeFrame.update()`, then `info.frame`.
+- It is called before every render the app makes: scene.js `render()`, the precompile warm-up and `capture`. Nothing
+  else renders: `compileAsync` advances the node frame itself, and `renderNow` goes through `render()`.
+- `capture` now renders in the same task, with its own frame, and keeps the `shadow.needsUpdate` for the render
+  target's own shadow map.
+- The r128 `frame` is an empty function, so the strict mock sees no new reads, and the spy test covers it.
+- Check (i) asserts 0 rAF calls over 2 s, both on the ready idle view and after Back to stage 4, and asserts that
+  three's `_requestId` is null. That matches my round-1 probe.
+- The two private members of the pinned 0.180.0 are named in the header and in "Known limits", and check (i)
+  catches a drift. That is acceptable.
+
+Notes:
+- N1: done. The ENOENT message is clear, the run fails rather than skips, and each file has a 300 s cap with
+  SIGKILL and a "timed out" label.
+- N2: done.
+  - The ui layer asks `PC.view3d.available()`. It does not read `PC.boot3d` or THREE, so the layer rule holds.
+  - The load text exists only in the gpu block. On the standard page the stage-3d branch finds no element and does
+    nothing.
+  - The no-adapter path keeps the CD-11 text, which (c) checks.
+  - The copy is still the PM's call, as noted in outcome.md.
+- N7: done. A renderer is now bound exactly once.
+- N3-N6 are deferred, as the round-1 notes allow. N4 and N5 belong in the G2 and G3 plans.
+
+No new required changes.
+
+VERDICT: APPROVED
